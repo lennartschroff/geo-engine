@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "demo_monitoring",
+  "type": "object",
+  "required": ["results", "cited_sources", "trend", "pieces", "audit_meta"],
+  "additionalProperties": false,
+  "properties": {
+    "_comment": { "type": "string" },
+    "results": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["competitor", "r"],
+        "additionalProperties": false,
+        "properties": {
+          "competitor": { "type": "string" },
+          "r": {
+            "type": "string",
+            "description": "Three space-separated result codes (claude gpt gemini): c<n>=cited, m<n>=mentioned, a=absent.",
+            "pattern": "^(c[0-9]+|m[0-9]+|a) (c[0-9]+|m[0-9]+|a) (c[0-9]+|m[0-9]+|a)$"
+          }
+        }
+      }
+    },
+    "cited_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "kind", "cites", "qs", "present", "act"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string" },
+          "cites": { "type": "integer", "minimum": 0 },
+          "qs": { "type": "integer", "minimum": 0 },
+          "present": {
+            "type": ["boolean", "null"],
+            "description": "null = not applicable, e.g. the competitor's own site"
+          },
+          "act": { "type": "string" }
+        }
+      }
+    },
+    "trend": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "pieces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["mark", "week", "type", "de", "en", "qs", "before", "after"],
+        "additionalProperties": false,
+        "properties": {
+          "mark": { "type": "string" },
+          "week": { "type": "integer", "minimum": 0 },
+          "type": { "type": "string" },
+          "de": { "type": "string" },
+          "en": { "type": "string" },
+          "qs": { "type": "array", "items": { "type": "string" } },
+          "before": { "type": "number" },
+          "after": { "type": "number" }
+        }
+      }
+    },
+    "audit_meta": {
+      "type": "object",
+      "required": ["date", "pages", "posts"],
+      "additionalProperties": false,
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "pages": { "type": "integer", "minimum": 0 },
+        "posts": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

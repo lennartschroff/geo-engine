@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "page_scores",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["de", "en", "path", "score", "missing"],
+    "additionalProperties": false,
+    "properties": {
+      "de": { "type": "string", "minLength": 1 },
+      "en": { "type": "string", "minLength": 1 },
+      "path": { "type": "string", "minLength": 1 },
+      "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+      "missing": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["h1", "words", "qh", "case", "nums", "faq", "def"]
+        }
+      }
+    }
+  }
+}

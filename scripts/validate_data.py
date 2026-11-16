@@ -1,0 +1,103 @@
+"""Validate data/*.json against schemas/*.schema.json, plus cross-file references.
+
+JSON Schema catches shape errors (wrong type, missing field, bad enum value).
+It can't catch "this category id doesn't exist" across files, so a second pass
+checks those foreign-key-like references explicitly.
+
+Usage:
+    python scripts/validate_data.py
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from jsonschema import Draft7Validator
+
+ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "data"
+SCHEMAS = ROOT / "schemas"
+
+FILES = {
+    "brand": "brand.json",
+    "categories": "categories.json",
+    "questions": "questions.json",
+    "blocks": "blocks.json",
+    "audit_actions": "audit_actions.json",
+    "page_scores": "page_scores.json",
+    "demo_monitoring": "demo_monitoring.json",
+}
+
+
+def load(name: str):
+    return json.loads((DATA / FILES[name]).read_text(encoding="utf-8"))
+
+
+def schema_errors() -> list[str]:
+    errors = []
+    for key, filename in FILES.items():
+        schema_path = SCHEMAS / f"{key}.schema.json"
+        if not schema_path.exists():
+            errors.append(f"{filename}: no schema at {schema_path.relative_to(ROOT)}")
+            continue
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        instance = load(key)
+        validator = Draft7Validator(schema)
+        for err in validator.iter_errors(instance):
+            path = "/".join(str(p) for p in err.absolute_path)
+            errors.append(f"{filename}{'/' + path if path else ''}: {err.message}")
+    return errors
+
+
+def reference_errors() -> list[str]:
+    errors = []
+    categories = {c["id"] for c in load("categories")}
+    questions = load("questions")
+    blocks = load("blocks")
+    demo = load("demo_monitoring")
+    question_ids = {q["id"] for q in questions}
+
+    for q in questions:
+        unknown = set(q["categories"]) - categories
+        if unknown:
+            errors.append(f"questions.json/{q['id']}: unknown category id(s) {sorted(unknown)}")
+
+    for b in blocks:
+        unknown = set(b["categories"]) - categories
+        if unknown:
+            errors.append(f"blocks.json/{b['id']}: unknown category id(s) {sorted(unknown)}")
+
+    for qid in demo.get("results", {}):
+        if qid not in question_ids:
+            errors.append(f"demo_monitoring.json/results/{qid}: no matching question id in questions.json")
+
+    key_ids = {q["id"] for q in questions if q.get("key")}
+    result_ids = set(demo.get("results", {}))
+    missing_key_results = key_ids - result_ids
+    if missing_key_results:
+        errors.append(
+            f"demo_monitoring.json/results: missing demo result(s) for key question(s) {sorted(missing_key_results)}"
+        )
+
+    for piece in demo.get("pieces", []):
+        unknown = set(piece.get("qs", [])) - question_ids
+        if unknown:
+            errors.append(f"demo_monitoring.json/pieces/{piece.get('mark')}: unknown question id(s) {sorted(unknown)}")
+
+    return errors
+
+
+def main() -> int:
+    errors = schema_errors() + reference_errors()
+    if errors:
+        print(f"{len(errors)} data validation error(s):\n")
+        for e in errors:
+            print(f"  - {e}")
+        return 1
+    print("All data files valid: schema + cross-file references OK.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

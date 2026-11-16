@@ -10,6 +10,7 @@
 
 (function () {
   const D = window.GEO_DATA;
+  const CORE = window.GEO_CORE;
   const BRAND = D.brand;
   const STR = window.makeStrings(BRAND.short);
   const ENGINES = [{ id: 'claude', name: 'Claude' }, { id: 'gpt', name: 'ChatGPT' }, { id: 'gemini', name: 'Gemini' }];
@@ -20,25 +21,17 @@
 
   // ---------- Data preparation ----------
   const CATS = D.categories.map(c => ({ id: c.id, kw: c.keywords }));
-  function parseResult(str) {
-    const one = x => x[0] === 'c' ? ['cited', +x.slice(1)] : x[0] === 'm' ? ['mentioned', +x.slice(1)] : ['absent', 0];
-    const t = str.split(' ');
-    return { claude: one(t[0]), gpt: one(t[1]), gemini: one(t[2]) };
-  }
   const QUESTIONS = D.questions.map(q => {
     const res = D.demo.results[q.id];
-    return { id: q.id, text: q.text, tags: q.categories, key: q.key, comp: res ? res.competitor : null, r: res ? parseResult(res.r) : null };
+    return { id: q.id, text: q.text, tags: q.categories, key: q.key, comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
   });
   const BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
 
   // ---------- Helpers ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const overlaps = (a, b) => a.some(t => b.indexOf(t) !== -1);
-  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
-  function kwHit(text, kw) {
-    if (kw.length <= 3) return new RegExp('(^|[^a-zäöüß])' + kw.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '([^a-zäöüß]|$)').test(text);
-    return text.indexOf(kw) !== -1;
-  }
+  const overlaps = CORE.overlaps;
+  const pct = CORE.pct;
+  const kwHit = CORE.kwHit;
 
   // ---------- State ----------
   const saved = load();
@@ -97,19 +90,7 @@
     return { qs, gapQs, answers, absent, hits, weight, blocks, missing, keyGaps: gapQs.filter(q => q.key).length };
   }
 
-  /** Scores a draft against the GEO checklist. Weights sum to 100. */
-  function scoreDraft(blocks, rel) {
-    const n = blocks.length;
-    const has = t => blocks.some(b => b.type === t);
-    const avgRel = n ? blocks.reduce((a, b) => a + rel(b), 0) / n : 0;
-    const met = [
-      n > 0 && (blocks[0].type === 'statement' || blocks[0].type === 'definition'),
-      has('figure'), has('case'), has('quote'), has('faq'),
-      n > 0 && avgRel >= 0.6, n >= 3 && n <= 7
-    ];
-    const W = [20, 20, 15, 15, 10, 10, 10];
-    return { met, avgRel, score: met.reduce((a, m, i) => a + (m ? W[i] : 0), 0) };
-  }
+  const scoreDraft = CORE.scoreDraft;
 
   function openDraft(qid) { set({ tab: 'write', writeStep: 2, selectedQ: qid, allBlocks: false }); }
   function getDraft() { return (state.drafts[state.selectedQ] || []).slice(); }
