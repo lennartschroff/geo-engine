@@ -73,6 +73,21 @@ pip install -r requirements.txt
 python scripts/audit_crawl.py --base https://www.example.com --limit 10
 ```
 
+## Development
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt   # adds pytest, ruff, jsonschema on top of requirements.txt
+
+ruff check .                          # lint
+python scripts/validate_data.py       # schema + cross-file reference checks for data/*.json
+pytest tests/ -v                      # Python tests (audit_crawl.py logic)
+node --test tests/core.test.js        # JS tests (app/core.js — GEO scoring, mention parsing)
+```
+
+All four run in CI (`.github/workflows/ci.yml`) on every push and pull request, along with a
+check that `app/data.js` matches what `build_web_data.py` would regenerate.
+
 ## Use it for your own brand
 
 1. Edit `data/brand.json` (name, domain, aliases used for mention detection).

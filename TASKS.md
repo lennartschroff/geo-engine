@@ -12,12 +12,12 @@ how reversible / how much it touches running behavior.
 ## Epic A — CI & safety nets
 *Goal: make it hard to break the app without noticing. No behavior change.*
 
-- [ ] **A1.** Add `ci.yml`: run `scripts/build_web_data.py` on every `pull_request`, fail
+- [x] **A1.** Add `ci.yml`: run `scripts/build_web_data.py` on every `pull_request`, fail
   the check if `app/data.js` would differ from what's committed (catches "forgot to
   rebuild"). — *Size S, Risk: none (new workflow only)*
 - [ ] **A2.** Add a `scripts/check.sh` pre-push helper: rebuild data, run gitleaks if
   installed, print a go/no-go summary. Document it in `README.md`. — *S, none*
-- [ ] **A3.** Write JSON Schema for `brand.json`, `categories.json`, `questions.json`,
+- [x] **A3.** Write JSON Schema for `brand.json`, `categories.json`, `questions.json`,
   `blocks.json`, `audit_actions.json`, `page_scores.json`, `demo_monitoring.json`.
   Validate in `ci.yml` with `jsonschema` (Python) or `ajv` (JS). — *M, none — pure
   validation, doesn't touch app logic*
@@ -30,17 +30,17 @@ how reversible / how much it touches running behavior.
 ## Epic B — Engineering hygiene
 *Goal: catch regressions in the logic that already exists.*
 
-- [ ] **B1.** `ruff` config + CI step for `scripts/*.py`. — *S, none*
+- [x] **B1.** `ruff` config + CI step for `scripts/*.py`. — *S, none*
 - [ ] **B2.** `eslint` + `prettier` config + CI step for `app/*.js`. Decide rules once,
   apply `--fix` once, commit as its own PR so it doesn't mix with feature diffs.
   — *M, low — pure formatting/lint, no logic change*
-- [ ] **B3.** Unit tests (pure functions, no DOM): GEO score calculation, gap ranking,
+- [x] **B3.** Unit tests (pure functions, no DOM): GEO score calculation, gap ranking,
   `parseResult` mention-status parser — extract them from `app.js` into a small
   testable module if needed, or test via a headless JS runner (`node --test` is
   enough, no framework required). — *M, low*
-- [ ] **B4.** Unit tests for `audit_crawl.py`: `schema_types()`, `RELATIVE_TIME`,
+- [x] **B4.** Unit tests for `audit_crawl.py`: `schema_types()`, `RELATIVE_TIME`,
   `FIGURE` regex, against fixture HTML snippets (`pytest`). — *M, low*
-- [ ] **B5.** Pin `requirements.txt` to exact versions (`requests==`, `beautifulsoup4==`,
+- [x] **B5.** Pin `requirements.txt` to exact versions (`requests==`, `beautifulsoup4==`,
   `lxml==`) instead of `>=`, so a future release can't silently change audit output.
   — *S, none*
 
@@ -93,8 +93,14 @@ results, refreshed weekly, and you've approved the cost before every real run.
 ---
 
 ## Epic E — Polish (any time, no dependencies)
+- [x] **E0.** Navigation IA: collapsed 7 flat top-level tabs into Overview + 2 groups
+  (Monitor: Questions/Sources/Impact · Improve: Website/Library/Write), each with a
+  second-level tab row. Requested directly, not originally in this backlog.
 - [ ] **E1.** Accessibility pass on the drag-and-drop draft studio: keyboard-only
-  alternative, contrast check against WCAG AA. — *M*
+  alternative, contrast check against WCAG AA. *Partial check done: reorder (↑/↓/×)
+  and add-to-draft are already plain buttons with aria-labels, so keyboard users have
+  a full equivalent to drag-and-drop already — a real contrast/focus-visibility audit
+  is still open.* — *M*
 - [ ] **E2.** Short screen recording/GIF of the draft studio for the README. — *S*
 - [ ] **E3.** Case-study write-up: problem, approach, scoring rationale, learnings.
   — *S*

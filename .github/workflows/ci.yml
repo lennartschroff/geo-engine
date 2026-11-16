@@ -1,0 +1,40 @@
+# Runs on every push and pull request: lint, validate data, run both test
+# suites, and make sure app/data.js is what build_web_data.py would produce
+# (catches "edited data/*.json but forgot to rebuild").
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: ruff
+        run: ruff check .
+      - name: validate data/*.json against schemas/*.schema.json
+        run: python scripts/validate_data.py
+      - name: pytest
+        run: pytest tests/ -v
+      - name: rebuild app/data.js and check it matches what's committed
+        run: |
+          python scripts/build_web_data.py
+          git diff --exit-code app/data.js || {
+            echo "::error::app/data.js is stale — run 'python3 scripts/build_web_data.py' and commit the result.";
+            exit 1;
+          }
+
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: node --test (app/core.js)
+        run: node --test tests/core.test.js
