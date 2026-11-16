@@ -5,6 +5,7 @@ window.makeStrings = function makeStrings(b) {
   const en = {
     demo: 'Demo · simulated data', sections: 'Sections',
     tabs: { overview: 'Overview', questions: 'Questions', sources: 'Sources', website: 'Website', impact: 'Impact', library: 'Library', write: 'Write' },
+    groups: { monitor: 'Monitor', improve: 'Improve' },
     types: { statement: 'Key statement', definition: 'Definition', figure: 'Figure', case: 'Case example', quote: 'Quote', faq: 'FAQ' },
 
     visKey: 'Visibility on key questions', visSub: b + ' mentioned, across all 3 engines', openGaps: 'Open gaps',
@@ -72,6 +73,7 @@ window.makeStrings = function makeStrings(b) {
   const de = Object.assign({}, en, {
     demo: 'Demo · simulierte Daten', sections: 'Bereiche',
     tabs: { overview: 'Übersicht', questions: 'Fragen', sources: 'Quellen', website: 'Website', impact: 'Wirkung', library: 'Bibliothek', write: 'Verfassen' },
+    groups: { monitor: 'Monitor', improve: 'Verbessern' },
     types: { statement: 'Kernaussage', definition: 'Definition', figure: 'Zahl', case: 'Fallbeispiel', quote: 'Zitat', faq: 'FAQ' },
     visKey: 'Sichtbarkeit Key-Fragen', visSub: b + ' genannt, über alle 3 Engines', openGaps: 'Offene Lücken',
     fullGap: n => n + ' Fragen ohne ' + b + ' in allen Engines',

@@ -15,6 +15,12 @@
   const STR = window.makeStrings(BRAND.short);
   const ENGINES = [{ id: 'claude', name: 'Claude' }, { id: 'gpt', name: 'ChatGPT' }, { id: 'gemini', name: 'Gemini' }];
   const TYPES = ['statement', 'definition', 'figure', 'case', 'quote', 'faq'];
+  // Top-level nav is Overview + 2 groups, instead of 7 flat tabs: "Monitor" is
+  // what the engines are doing (the read side), "Improve" is what to do about
+  // it (the act side). Each group's children render as a second-level tab row.
+  const GROUPS = { monitor: ['questions', 'sources', 'impact'], improve: ['website', 'library', 'write'] };
+  const GROUP_OF = {};
+  Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
   const TYPE_FG = { statement: '#1A3A9C', definition: '#3A3D45', figure: '#16181D', case: '#9A3412', quote: '#5B2A86', faq: '#1F5C55' };
   const C = { fg: '#16181D', muted: '#6B6F78', faint: '#9A9DA5', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
   const STORE_KEY = 'geo-engine:v1';
@@ -393,7 +399,14 @@
       ranked: CATS.map(c => ({ c, st: catStats(c.id) })).sort((a, b) => b.st.weight - a.st.weight)
     };
 
-    const tabs = Object.keys(l.tabs).map(id => tabBtn(l.tabs[id], state.tab === id, () => set({ tab: id }))).join('');
+    const curGroup = GROUP_OF[state.tab];
+    const tabs = [tabBtn(l.tabs.overview, state.tab === 'overview', () => set({ tab: 'overview' }))]
+      .concat(Object.keys(GROUPS).map(g => tabBtn(l.groups[g], curGroup === g, () => { if (curGroup !== g) set({ tab: GROUPS[g][0] }); })))
+      .join('');
+    const subnav = curGroup
+      ? '<nav class="subtabs" style="margin-bottom:8px" aria-label="' + esc(l.groups[curGroup]) + '"><div style="display:flex;flex-wrap:wrap;gap:4px">' +
+        GROUPS[curGroup].map(id => tabBtn(l.tabs[id], state.tab === id, () => set({ tab: id }))).join('') + '</div></nav>'
+      : '';
     const views = {
       overview: viewOverview, questions: viewQuestions, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
       write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
@@ -405,7 +418,7 @@
       '<div class="right"><span class="small muted">' + esc(l.demo) + '</span><div class="lang" role="group" aria-label="Language">' +
       '<button class="' + (state.lang === 'en' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'en') + '" ' + click(() => set({ lang: 'en' })) + '>EN</button>' +
       '<button class="' + (state.lang === 'de' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'de') + '" ' + click(() => set({ lang: 'de' })) + '>DE</button></div></div></div></header>' +
-      '<main>' + views[state.tab](ctx) + '</main>';
+      '<main>' + subnav + views[state.tab](ctx) + '</main>';
 
     if (focused) {
       const el = document.getElementById(focused);
