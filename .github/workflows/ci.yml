@@ -21,6 +21,15 @@ jobs:
         run: python scripts/validate_data.py
       - name: pytest
         run: pytest tests/ -v
+      - name: monitoring dry-run smoke test (zero API cost)
+        run: |
+          python monitoring/run.py --dry-run --questions q1,q2 --runs 1 --db /tmp/ci-check.sqlite
+          python -c "
+          import sqlite3
+          n = sqlite3.connect('/tmp/ci-check.sqlite').execute('SELECT COUNT(*) FROM runs').fetchone()[0]
+          assert n == 6, f'expected 6 rows, got {n}'
+          print('monitoring dry-run wrote', n, 'rows as expected')
+          "
       - name: rebuild app/data.js and check it matches what's committed
         run: |
           python scripts/build_web_data.py

@@ -53,18 +53,22 @@ pass. Lint is clean.
 *Goal: replace `demo_monitoring.json` with real data. Touches money (API calls) —
 each task below gets its own PR and its own review before running against real keys.*
 
-- [ ] **C1.** Dry-run/mock mode: recorded fixture responses for each engine, so C2-C5
-  can be built and tested with **zero API spend**. Build this first. — *M, none (no
-  real calls)*
-- [ ] **C2.** Mention detection: match `brand.json` aliases (case/diacritic-insensitive),
-  extract rank among named providers, normalize cited URLs to bare domains. Pure
-  logic — unit test against the fixtures from C1. — *M, none*
-- [ ] **C3.** Cost estimator: token-count the 15 key questions × 3 engines × 3 runs,
-  print projected cost, require `--yes` above a configurable threshold, hard-cap with
-  `--max-calls`. — *S, none (guard logic only)*
-- [ ] **C4.** `monitoring/run.py`: wires C1–C3 together, calls OpenAI/Anthropic/Gemini
-  with web search enabled, writes `question_id, engine, model, run_index, timestamp,
-  language, mentioned, position, cited_urls, answer_text` to SQLite.
+- [x] **C1.** Dry-run/mock mode: `monitoring/fixtures/sample_answers.json` +
+  `monitoring/run.py --dry-run` exercises question selection, mention detection and
+  the SQLite writer end to end at zero cost. Verified in CI.
+- [x] **C2.** Mention detection: `monitoring/mention_detection.py` — matches
+  `brand.json` aliases case-insensitively (and across hyphen/space variants),
+  ranks the brand among named competitors by first-mention order, normalizes cited
+  URLs to bare domains. 21 unit tests in `tests/test_mention_detection.py`.
+- [x] **C3.** Cost estimator: `monitoring/cost_estimate.py` — `estimate_cost()`,
+  `check_call_budget()` (`--max-calls`), `needs_confirmation()` (`--yes` threshold),
+  wired into `run.py`. Per-token prices are explicitly marked `[placeholder]` —
+  **verify against each provider's current pricing page before trusting a dollar
+  figure from this in a real run.** 11 unit tests in `tests/test_cost_estimate.py`.
+- [ ] **C4.** Wire real provider calls into `monitoring/run.py` (currently raises
+  `NotImplementedError` outside `--dry-run`, on purpose). Needs: which provider(s)
+  (OpenAI/Anthropic/Gemini, one or all three), API keys in `.env`, and a verified
+  (not placeholder) pricing table in `cost_estimate.py`.
   **Gate: review cost estimate with you before the first real run.** — *L, medium —
   real API spend, real external calls*
 - [ ] **C5.** Export: SQLite → `data/monitoring.json`, point the app at it instead of

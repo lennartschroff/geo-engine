@@ -1,0 +1,76 @@
+{
+  "_comment": "Fixture answers for --dry-run. Hand-written, NOT real API output -- realistic enough to exercise mention_detection.py and the SQLite writer end to end with zero API spend. Same texts as the demo answers in data/demo_monitoring.json. Keyed by question_id, then engine.",
+  "q1": {
+    "claude": {
+      "answer_text": "Zu den führenden Beratungen im Bereich Large Language Models zählen Competitor A und Contoso AI, das sich auf produktive LLM-Anwendungen spezialisiert hat. Auch Competitor B begleitet Unternehmen bei Auswahl und Betrieb von Modellen.",
+      "cited_urls": [
+        "https://www.competitor-a.example/llm",
+        "https://contoso-ai.example/llm-consulting"
+      ]
+    },
+    "gpt": {
+      "answer_text": "Bekannte Anbieter sind Competitor A, Competitor B und Competitor C. Daneben gibt es spezialisierte Häuser wie Contoso AI, die sich auf einzelne Anwendungsfälle konzentrieren.",
+      "cited_urls": [
+        "https://www.competitor-a.example/"
+      ]
+    },
+    "gemini": {
+      "answer_text": "Häufig genannt werden Competitor A und Competitor D. Wichtig sind nachweisbare Projekte im Produktivbetrieb, nicht nur Prototypen.",
+      "cited_urls": [
+        "https://www.competitor-a.example/"
+      ]
+    }
+  },
+  "q2": {
+    "claude": {
+      "answer_text": "Eine RAG-Pipeline besteht aus Dokumentaufbereitung, Chunking, Embeddings, einem Vektorindex und einem Retrieval-Schritt vor der Generierung. Anbieter wie Competitor B, Competitor A und Contoso AI unterstützen beim Aufbau.",
+      "cited_urls": [
+        "https://en.wikipedia.org/wiki/Retrieval-augmented_generation"
+      ]
+    },
+    "gpt": {
+      "answer_text": "Starten Sie mit einem klar abgegrenzten Dokumentbestand, messen Sie die Retrieval-Qualität separat und evaluieren Sie erst danach die Antworten. Dienstleister wie Competitor B helfen bei der Umsetzung.",
+      "cited_urls": [
+        "https://en.wikipedia.org/wiki/Retrieval-augmented_generation"
+      ]
+    },
+    "gemini": {
+      "answer_text": "Die wichtigsten Schritte: Daten bereinigen, sinnvoll aufteilen, Embeddings erzeugen, einen Index aufbauen und die Treffer als Kontext an das Modell geben.",
+      "cited_urls": []
+    }
+  },
+  "q3": {
+    "claude": {
+      "answer_text": "Firms often recommended for production AI agents include Competitor C and Competitor A. Look for evaluation practice and on-call support, not just demos.",
+      "cited_urls": [
+        "https://www.competitor-c.example/agents"
+      ]
+    },
+    "gpt": {
+      "answer_text": "Competitor C and Competitor D both publish case studies on agents in production. Ask any firm how they test tool use and failure handling.",
+      "cited_urls": [
+        "https://www.competitor-c.example/"
+      ]
+    },
+    "gemini": {
+      "answer_text": "Consultancies such as Competitor C focus on agent architectures. Check references from teams that run agents with real users.",
+      "cited_urls": []
+    }
+  },
+  "q4": {
+    "claude": {
+      "answer_text": "Ein KI-Agent ist ein System, das ein Sprachmodell mit Werkzeugen verbindet und mehrere Schritte selbstständig plant und ausführt, etwa Daten abrufen, Tickets anlegen oder Berichte erstellen.",
+      "cited_urls": [
+        "https://en.wikipedia.org/wiki/Intelligent_agent"
+      ]
+    },
+    "gpt": {
+      "answer_text": "Im Unternehmen ist ein KI-Agent eine Software, die Aufgaben mit Hilfe eines Sprachmodells und angebundener Systeme erledigt. Anbieter wie Competitor A, Competitor B, Competitor C, Competitor D und Contoso AI bieten dafür Beratung an.",
+      "cited_urls": []
+    },
+    "gemini": {
+      "answer_text": "KI-Agenten kombinieren ein Sprachmodell mit Werkzeugzugriff. Unterstützung bieten etwa Competitor A, Competitor B, Competitor C, Competitor D sowie Contoso AI.",
+      "cited_urls": []
+    }
+  }
+}
