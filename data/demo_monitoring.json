@@ -1,0 +1,335 @@
+{
+ "_comment": "Simulated monitoring data for the demo. Result codes per engine (claude gpt gemini): c<n> = cited at position n, m<n> = mentioned at position n, a = absent.",
+ "results": {
+  "q1": {
+   "competitor": "Competitor A",
+   "r": "c2 m4 a"
+  },
+  "q2": {
+   "competitor": "Competitor B",
+   "r": "m3 a a"
+  },
+  "q3": {
+   "competitor": "Competitor C",
+   "r": "a a a"
+  },
+  "q4": {
+   "competitor": "Competitor A",
+   "r": "a m5 m5"
+  },
+  "q5": {
+   "competitor": "Competitor D",
+   "r": "c1 c2 m3"
+  },
+  "q6": {
+   "competitor": "Competitor B",
+   "r": "a m2 a"
+  },
+  "q7": {
+   "competitor": "Competitor C",
+   "r": "c1 c1 c2"
+  },
+  "q8": {
+   "competitor": "Competitor D",
+   "r": "a a a"
+  },
+  "q9": {
+   "competitor": "Competitor C",
+   "r": "a m6 a"
+  },
+  "q10": {
+   "competitor": "Competitor A",
+   "r": "m5 a a"
+  },
+  "q11": {
+   "competitor": "Competitor B",
+   "r": "a a a"
+  },
+  "q12": {
+   "competitor": "Competitor D",
+   "r": "a a m4"
+  },
+  "q13": {
+   "competitor": "Competitor C",
+   "r": "a a a"
+  },
+  "q14": {
+   "competitor": "Competitor A",
+   "r": "c1 m2 m3"
+  },
+  "q15": {
+   "competitor": "Competitor B",
+   "r": "m2 a a"
+  }
+ },
+ "answers": {
+  "q1": [
+   {
+    "engine": "claude",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Zu den führenden Beratungen im Bereich Large Language Models zählen Competitor A und Contoso AI, das sich auf produktive LLM-Anwendungen spezialisiert hat. Auch Competitor B begleitet Unternehmen bei Auswahl und Betrieb von Modellen."
+   },
+   {
+    "engine": "gpt",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Bekannte Anbieter sind Competitor A, Competitor B und Competitor C. Daneben gibt es spezialisierte Häuser wie Contoso AI, die sich auf einzelne Anwendungsfälle konzentrieren."
+   },
+   {
+    "engine": "gemini",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Häufig genannt werden Competitor A und Competitor D. Wichtig sind nachweisbare Projekte im Produktivbetrieb, nicht nur Prototypen."
+   }
+  ],
+  "q2": [
+   {
+    "engine": "claude",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Eine RAG-Pipeline besteht aus Dokumentaufbereitung, Chunking, Embeddings, einem Vektorindex und einem Retrieval-Schritt vor der Generierung. Anbieter wie Competitor B, Competitor A und Contoso AI unterstützen beim Aufbau."
+   },
+   {
+    "engine": "gpt",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Starten Sie mit einem klar abgegrenzten Dokumentbestand, messen Sie die Retrieval-Qualität separat und evaluieren Sie erst danach die Antworten. Dienstleister wie Competitor B helfen bei der Umsetzung."
+   },
+   {
+    "engine": "gemini",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Die wichtigsten Schritte: Daten bereinigen, sinnvoll aufteilen, Embeddings erzeugen, einen Index aufbauen und die Treffer als Kontext an das Modell geben."
+   }
+  ],
+  "q3": [
+   {
+    "engine": "claude",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Firms often recommended for production AI agents include Competitor C and Competitor A. Look for evaluation practice and on-call support, not just demos."
+   },
+   {
+    "engine": "gpt",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Competitor C and Competitor D both publish case studies on agents in production. Ask any firm how they test tool use and failure handling."
+   },
+   {
+    "engine": "gemini",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Consultancies such as Competitor C focus on agent architectures. Check references from teams that run agents with real users."
+   }
+  ],
+  "q4": [
+   {
+    "engine": "claude",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Ein KI-Agent ist ein System, das ein Sprachmodell mit Werkzeugen verbindet und mehrere Schritte selbstständig plant und ausführt, etwa Daten abrufen, Tickets anlegen oder Berichte erstellen."
+   },
+   {
+    "engine": "gpt",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "Im Unternehmen ist ein KI-Agent eine Software, die Aufgaben mit Hilfe eines Sprachmodells und angebundener Systeme erledigt. Anbieter wie Competitor A, Competitor B, Competitor C, Competitor D und Contoso AI bieten dafür Beratung an."
+   },
+   {
+    "engine": "gemini",
+    "variant": 0,
+    "model": "demo",
+    "date": "2026-11-16",
+    "prompt": null,
+    "text": "KI-Agenten kombinieren ein Sprachmodell mit Werkzeugzugriff. Unterstützung bieten etwa Competitor A, Competitor B, Competitor C, Competitor D sowie Contoso AI."
+   }
+  ]
+ },
+ "competitors": [
+  "Competitor A",
+  "Competitor B",
+  "Competitor C",
+  "Competitor D"
+ ],
+ "cited_sources": [
+  {
+   "name": "[AI tooling directory A]",
+   "kind": "portal",
+   "cites": 14,
+   "qs": 6,
+   "present": false,
+   "act": "pitch"
+  },
+  {
+   "name": "wikipedia.org",
+   "kind": "wiki",
+   "cites": 11,
+   "qs": 7,
+   "present": false,
+   "act": "wiki"
+  },
+  {
+   "name": "[Ranking: top LLM consulting firms]",
+   "kind": "ranking",
+   "cites": 9,
+   "qs": 4,
+   "present": false,
+   "act": "listing"
+  },
+  {
+   "name": "[Competitor A] website",
+   "kind": "competitor",
+   "cites": 9,
+   "qs": 5,
+   "present": null,
+   "act": "analyze"
+  },
+  {
+   "name": "linkedin.com",
+   "kind": "social",
+   "cites": 7,
+   "qs": 5,
+   "present": true,
+   "act": "posts"
+  },
+  {
+   "name": "[Own website]",
+   "kind": "own",
+   "cites": 6,
+   "qs": 4,
+   "present": true,
+   "act": "pages"
+  },
+  {
+   "name": "[AI trade journal B]",
+   "kind": "media",
+   "cites": 6,
+   "qs": 3,
+   "present": false,
+   "act": "article"
+  },
+  {
+   "name": "[Study: state of enterprise AI report C]",
+   "kind": "study",
+   "cites": 5,
+   "qs": 3,
+   "present": false,
+   "act": "study"
+  },
+  {
+   "name": "[Competitor B] blog",
+   "kind": "competitor",
+   "cites": 4,
+   "qs": 3,
+   "present": null,
+   "act": "analyze"
+  },
+  {
+   "name": "reddit.com",
+   "kind": "community",
+   "cites": 4,
+   "qs": 2,
+   "present": false,
+   "act": "watch"
+  },
+  {
+   "name": "[University AI lab D]",
+   "kind": "science",
+   "cites": 3,
+   "qs": 2,
+   "present": true,
+   "act": "paper"
+  },
+  {
+   "name": "[AI industry association E]",
+   "kind": "association",
+   "cites": 3,
+   "qs": 2,
+   "present": false,
+   "act": "profile"
+  }
+ ],
+ "trend": [
+  27,
+  28,
+  27,
+  30,
+  31,
+  33,
+  32,
+  35,
+  37,
+  38,
+  40,
+  42
+ ],
+ "pieces": [
+  {
+   "mark": "A",
+   "week": 4,
+   "type": "guide",
+   "de": "Leitfaden: KI-Agenten richtig evaluieren",
+   "en": "Guide: evaluating AI agents correctly",
+   "qs": [
+    "q5",
+    "q32"
+   ],
+   "before": 50,
+   "after": 83
+  },
+  {
+   "mark": "B",
+   "week": 7,
+   "type": "article",
+   "de": "Artikel: RAG in der Praxis",
+   "en": "Article: RAG in practice",
+   "qs": [
+    "q14",
+    "q10"
+   ],
+   "before": 33,
+   "after": 67
+  },
+  {
+   "mark": "C",
+   "week": 10,
+   "type": "faq",
+   "de": "FAQ-Seite: Retrieval-Augmented Generation",
+   "en": "FAQ page: retrieval-augmented generation",
+   "qs": [
+    "q2",
+    "q15"
+   ],
+   "before": 17,
+   "after": 33
+  }
+ ],
+ "audit_meta": {
+  "date": "2026-11-10",
+  "pages": 10,
+  "posts": 0
+ }
+}

@@ -1,0 +1,20 @@
+# Secrets – never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local run output (may contain third-party page content)
+data/crawl-*.json
+docs/audit-summary-*.md
+monitoring/*.sqlite
+monitoring/*.db
+output/website/*
+!output/website/.gitkeep
+
+# Python / OS
+__pycache__/
+*.pyc
+.venv/
+.DS_Store

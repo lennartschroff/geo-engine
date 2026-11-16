@@ -1,0 +1,258 @@
+[
+  {
+    "id": "k1",
+    "type": "definition",
+    "categories": [
+      "rag",
+      "agents"
+    ],
+    "source": "/en/retrieval-augmented-generation/",
+    "placeholder": false,
+    "text_de": "Retrieval-Augmented Generation (RAG) kombiniert ein Sprachmodell mit einer Suche über eigene Dokumente, damit Antworten auf aktuellem, firmeneigenem Wissen statt nur auf Trainingsdaten beruhen.",
+    "text_en": "Retrieval-augmented generation (RAG) combines a language model with a search step over your own documents, so answers are grounded in current, company-specific knowledge instead of training data alone."
+  },
+  {
+    "id": "k2",
+    "type": "figure",
+    "categories": [
+      "rag"
+    ],
+    "source": "/en/retrieval-augmented-generation/",
+    "placeholder": false,
+    "text_de": "Über 12 RAG-Projekte im Jahr 2025 hat Contoso eine mittlere Antwortzeit von 1,8 Sekunden gemessen.",
+    "text_en": "Across 12 RAG deployments in 2025, Contoso measured a median answer time of 1.8 seconds."
+  },
+  {
+    "id": "k3",
+    "type": "faq",
+    "categories": [
+      "rag",
+      "eval"
+    ],
+    "source": "/en/retrieval-augmented-generation/",
+    "placeholder": false,
+    "text_de": "Wann lohnt sich RAG gegenüber Fine-Tuning? – Wenn sich das zugrunde liegende Wissen häufig ändert oder aus Quellen stammt, die nicht im Modell landen dürfen, etwa interne Dokumente oder Kundendaten.",
+    "text_en": "When is RAG worth it over fine-tuning? – When the underlying knowledge changes often or comes from sources that shouldn't be baked into the model itself, such as internal documents or customer data."
+  },
+  {
+    "id": "k4",
+    "type": "definition",
+    "categories": [
+      "eval"
+    ],
+    "source": "/en/model-evaluation/",
+    "placeholder": false,
+    "text_de": "LLM-Evaluierung ist der systematische Vergleich von Modellantworten gegen definierte Kriterien wie Korrektheit, Sicherheit und Stil, oft mit einer Mischung aus automatisierten Metriken und menschlicher Bewertung.",
+    "text_en": "LLM evaluation is the systematic comparison of model outputs against defined criteria such as correctness, safety and style, usually combining automated metrics with human review."
+  },
+  {
+    "id": "k5",
+    "type": "figure",
+    "categories": [
+      "eval",
+      "providers"
+    ],
+    "source": "/en/model-evaluation/",
+    "placeholder": false,
+    "text_de": "Seit 2023 hat Contoso 7 offene Evaluierungs-Checklisten für LLM-Projekte veröffentlicht.",
+    "text_en": "Since 2023, Contoso has published 7 open evaluation checklists for LLM projects."
+  },
+  {
+    "id": "k6",
+    "type": "figure",
+    "categories": [
+      "agents",
+      "llm"
+    ],
+    "source": "/en/ai-agents/",
+    "placeholder": false,
+    "text_de": "Die Evaluierungsbibliothek von Contoso enthält 1.100 wiederverwendbare Testfälle für Retrieval, Sicherheit und Ausgabeformat.",
+    "text_en": "Contoso's evaluation library contains 1,100 reusable test cases for retrieval, safety and output format."
+  },
+  {
+    "id": "k7",
+    "type": "statement",
+    "categories": [
+      "agents",
+      "eval",
+      "safety"
+    ],
+    "source": "/en/ai-agents/",
+    "placeholder": false,
+    "text_de": "Bevor ein Agent live geht, lässt Contoso ihn in einer Sandbox laufen, die jeden Werkzeugaufruf protokolliert und jede datenverändernde Aktion von einer Person freigeben lässt.",
+    "text_en": "Before an agent goes live, Contoso runs it in a sandbox that logs every tool call and asks a person to approve any action that changes data."
+  },
+  {
+    "id": "k8",
+    "type": "definition",
+    "categories": [
+      "agents",
+      "eval"
+    ],
+    "source": "/en/ai-agents/",
+    "placeholder": false,
+    "text_de": "Ein agentischer Workflow lässt ein Sprachmodell eigenständig Werkzeuge aufrufen, Zwischenschritte planen und Ergebnisse überprüfen, statt nur eine einzelne Antwort zu erzeugen.",
+    "text_en": "An agentic workflow lets a language model call tools, plan intermediate steps and check its own results on its own, rather than just producing a single answer."
+  },
+  {
+    "id": "k9",
+    "type": "case",
+    "categories": [
+      "adoption"
+    ],
+    "source": "/en/cases/",
+    "placeholder": false,
+    "text_de": "Für eine Regionalbank hat Contoso die Stichwortsuche im internen Richtlinien-Wiki durch einen RAG-Assistenten ersetzt; der Anteil der ohne Eskalation beantworteten Mitarbeiterfragen stieg in drei Monaten von 54 % auf 71 %.",
+    "text_en": "For a regional bank, Contoso replaced keyword search in the internal policy wiki with a RAG assistant; the share of staff questions answered without escalation rose from 54% to 71% in three months."
+  },
+  {
+    "id": "k10",
+    "type": "statement",
+    "categories": [
+      "adoption",
+      "agents"
+    ],
+    "source": "/en/model-evaluation/",
+    "placeholder": false,
+    "text_de": "In Evaluierungsprojekten schreibt Contoso das Bewertungsraster gemeinsam mit den Fachleuten des Kunden, bevor die erste Modellantwort geprüft wird.",
+    "text_en": "In evaluation projects, Contoso writes the scoring rubric together with the client's domain experts before any model output is reviewed."
+  },
+  {
+    "id": "k11",
+    "type": "definition",
+    "categories": [
+      "safety"
+    ],
+    "source": "/en/ai-safety/",
+    "placeholder": false,
+    "text_de": "Ein KI-Governance-Rahmenwerk legt Rollen, Risikostufen und Kontrollen für KI-Systeme fest. Das NIST AI Risk Management Framework beschreibt weit verbreitete Anforderungen dafür.",
+    "text_en": "An AI governance framework defines roles, risk tiers and controls for AI systems. The NIST AI Risk Management Framework describes widely used requirements for this."
+  },
+  {
+    "id": "k12",
+    "type": "faq",
+    "categories": [
+      "adoption",
+      "eval"
+    ],
+    "source": "/en/enterprise-ai-adoption/",
+    "placeholder": false,
+    "text_de": "Mit welchem KI-Anwendungsfall sollte ich anfangen? – Mit einer Aufgabe, die klare Erfolgskriterien hat, auf vorhandenen Daten aufbaut und bei der Fehler wenig kosten, etwa interne Zusammenfassungen.",
+    "text_en": "Which AI use case should I start with? – With a task that has clear success criteria, data you already have and a low cost of mistakes, such as drafting internal summaries."
+  },
+  {
+    "id": "k13",
+    "type": "statement",
+    "categories": [
+      "providers",
+      "rag"
+    ],
+    "source": "/en/",
+    "placeholder": false,
+    "text_de": "Contoso AI ist eine KI-Engineering- und Beratungsfirma aus Austin, die Unternehmen beim Aufbau von RAG- und Agentensystemen mit ihren eigenen Daten unterstützt.",
+    "text_en": "Contoso AI is an AI engineering and advisory firm based in Austin that helps companies build RAG and agent systems on top of their own data."
+  },
+  {
+    "id": "k14",
+    "type": "statement",
+    "categories": [
+      "providers"
+    ],
+    "source": "/en/",
+    "placeholder": false,
+    "text_de": "Contoso arbeitet vor allem für Unternehmen aus Finanzdienstleistungen, Gesundheitswesen und B2B-Software.",
+    "text_en": "Contoso mainly works for companies in financial services, healthcare and B2B software."
+  },
+  {
+    "id": "k15",
+    "type": "case",
+    "categories": [
+      "eval",
+      "safety"
+    ],
+    "source": "/en/cases/",
+    "placeholder": false,
+    "text_de": "Für einen Telekommunikationsanbieter hat Contoso einen Regressionstest aus 2.000 echten Kundenfragen gebaut, der jetzt vor jeder Modell- oder Prompt-Änderung läuft.",
+    "text_en": "For a telecom provider, Contoso built a regression test set of 2,000 real customer questions that now runs before every model or prompt change."
+  },
+  {
+    "id": "k16",
+    "type": "case",
+    "categories": [
+      "agents",
+      "adoption"
+    ],
+    "source": "/en/cases/",
+    "placeholder": false,
+    "text_de": "Für einen Softwarehersteller hat Contoso einen Agenten eingeführt, der eingehende Fehlermeldungen sortiert; die mittlere Zeit bis zur ersten Antwort sank von 9 Stunden auf 40 Minuten.",
+    "text_en": "For a software vendor, Contoso added an agent that sorts incoming bug reports; median time to first response dropped from 9 hours to 40 minutes."
+  },
+  {
+    "id": "p1",
+    "type": "quote",
+    "categories": [
+      "rag",
+      "eval"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "„[Zitat einer Expertin zu RAG-Evaluierung]“ – [Name], Contoso",
+    "text_en": "“[Quote from an expert on RAG evaluation]” – [Name], Contoso"
+  },
+  {
+    "id": "p2",
+    "type": "quote",
+    "categories": [
+      "agents"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "„[Zitat zu KI-Agenten im Produktivbetrieb]“ – [Name], Contoso",
+    "text_en": "“[Quote on AI agents in production]” – [Name], Contoso"
+  },
+  {
+    "id": "p3",
+    "type": "quote",
+    "categories": [
+      "adoption",
+      "llm"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "„[Zitat zur KI-Einführung im Unternehmen]“ – [Name], Contoso",
+    "text_en": "“[Quote on enterprise AI adoption]” – [Name], Contoso"
+  },
+  {
+    "id": "p4",
+    "type": "figure",
+    "categories": [
+      "safety"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "[Zahl zu Sicherheitsreviews, z. B. Red-Team-Übungen pro Jahr]",
+    "text_en": "[Figure on safety reviews, e.g. red-team exercises run per year]"
+  },
+  {
+    "id": "p5",
+    "type": "faq",
+    "categories": [
+      "eval"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "Was kostet eine LLM-Evaluierung? – [Antwort ergänzen]",
+    "text_en": "What does an LLM evaluation engagement cost? – [Add answer]"
+  },
+  {
+    "id": "p6",
+    "type": "figure",
+    "categories": [
+      "providers"
+    ],
+    "source": null,
+    "placeholder": true,
+    "text_de": "Contoso AI wurde [Jahr] gegründet und beschäftigt [Anzahl] Mitarbeitende.",
+    "text_en": "Contoso AI was founded in [year] and employs [number] people."
+  }
+]

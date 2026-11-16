@@ -1,0 +1,8 @@
+{
+  "_comment": "Contoso AI is a fictional demo company (the classic placeholder-company name used across Microsoft's own docs, chosen so this reads instantly as a demo). Replace these values with your own brand to use the tool.",
+  "name": "Contoso AI",
+  "short": "Contoso",
+  "domain": "contoso-ai.example",
+  "city": "Austin",
+  "aliases": ["Contoso AI", "Contoso"]
+}

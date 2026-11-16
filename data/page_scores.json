@@ -1,0 +1,121 @@
+[
+ {
+  "de": "Startseite",
+  "en": "Home page",
+  "path": "/en/",
+  "score": 14,
+  "missing": [
+   "nums",
+   "qh",
+   "faq",
+   "words",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "Prompt-Evaluierung",
+  "en": "Prompt evaluation",
+  "path": "/en/prompt-evaluation/",
+  "score": 14,
+  "missing": [
+   "def",
+   "nums",
+   "qh",
+   "faq",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "LLM-Observability",
+  "en": "LLM observability",
+  "path": "/en/llm-observability/",
+  "score": 14,
+  "missing": [
+   "def",
+   "qh",
+   "faq",
+   "words",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "RAG-Kostenrechner",
+  "en": "RAG cost calculator",
+  "path": "/en/rag-cost-calculator/",
+  "score": 14,
+  "missing": [
+   "def",
+   "qh",
+   "faq",
+   "words",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "KI-Governance-Reife",
+  "en": "AI governance readiness",
+  "path": "/en/ai-governance-readiness/",
+  "score": 29,
+  "missing": [
+   "nums",
+   "qh",
+   "faq",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "KI-Einführung im Unternehmen",
+  "en": "Enterprise AI adoption",
+  "path": "/en/enterprise-ai-adoption/",
+  "score": 29,
+  "missing": [
+   "nums",
+   "qh",
+   "faq",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "KI-Agenten",
+  "en": "AI agents",
+  "path": "/en/ai-agents/",
+  "score": 57,
+  "missing": [
+   "faq",
+   "h1",
+   "case"
+  ]
+ },
+ {
+  "de": "LLM-Beratung",
+  "en": "LLM consulting",
+  "path": "/en/llm-consulting/",
+  "score": 71,
+  "missing": [
+   "qh",
+   "faq"
+  ]
+ },
+ {
+  "de": "KI-Agenten-Benchmarks",
+  "en": "AI agent benchmarks",
+  "path": "/en/ai-agent-benchmarks/",
+  "score": 86,
+  "missing": [
+   "faq"
+  ]
+ },
+ {
+  "de": "Retrieval-Augmented Generation",
+  "en": "Retrieval-augmented generation",
+  "path": "/en/retrieval-augmented-generation/",
+  "score": 100,
+  "missing": []
+ }
+]

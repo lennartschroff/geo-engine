@@ -1,0 +1,10 @@
+[
+  {"id": "llm", "label_de": "Large Language Models", "label_en": "Large language models", "keywords": ["large language model", "llm", "gpt", "foundation model", "sprachmodell"]},
+  {"id": "rag", "label_de": "Retrieval-Augmented Generation", "label_en": "Retrieval-augmented generation", "keywords": ["rag", "retrieval augmented generation", "vector search", "embeddings", "wissensdatenbank"]},
+  {"id": "agents", "label_de": "KI-Agenten", "label_en": "AI agents", "keywords": ["ai agent", "autonomous agent", "agentic workflow", "tool use", "ki-agent"]},
+  {"id": "eval", "label_de": "Modellevaluierung", "label_en": "Model evaluation", "keywords": ["model evaluation", "benchmark", "llm eval", "red teaming", "evaluierung"]},
+  {"id": "safety", "label_de": "KI-Sicherheit & Governance", "label_en": "AI safety & governance", "keywords": ["ai safety", "responsible ai", "ai governance", "compliance", "ki-sicherheit"]},
+  {"id": "mlops", "label_de": "MLOps & Deployment", "label_en": "MLOps & deployment", "keywords": ["mlops", "model deployment", "inference", "latency", "bereitstellung"]},
+  {"id": "adoption", "label_de": "KI-Einführung im Unternehmen", "label_en": "Enterprise AI adoption", "keywords": ["enterprise ai", "ai adoption", "change management", "ai roi", "ki-einführung"]},
+  {"id": "providers", "label_de": "Anbieter & Standort", "label_en": "Providers & location", "keywords": ["ai consultancy", "ai agency", "ai vendor", "austin", "ki-beratung"]}
+]

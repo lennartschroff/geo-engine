@@ -1,0 +1,130 @@
+[
+ {
+  "id": "f-bots-answer",
+  "priority": "high",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "AI search crawlers are blocked",
+   "These crawlers get an error response from the server: PerplexityBot. They fetch pages live for answers with web search, so blocked pages can't be cited.",
+   "Check the server, CDN or security plugin rules for these user agents and allow them."
+  ],
+  "de": [
+   "KI-Such-Crawler werden blockiert",
+   "Diese Crawler erhalten eine Fehlerantwort vom Server: PerplexityBot. Sie rufen Seiten live für Antworten mit Websuche ab; blockierte Seiten können nicht zitiert werden.",
+   "Regeln in Server, CDN oder Sicherheits-Plugin für diese User-Agents prüfen und freigeben."
+  ]
+ },
+ {
+  "id": "f-org-schema",
+  "priority": "high",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "No organization schema",
+   "None of the 10 crawled pages has Organization structured data (JSON-LD).",
+   "Add Organization JSON-LD to the home page: name, url, logo, description, foundingDate, address, sameAs (profiles), knowsAbout (core topics)."
+  ],
+  "de": [
+   "Kein Organisations-Schema",
+   "Keine der 10 gecrawlten Seiten hat strukturierte Organisationsdaten (JSON-LD).",
+   "Organization-JSON-LD auf der Startseite ergänzen: name, url, logo, description, foundingDate, address, sameAs (Profile), knowsAbout (Kernthemen)."
+  ]
+ },
+ {
+  "id": "f-h1",
+  "priority": "mid",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "Pages without a main heading",
+   "1 of 10 pages has no H1, e.g. https://contoso-ai.example/en/ai-governance-readiness/.",
+   "Give every page one H1 that states its topic plainly."
+  ],
+  "de": [
+   "Seiten ohne Hauptüberschrift",
+   "1 von 10 Seiten hat keine H1, z. B. https://contoso-ai.example/en/ai-governance-readiness/.",
+   "Jeder Seite genau eine H1 geben, die das Thema klar benennt."
+  ]
+ },
+ {
+  "id": "f-relative-time",
+  "priority": "mid",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "Relative time statements go stale",
+   "2 pages use phrases like \"more than 5 years\", \"over 3 years\", e.g. https://contoso-ai.example/en/, https://contoso-ai.example/en/ai-governance-readiness/.",
+   "Replace them with fixed years (\"since 2011\")."
+  ],
+  "de": [
+   "Relative Zeitangaben veralten",
+   "2 Seiten verwenden Formulierungen wie \"more than 5 years\", \"over 3 years\", z. B. https://contoso-ai.example/en/, https://contoso-ai.example/en/ai-governance-readiness/.",
+   "Durch feste Jahreszahlen ersetzen (\"seit 2011\")."
+  ]
+ },
+ {
+  "id": "f-llms",
+  "priority": "low",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "No llms.txt",
+   "/llms.txt returns HTTP 404. It's an emerging convention, not a standard, and engines don't reliably use it yet.",
+   "Optional: publish a short llms.txt that lists your most important pages."
+  ],
+  "de": [
+   "Keine llms.txt",
+   "/llms.txt liefert HTTP 404. Das ist eine junge Konvention, kein Standard; Engines nutzen sie noch nicht verlässlich.",
+   "Optional: eine kurze llms.txt mit den wichtigsten Seiten veröffentlichen."
+  ]
+ },
+ {
+  "id": "f-thin",
+  "priority": "low",
+  "effort": "mid",
+  "status": "open",
+  "en": [
+   "Thin pages",
+   "2 pages have fewer than 300 words of main content, e.g. https://contoso-ai.example/en/llm-observability/, https://contoso-ai.example/en/rag-cost-calculator/.",
+   "Merge or expand pages that should rank for a topic; leave pure utility pages alone."
+  ],
+  "de": [
+   "Dünne Seiten",
+   "2 Seiten haben weniger als 300 Wörter Hauptinhalt, z. B. https://contoso-ai.example/en/llm-observability/, https://contoso-ai.example/en/rag-cost-calculator/.",
+   "Seiten, die zu einem Thema gefunden werden sollen, zusammenlegen oder ausbauen; reine Service-Seiten so lassen."
+  ]
+ },
+ {
+  "id": "f-meta",
+  "priority": "low",
+  "effort": "low",
+  "status": "open",
+  "en": [
+   "Missing meta descriptions",
+   "3 of 10 pages have no meta description, e.g. https://contoso-ai.example/en/prompt-evaluation/, https://contoso-ai.example/en/llm-observability/, https://contoso-ai.example/en/rag-cost-calculator/.",
+   "Write a one-sentence summary for each page; engines and search results use it as a snippet."
+  ],
+  "de": [
+   "Fehlende Meta-Beschreibungen",
+   "3 von 10 Seiten haben keine Meta-Beschreibung, z. B. https://contoso-ai.example/en/prompt-evaluation/, https://contoso-ai.example/en/llm-observability/, https://contoso-ai.example/en/rag-cost-calculator/.",
+   "Für jede Seite eine Ein-Satz-Zusammenfassung schreiben; Engines und Suchergebnisse nutzen sie als Auszug."
+  ]
+ },
+ {
+  "id": "f-stale",
+  "priority": "low",
+  "effort": "high",
+  "status": "open",
+  "en": [
+   "Outdated articles",
+   "1 article was last published or updated before 2023, e.g. https://contoso-ai.example/en/enterprise-ai-adoption/.",
+   "Update the ones about current topics (with a visible date), redirect or retire the rest."
+  ],
+  "de": [
+   "Veraltete Beiträge",
+   "1 Beitrag wurde zuletzt vor 2023 veröffentlicht oder aktualisiert, z. B. https://contoso-ai.example/en/enterprise-ai-adoption/.",
+   "Beiträge zu aktuellen Themen überarbeiten (mit sichtbarem Datum), den Rest umleiten oder entfernen."
+  ]
+ }
+]
