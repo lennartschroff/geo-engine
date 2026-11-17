@@ -41,7 +41,7 @@ window.makeStrings = function makeStrings(b) {
     webPagesSub: 'Heuristic score from an answer sentence up front, figures, question headings, FAQ schema, depth, H1 and a linked case study.',
     prio: { high: 'High', mid: 'Medium', low: 'Low' }, effort: { low: 'Low effort', mid: 'Medium effort', high: 'High effort' },
     miss: { def: 'Answer sentence up front', nums: 'Add figures', qh: 'Question-style subheadings', faq: 'FAQ with schema', words: 'Deepen content', h1: 'H1 stating what ' + b + ' is', case: 'Link a case study' },
-    doneAria: 'Done: ', webNote: 'Demo audit of a fictional website. Run scripts/audit_crawl.py against your own site for real data.',
+    doneAria: 'Done: ', webNote: 'Demo audit of a fictional website. Run scripts/audit_crawl.py then scripts/score_pages.py against your own site for real data.',
 
     impSub: 'How visibility develops after each publication – the proof of whether GEO content works.',
     impStatNow: 'Visibility on key questions today', impStatDelta: 'Change over 12 weeks', impStatCount: 'published pieces',
@@ -105,7 +105,7 @@ window.makeStrings = function makeStrings(b) {
     webPagesSub: 'Heuristischer Score aus Antwort-Satz am Anfang, Zahlen, Fragen-Überschriften, FAQ-Schema, Umfang, H1 und verlinktem Fallbeispiel.',
     prio: { high: 'Hoch', mid: 'Mittel', low: 'Niedrig' }, effort: { low: 'Aufwand gering', mid: 'Aufwand mittel', high: 'Aufwand hoch' },
     miss: { def: 'Antwort-Satz an den Anfang', nums: 'Zahlen ergänzen', qh: 'Fragen als Zwischenüberschriften', faq: 'FAQ mit Schema', words: 'Inhalt vertiefen', h1: 'H1 mit Aussage zu ' + b, case: 'Fallbeispiel verlinken' },
-    doneAria: 'Erledigt: ', webNote: 'Demo-Audit einer fiktiven Website. Für echte Daten scripts/audit_crawl.py gegen die eigene Seite laufen lassen.',
+    doneAria: 'Erledigt: ', webNote: 'Demo-Audit einer fiktiven Website. Für echte Daten scripts/audit_crawl.py, dann scripts/score_pages.py gegen die eigene Seite laufen lassen.',
     impSub: 'Wie sich die Sichtbarkeit nach jeder Veröffentlichung entwickelt – der Nachweis, ob GEO-Content wirkt.',
     impStatNow: 'Sichtbarkeit Key-Fragen heute', impStatDelta: 'Veränderung in 12 Wochen', impStatCount: 'veröffentlichte Inhalte',
     impChart: 'Sichtbarkeit Key-Fragen pro Woche', impPieces: 'Veröffentlichte Inhalte',

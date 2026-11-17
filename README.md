@@ -46,7 +46,10 @@ data/        JSON source of truth: brand, topics, questions, content blocks, aud
 app/         Static web app (vanilla JS, no framework, no build tooling)
 scripts/     build_web_data.py  → bundles data/*.json into app/data.js
              audit_crawl.py     → crawls a website's sitemap and extracts GEO signals
-monitoring/  (planned) scheduled prompt runs against the engine APIs → SQLite
+             score_pages.py     → turns a crawl into data/page_scores.json
+monitoring/  run.py             → sends tracked questions to the engines, writes SQLite
+             (real provider calls not wired in yet — --dry-run uses recorded fixtures;
+             see TASKS.md Epic C)
 ```
 
 Design decisions:
@@ -71,6 +74,8 @@ Website audit against a site you own:
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/audit_crawl.py --base https://www.example.com --limit 10
+python scripts/score_pages.py        # reads the newest data/crawl-*.json, writes data/page_scores.json
+python3 scripts/build_web_data.py    # rebuild app/data.js to pick it up
 ```
 
 ## Development
@@ -86,7 +91,9 @@ node --test tests/core.test.js        # JS tests (app/core.js — GEO scoring, m
 ```
 
 All four run in CI (`.github/workflows/ci.yml`) on every push and pull request, along with a
-check that `app/data.js` matches what `build_web_data.py` would regenerate.
+check that `app/data.js` matches what `build_web_data.py` would regenerate. Run
+`./scripts/check.sh` locally before pushing to catch the same issues earlier — it runs every
+CI step plus `gitleaks` if you have it installed.
 
 ## Use it for your own brand
 

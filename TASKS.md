@@ -15,7 +15,7 @@ how reversible / how much it touches running behavior.
 - [x] **A1.** Add `ci.yml`: run `scripts/build_web_data.py` on every `pull_request`, fail
   the check if `app/data.js` would differ from what's committed (catches "forgot to
   rebuild"). — *Size S, Risk: none (new workflow only)*
-- [ ] **A2.** Add a `scripts/check.sh` pre-push helper: rebuild data, run gitleaks if
+- [x] **A2.** Add a `scripts/check.sh` pre-push helper: rebuild data, run gitleaks if
   installed, print a go/no-go summary. Document it in `README.md`. — *S, none*
 - [x] **A3.** Write JSON Schema for `brand.json`, `categories.json`, `questions.json`,
   `blocks.json`, `audit_actions.json`, `page_scores.json`, `demo_monitoring.json`.
@@ -90,7 +90,7 @@ results, refreshed weekly, and you've approved the cost before every real run.
 - [ ] **D3.** Trend view with confidence intervals (answers vary run to run — don't
   show single-run noise as a trend). — *M*
 - [ ] **D4.** Draft export to Markdown/HTML incl. `FAQPage` JSON-LD. — *S*
-- [ ] **D5.** `audit_crawl.py` output feeds `page_scores.json` automatically instead of
+- [x] **D5.** `audit_crawl.py` output feeds `page_scores.json` automatically instead of
   the hand-maintained static file. — *M*
 - [ ] **D6.** Block extraction suggestions from PDFs/transcripts/blog posts. — *L*
 
