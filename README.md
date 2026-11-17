@@ -97,10 +97,22 @@ CI step plus `gitleaks` if you have it installed.
 
 ## Use it for your own brand
 
+Any company can self-serve this with zero cost to anyone but themselves — no API key is
+needed for steps 1-4, and in step 5 (once built, see `TASKS.md` Epic C4) each user supplies
+their own key in their own local `.env`, never shared with anyone else.
+
 1. Edit `data/brand.json` (name, domain, aliases used for mention detection).
-2. Replace `data/blocks.json` with real content blocks from your own site, papers and case studies.
-3. Adapt `data/questions.json` and `data/categories.json` to your market.
-4. Run `python3 scripts/build_web_data.py`.
+2. Write `data/categories.json` for your market (topic id, EN/DE label, matching keywords) —
+   this is real domain knowledge about your business that can't be auto-generated.
+3. Run `python3 scripts/generate_questions.py` to get a starter `data/questions.json` from
+   those categories via templates (zero cost, no API key, instant) — then edit the generated
+   phrasing to match how your actual customers ask.
+4. Replace `data/blocks.json` with real content blocks from your own site, papers and case
+   studies. Run `python3 scripts/audit_crawl.py --base <your site>` then
+   `python3 scripts/score_pages.py` for a real website audit instead of the demo one.
+5. Run `python3 scripts/build_web_data.py` to rebuild `app/data.js`.
+6. For real (non-demo) monitoring: see `TASKS.md` Epic C — `monitoring/run.py --dry-run`
+   works today against recorded fixtures; real provider calls aren't wired in yet.
 
 ## Deploy the demo (GitHub Pages)
 

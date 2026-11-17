@@ -83,6 +83,23 @@ results, refreshed weekly, and you've approved the cost before every real run.
 
 ---
 
+## Epic F — Self-service onboarding (any company, zero cost to you)
+*Goal: lower the barrier from "hand-edit 3 JSON files" to a guided, zero-cost path —
+every user brings their own API key for anything that costs money, never yours.*
+
+- [x] **F1.** `scripts/generate_questions.py`: template-based starter `questions.json`
+  from a hand-authored `categories.json`. Zero cost, no API key, deterministic
+  output. 7 unit tests. Explicitly the "free templates" option, not an LLM-assisted
+  generator — chosen over the alternatives for simplicity and zero cost to everyone.
+- [ ] **F2.** Onboarding wizard (`scripts/init.py`?) that prompts for brand info and
+  walks through brand.json -> categories.json -> generate_questions.py -> audit_crawl.py
+  -> score_pages.py -> build_web_data.py, instead of a README checklist. — *M*
+- [ ] **F3.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
+  flow into `monitoring/run.py`, so "connect your own API, you're ready to go" is a
+  literal, tested instruction, not just an architectural claim.
+
+---
+
 ## Epic D — Product features (depend on Epic C data)
 - [ ] **D1.** Answer viewer: full engine answer text with brand/competitor mentions
   highlighted. — *M*
