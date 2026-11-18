@@ -8,6 +8,7 @@
 # Local run output (may contain third-party page content)
 data/crawl-*.json
 data/suggested_topics.json
+monitoring/monitoring_export.json
 docs/audit-summary-*.md
 monitoring/*.sqlite
 monitoring/*.db

@@ -23,10 +23,19 @@
   /**
    * Parses a demo-monitoring result string like "c2 m4 a" into per-engine
    * status. Codes: c<n> = cited at position n, m<n> = mentioned at
-   * position n, a = absent. Engine order is fixed: claude, gpt, gemini.
+   * position n, a = absent (checked, not found), n = not run (never
+   * queried for this engine — distinct from "a": a real monitoring export
+   * can have real data for one engine and nothing yet for the others, and
+   * those need to render as "not run" (notrun dot), not a false "absent").
+   * Engine order is fixed: claude, gpt, gemini.
    */
   function parseResult(str) {
-    const one = x => (x[0] === 'c' ? ['cited', +x.slice(1)] : x[0] === 'm' ? ['mentioned', +x.slice(1)] : ['absent', 0]);
+    const one = x => (
+      x[0] === 'c' ? ['cited', +x.slice(1)] :
+      x[0] === 'm' ? ['mentioned', +x.slice(1)] :
+      x[0] === 'n' ? ['notrun', 0] :
+      ['absent', 0]
+    );
     const t = str.split(' ');
     return { claude: one(t[0]), gpt: one(t[1]), gemini: one(t[2]) };
   }

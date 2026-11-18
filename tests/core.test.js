@@ -34,6 +34,22 @@ describe('parseResult', () => {
       gemini: ['cited', 10],
     });
   });
+
+  test('"n" means not run, distinct from "a" (checked, absent)', () => {
+    assert.deepEqual(CORE.parseResult('c2 n n'), {
+      claude: ['cited', 2],
+      gpt: ['notrun', 0],
+      gemini: ['notrun', 0],
+    });
+  });
+
+  test('all not run (e.g. a question with no real data for any engine yet)', () => {
+    assert.deepEqual(CORE.parseResult('n n n'), {
+      claude: ['notrun', 0],
+      gpt: ['notrun', 0],
+      gemini: ['notrun', 0],
+    });
+  });
 });
 
 describe('pct', () => {

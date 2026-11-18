@@ -13,11 +13,14 @@
         "required": ["competitor", "r"],
         "additionalProperties": false,
         "properties": {
-          "competitor": { "type": "string" },
+          "competitor": {
+            "type": ["string", "null"],
+            "description": "null = not tracked (e.g. a real export, where no maintained competitor list exists yet — see TASKS.md C5a)"
+          },
           "r": {
             "type": "string",
-            "description": "Three space-separated result codes (claude gpt gemini): c<n>=cited, m<n>=mentioned, a=absent.",
-            "pattern": "^(c[0-9]+|m[0-9]+|a) (c[0-9]+|m[0-9]+|a) (c[0-9]+|m[0-9]+|a)$"
+            "description": "Three space-separated result codes (claude gpt gemini): c<n>=cited, m<n>=mentioned, a=absent (checked, not found), n=not run for this engine.",
+            "pattern": "^(c[0-9]+|m[0-9]+|a|n) (c[0-9]+|m[0-9]+|a|n) (c[0-9]+|m[0-9]+|a|n)$"
           }
         }
       }

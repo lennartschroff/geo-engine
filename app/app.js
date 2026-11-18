@@ -252,7 +252,7 @@
       lang: 'en', tab: 'overview', scope: 'key', onlyGaps: false, srcFilter: 'all',
       libCat: 'all', libType: 'all', writeStep: 1, allBlocks: false, selectedQ: DEFAULT_Q,
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
-      newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '',
+      newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '',
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}
     }, saved);
     let drag = null;
@@ -447,6 +447,37 @@
       set({ custom: state.custom.concat([q]), newQ: '', scope: 'custom', onlyGaps: false, formMsg: 'saved' });
     }
 
+    // Reads the JSON scripts/export_monitoring.py produces (built from a real
+    // monitoring/run.py run) -- pure client-side file read, no network call.
+    // This is what makes a real monitoring run actually visible: run.py
+    // writes to SQLite, export_monitoring.py turns that into this shape, and
+    // this is where it gets loaded back into the running app. Replaces
+    // own.demo wholesale (results/cited_sources/audit_meta); keeps any
+    // existing trend/pieces since a single export has neither.
+    function loadMonitoringFile(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!parsed || typeof parsed !== 'object' || !parsed.results) throw new Error('missing results');
+          own.demo = {
+            results: parsed.results,
+            cited_sources: Array.isArray(parsed.cited_sources) ? parsed.cited_sources : [],
+            trend: own.demo.trend,
+            pieces: own.demo.pieces,
+            audit_meta: parsed.audit_meta || own.demo.audit_meta,
+          };
+          saveOwn(own);
+          boot();
+        } catch (err) {
+          set({ monitoringMsg: 'error' });
+        }
+      };
+      reader.readAsText(file);
+    }
+
     function viewSources() {
       const l = L(); const S = D.demo.cited_sources;
       const max = S.length ? Math.max.apply(null, S.map(c => c.cites)) : 0;
@@ -462,8 +493,21 @@
         '<div class="stats">' + stat(S.length, l.srcStatTotal) + stat(S.filter(c => c.present === true).length, l.srcStatYes, C.accent) + stat(S.filter(c => c.present === false).length, l.srcStatTargets, C.warn) + '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + tabBtn(l.srcAll, state.srcFilter === 'all', () => set({ srcFilter: 'all' })) + tabBtn(l.srcOnlyTargets, state.srcFilter === 'targets', () => set({ srcFilter: 'targets' })) + '</div>' +
         '<div class="scroll"><div style="min-width:820px"><div class="sgrid small muted" style="padding:0 0 8px"><span>' + esc(l.colSource) + '</span><span>' + esc(l.colType) + '</span><span>' + esc(l.colCites) + '</span><span>' + esc(l.colPresent) + '</span><span>' + esc(l.colNext) + '</span></div>' +
-        (S.length ? rows : mode === 'own' ? ownHint('python monitoring/run.py --dry-run', l.srcHint) : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
+        (S.length ? rows : mode === 'own' ? loadMonitoringCard() : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
         '<span class="small muted">' + esc(l.srcNote) + '</span></section>';
+    }
+
+    function loadMonitoringCard() {
+      const l = L();
+      return ownHint('python monitoring/run.py --dry-run', l.srcHint) +
+        '<div class="card" style="gap:10px;margin-top:12px">' +
+        '<span class="s14" style="font-weight:500">' + esc(l.loadMonitoringTitle) + '</span>' +
+        '<span class="s13 muted">' + esc(l.loadMonitoringHint) + '</span>' +
+        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+        '<label for="src-monitoring-file" class="btn sm plain" style="cursor:pointer">' + esc(l.chooseFile) + '</label>' +
+        '<input id="src-monitoring-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
+        (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') +
+        '</div></div>';
     }
 
     function viewWebsite() {
