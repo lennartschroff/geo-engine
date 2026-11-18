@@ -86,10 +86,36 @@ each task below gets its own PR and its own review before running against real k
   heuristic (`detect_language()` — umlauts/common DE words) — 100% correct
   against all 50 real questions in `data/questions.json`, not a real
   language detector but good enough for this deliberately mixed-language set.
-- [ ] **C4b.** `gpt` and `gemini` engines — still raise `NotImplementedError`
-  outside `--dry-run`. Not started; same gate as below applies per-provider.
-  **Gate: review cost estimate with you before the first real run of each
-  engine.** — *L, medium — real API spend, real external calls*
+- [x] **C4b. `gemini` engine: implemented, verified against a real free-tier
+  key — grounded search is billing-gated, plain generation works.**
+  `monitoring/run.py`'s `call_gemini()` calls `gemini-3.5-flash-lite` via the
+  `google-genai` SDK's `client.interactions.create()`, with
+  `tools=[{"type": "google_search"}]` for grounding, reading `GEMINI_API_KEY`
+  from `.env`. Real findings, not from docs: (1) a plain (non-grounded) call
+  to this model with this key succeeded and returned a correct, coherent
+  answer; (2) the exact same call with Google Search grounding enabled
+  returned HTTP 429 `too_many_requests` immediately, and again after a 60s
+  wait — the error body explicitly says "check your plan and billing
+  details," confirming free-tier Google Search grounding is billing-gated,
+  not a transient rate limit. `call_gemini()` catches this and re-raises a
+  clear `RuntimeError` naming the cause instead of a bare SDK traceback. The
+  citation-extraction code (walking `interaction.steps` →
+  `model_output`/`text` blocks → `.annotations` for `url_citation`) is
+  implemented per the SDK's documented response shape but has not been
+  exercised against a real successful grounded response, since grounding
+  never succeeded in testing — covered instead by 6 unit tests in
+  `tests/test_run.py::TestCallGemini` that mock the client and pin down the
+  429 handling, the citation walk, and the defensive `getattr` fallbacks
+  (missing `.steps`, empty `.annotations`). A real packaging bug was found
+  and fixed along the way: installing `google-genai` pulled in `cryptography`
+  (via `google-auth`) without a prebuilt wheel for this Python/platform
+  combo, so pip tried to build it from source via Rust/maturin and failed;
+  pinned `cryptography==48.0.1` (has a universal2 macOS wheel) in
+  `requirements.txt` — verified the fix with a clean
+  `pip install -r requirements.txt` after. `gpt` still raises
+  `NotImplementedError` outside `--dry-run` — not started.
+  **Gate: review cost estimate with you before the first real run.** —
+  *L, medium — real API spend, real external calls*
 - [ ] **C5. THE biggest real gap right now.** C4a proved real API calls work and
   write real results to `monitoring/runs.sqlite` — but nothing reads that file
   into the app yet. Right now a real monitoring run is a dead end: the data

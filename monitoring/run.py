@@ -3,13 +3,20 @@
 Sends the tracked questions to each engine, detects brand mentions, and
 writes one row per (question, engine, run) to SQLite.
 
-Real API calls: only "claude" is implemented so far (TASKS.md C4), using
-claude-sonnet-5 with the web search tool, reading ANTHROPIC_API_KEY from a
-local .env — never shared, never sent anywhere but Anthropic's API. "gpt"
-and "gemini" still raise NotImplementedError outside --dry-run. Use
---dry-run to exercise the whole pipeline against recorded fixtures at zero
-cost; real runs always print a cost estimate first and require --yes above
-the configured threshold (see cost_estimate.py).
+Real API calls: "claude" and "gemini" are implemented (TASKS.md C4),
+reading ANTHROPIC_API_KEY / GEMINI_API_KEY from a local .env — never
+shared, never sent anywhere but each provider's own API. "gpt" still
+raises NotImplementedError outside --dry-run. Use --dry-run to exercise
+the whole pipeline against recorded fixtures at zero cost; real runs
+always print a cost estimate first and require --yes above the
+configured threshold (see cost_estimate.py).
+
+Gemini caveat, found by testing (2026-11-19), not documentation: on the
+free tier (no billing account linked), Google Search grounding returned
+HTTP 429 immediately, while plain (non-grounded) calls worked fine --
+grounding appears to need billing enabled, or has a near-zero free quota.
+call_gemini() surfaces this as a clear error rather than a confusing
+stack trace; see its docstring.
 
 Usage:
     python monitoring/run.py --dry-run
@@ -37,6 +44,7 @@ ALL_ENGINES = ["claude", "gpt", "gemini"]
 FIXTURES_PATH = ROOT / "monitoring" / "fixtures" / "sample_answers.json"
 CLAUDE_MODEL = "claude-sonnet-5"
 CLAUDE_MAX_SEARCHES = 2
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 
 def _load_dotenv() -> None:
@@ -98,6 +106,68 @@ def call_claude(question_text: str) -> dict:
         if getattr(result, "type", None) == "web_search_result"
     ]
     return {"answer_text": answer_text, "cited_urls": cited_urls}
+
+
+def call_gemini(question_text: str) -> dict:
+    """One real call to Gemini (gemini-3.5-flash-lite) with Google Search
+    grounding, via the google-genai SDK's interactions API.
+
+    Returns {"answer_text": str, "cited_urls": list[str]}.
+
+    Caveat found by testing against a real free-tier key (2026-11-19), not
+    from documentation: a grounded call returned HTTP 429
+    ("too_many_requests") immediately, while a plain (non-grounded) call to
+    the same model with the same key succeeded right before it. This reads
+    as Google Search grounding needing a linked billing account, or having
+    an extremely small free quota — not a bug in this code. That 429 is
+    caught below and re-raised as a clear RuntimeError instead of a
+    confusing stack trace. The citation-extraction code path (annotations
+    on a successful grounded response) is written from the documented
+    response shape but could not be verified against a real successful
+    grounded response for that reason — it's defensive (falls back to an
+    empty cited_urls list rather than crashing) in case the real shape
+    differs once grounding actually succeeds for you.
+    """
+    try:
+        from google import genai
+    except ImportError as e:
+        raise RuntimeError("The 'google-genai' package isn't installed — run: pip install -r requirements.txt") from e
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set — add it to .env (see .env.example).")
+
+    client = genai.Client(api_key=api_key)
+    try:
+        interaction = client.interactions.create(
+            model=GEMINI_MODEL,
+            input=question_text,
+            tools=[{"type": "google_search"}],
+        )
+    except Exception as e:
+        if "429" in str(e) or "too_many_requests" in str(e).lower():
+            raise RuntimeError(
+                "Gemini's Google Search grounding returned a rate-limit error (429). In testing "
+                "(2026-11-19) this happened immediately on a free-tier key with no billing account "
+                "linked, even though a plain non-grounded call to the same model worked fine right "
+                "before it — grounding may require billing to be enabled. See "
+                "https://aistudio.google.com/docs/rate-limits."
+            ) from e
+        raise
+
+    answer_text = interaction.output_text
+    cited_urls = []
+    for step in getattr(interaction, "steps", None) or []:
+        if getattr(step, "type", None) != "model_output":
+            continue
+        for block in getattr(step, "content", None) or []:
+            if getattr(block, "type", None) != "text":
+                continue
+            for ann in getattr(block, "annotations", None) or []:
+                if getattr(ann, "type", None) == "url_citation" and getattr(ann, "url", None):
+                    cited_urls.append(ann.url)
+    return {"answer_text": answer_text, "cited_urls": cited_urls}
+
 
 # Heuristic EN/DE detection for the question text (README's own design is a
 # deliberately mixed-language question set) — looks for German umlauts or a
@@ -164,10 +234,13 @@ def run_one(question: dict, engine: str, run_index: int, brand_aliases: list[str
     elif engine == "claude":
         answer = call_claude(question["text"])
         model = CLAUDE_MODEL
+    elif engine == "gemini":
+        answer = call_gemini(question["text"])
+        model = GEMINI_MODEL
     else:
         raise NotImplementedError(
             f"Real API calls for engine={engine!r} are not implemented yet (TASKS.md C4). "
-            "Only 'claude' is wired in so far. Use --dry-run, or --engines claude."
+            "'claude' and 'gemini' are wired in so far. Use --dry-run, or --engines claude,gemini."
         )
 
     result = detect_mention(answer["answer_text"], brand_aliases, COMPETITOR_NAMES)
@@ -210,9 +283,13 @@ def main() -> int:
     print(f"Estimated calls: {estimate.num_calls}  Estimated cost: ${estimate.total_usd:.4f} "
           f"({', '.join(f'{e}=${c:.4f}' for e, c in estimate.per_engine_usd.items())})")
     if not args.dry_run:
-        non_claude = set(engines) - {"claude"}
-        if non_claude:
-            print(f"[pricing for {sorted(non_claude)} is still placeholder — not implemented, would raise below]")
+        not_implemented = set(engines) - {"claude", "gemini"}
+        if not_implemented:
+            print(f"[{sorted(not_implemented)} not implemented yet — would raise below]")
+        if "gemini" in engines:
+            print("[gemini pricing is still placeholder, and the real cost is likely $0 while you're on the "
+                  "free tier anyway — but see call_gemini()'s docstring: Google Search grounding returned a "
+                  "429 in testing on a free-tier key, so a real gemini run may just fail with a clear error.]")
         print("Token-count assumptions are still rough; the per-token and per-search unit prices for "
               "claude-sonnet-5 are verified (2026-11-18). Real cost depends on actual answer length.")
 

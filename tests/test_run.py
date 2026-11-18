@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import os
 import sys
+import types
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -91,3 +93,67 @@ class TestLoadDotenv:
         (isolated_root / ".env").write_text(f"{ENV_TEST_KEY}=part1=part2\n")
         run_module._load_dotenv()
         assert os.environ[ENV_TEST_KEY] == "part1=part2"
+
+
+class TestCallGemini:
+    """call_gemini() makes a real network call, so these mock the google-genai
+    client and only cover the pure logic around it: error messages and the
+    defensive citation-extraction walk. The 429-on-free-tier path itself was
+    verified for real against a live key (see call_gemini()'s docstring and
+    TASKS.md) -- these tests just pin down the code's reaction to that error.
+    """
+
+    def test_missing_api_key_raises_clear_error(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+            run_module.call_gemini("Any question")
+
+    def test_rate_limit_error_raises_clear_billing_message(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        fake_client = Mock()
+        fake_client.interactions.create.side_effect = Exception(
+            "429 too_many_requests: check your plan and billing details"
+        )
+        with patch("google.genai.Client", return_value=fake_client):
+            with pytest.raises(RuntimeError, match="rate-limit|429|grounding"):
+                run_module.call_gemini("Any question")
+
+    def test_non_rate_limit_error_propagates_unchanged(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        fake_client = Mock()
+        fake_client.interactions.create.side_effect = ValueError("something else broke")
+        with patch("google.genai.Client", return_value=fake_client):
+            with pytest.raises(ValueError, match="something else broke"):
+                run_module.call_gemini("Any question")
+
+    def test_extracts_answer_text_and_citations(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        annotation = types.SimpleNamespace(type="url_citation", url="https://example.com/a")
+        block = types.SimpleNamespace(type="text", annotations=[annotation])
+        step = types.SimpleNamespace(type="model_output", content=[block])
+        interaction = types.SimpleNamespace(output_text="The answer.", steps=[step])
+        fake_client = Mock()
+        fake_client.interactions.create.return_value = interaction
+        with patch("google.genai.Client", return_value=fake_client):
+            result = run_module.call_gemini("Any question")
+        assert result == {"answer_text": "The answer.", "cited_urls": ["https://example.com/a"]}
+
+    def test_no_annotations_yields_empty_cited_urls(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        block = types.SimpleNamespace(type="text", annotations=[])
+        step = types.SimpleNamespace(type="model_output", content=[block])
+        interaction = types.SimpleNamespace(output_text="Plain answer, no search.", steps=[step])
+        fake_client = Mock()
+        fake_client.interactions.create.return_value = interaction
+        with patch("google.genai.Client", return_value=fake_client):
+            result = run_module.call_gemini("Any question")
+        assert result == {"answer_text": "Plain answer, no search.", "cited_urls": []}
+
+    def test_missing_steps_attribute_does_not_crash(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        interaction = types.SimpleNamespace(output_text="No steps at all.")
+        fake_client = Mock()
+        fake_client.interactions.create.return_value = interaction
+        with patch("google.genai.Client", return_value=fake_client):
+            result = run_module.call_gemini("Any question")
+        assert result == {"answer_text": "No steps at all.", "cited_urls": []}

@@ -2,3 +2,12 @@ requests==2.32.3
 beautifulsoup4==4.12.3
 lxml==5.3.0
 anthropic==2.10.0
+google-genai==3.5.0
+# Pinned explicitly: without this, pip's resolver can land on an older
+# cryptography version (a google-genai -> google-auth transitive dep) with
+# no prebuilt wheel for some platform/Python combos, and tries to build it
+# from source via Rust/maturin, which fails without OpenSSL dev headers and
+# a configured Rust toolchain. 48.0.1 has a universal2 macOS wheel. Verified
+# 2026-11-19: pip install -r requirements.txt failed on this exact error
+# before this pin was added, and installed cleanly after.
+cryptography==48.0.1
