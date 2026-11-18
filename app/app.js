@@ -37,6 +37,17 @@
 
   // ---------- Shared helpers & event wiring (used by every screen) ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const C = { fg: '#16181D', muted: '#6B6F78', faint: '#9A9DA5', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
+  // Small line icons (stroke="currentColor", inherits color from surrounding
+  // text) -- used instead of emoji throughout, matching the rest of the app's
+  // monochrome, minimal visual language.
+  const icon = (size, path) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-' + Math.round(size * 0.16) + 'px;flex-shrink:0">' + path + '</svg>';
+  const iconEye = size => icon(size, '<path d="M2 12s3.4-6.5 10-6.5S22 12 22 12s-3.4 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>');
+  const iconSliders = size => icon(size, '<line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"/>');
+  const iconGear = size => icon(size, '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>');
+  const iconGrid = size => icon(size, '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>');
+  const iconCheck = size => icon(size, '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>');
+  const iconCircle = size => icon(size, '<circle cx="12" cy="12" r="9"/>');
 
   const root = document.getElementById('app');
   let handlers = [];
@@ -56,21 +67,21 @@
   function renderWelcome() {
     handlers = [];
     root.innerHTML =
-      '<div style="max-width:720px;margin:72px auto;padding:0 32px;display:flex;flex-direction:column;gap:40px">' +
-      '<div style="text-align:center;display:flex;flex-direction:column;gap:8px">' +
+      '<div style="max-width:680px;margin:64px auto;padding:0 32px;display:flex;flex-direction:column;gap:32px">' +
+      '<div class="head" style="gap:10px">' +
       '<span class="s13 muted" style="letter-spacing:.04em">GEO ENGINE</span>' +
-      '<h1 style="font-size:30px">See how AI assistants talk about a brand</h1>' +
-      '<p class="muted">Track mentions in ChatGPT, Claude and Gemini, find the gaps, and draft content that closes them.</p></div>' +
+      '<h1 style="font-size:28px">See how AI assistants talk about a brand</h1>' +
+      '<p>Track mentions in ChatGPT, Claude and Gemini, find the gaps, and draft content that closes them.</p></div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
-      '<div class="card" style="flex:1 1 280px">' +
-      '<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:22px">👀 See a live example</span>' +
-      '<span class="s14 muted">Contoso AI, a fictional AI consultancy — fully interactive demo data.</span></div>' +
+      '<div class="card" style="flex:1 1 280px;gap:16px">' +
+      '<div style="display:flex;align-items:center;gap:10px;color:' + C.accent + '">' + iconEye(22) + '<h2>See a live example</h2></div>' +
+      '<p class="s14 muted" style="margin:0">Contoso AI, a fictional AI consultancy — fully interactive demo data.</p>' +
       '<button class="btn" style="align-self:flex-start" ' + click(chooseDemo) + '>Open the demo →</button></div>' +
-      '<div class="card" style="flex:1 1 280px">' +
-      '<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:22px">🚀 Set up my own brand</span>' +
-      '<span class="s14 muted">Takes about 2 minutes. Nothing leaves your browser.</span></div>' +
+      '<div class="card" style="flex:1 1 280px;gap:16px">' +
+      '<div style="display:flex;align-items:center;gap:10px;color:' + C.fg + '">' + iconSliders(22) + '<h2>Set up your own brand</h2></div>' +
+      '<p class="s14 muted" style="margin:0">Takes about two minutes. Nothing leaves your browser.</p>' +
       '<button class="btn outline" style="align-self:flex-start" ' + click(chooseOwn) + '>Get started →</button></div></div>' +
-      '<span class="small muted" style="text-align:center">You can switch between the two any time.</span></div>';
+      '<span class="small muted">You can switch between the two at any time from the header.</span></div>';
   }
   function chooseDemo() { mode = 'demo'; saveMode('demo'); boot(); }
   function chooseOwn() { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); }
@@ -92,7 +103,7 @@
     const d = setupDraft;
     const topicRows = d.topics.map((t, i) =>
       '<div style="display:flex;gap:8px;align-items:center">' +
-      '<input type="text" style="flex:1 1 160px" value="' + esc(t.label) + '" placeholder="e.g. Robotics consulting" ' + attr('input', e => { d.topics[i].label = e.target.value; }) + '>' +
+      '<input type="text" style="flex:1 1 160px" value="' + esc(t.label) + '" placeholder="e.g. SEO services" ' + attr('input', e => { d.topics[i].label = e.target.value; }) + '>' +
       '<input type="text" style="flex:2 1 220px" value="' + esc(t.keywords) + '" placeholder="keywords, comma, separated" ' + attr('input', e => { d.topics[i].keywords = e.target.value; }) + '>' +
       '<button class="icon" aria-label="Remove topic" ' + click(() => { d.topics.splice(i, 1); renderSetup(); }) + '>×</button></div>'
     ).join('');
@@ -101,9 +112,9 @@
       '<button class="link" style="align-self:flex-start" ' + click(() => { mode = 'demo'; saveMode('demo'); setupDraft = null; boot(); }) + '>← Back to the demo</button>' +
       '<div class="head"><h1>Set up your brand</h1><p>Runs entirely in your browser — nothing is sent anywhere, no API key needed for this part.</p></div>' +
       '<div class="card">' +
-      '<label for="su-name">Company name</label><input id="su-name" type="text" value="' + esc(d.name) + '" placeholder="e.g. Acme Robotics" ' + attr('input', e => { d.name = e.target.value; }) + '>' +
-      '<label for="su-domain">Website domain</label><input id="su-domain" type="text" value="' + esc(d.domain) + '" placeholder="e.g. acme-robotics.com" ' + attr('input', e => { d.domain = e.target.value; }) + '>' +
-      '<label for="su-aliases">Also known as (comma-separated, optional)</label><input id="su-aliases" type="text" value="' + esc(d.aliases) + '" placeholder="e.g. Acme, Acme Robotics Inc." ' + attr('input', e => { d.aliases = e.target.value; }) + '>' +
+      '<label for="su-name">Company name</label><input id="su-name" type="text" value="' + esc(d.name) + '" placeholder="e.g. Lighthouse Marketing" ' + attr('input', e => { d.name = e.target.value; }) + '>' +
+      '<label for="su-domain">Website domain</label><input id="su-domain" type="text" value="' + esc(d.domain) + '" placeholder="e.g. lighthouse-marketing.com" ' + attr('input', e => { d.domain = e.target.value; }) + '>' +
+      '<label for="su-aliases">Also known as (comma-separated, optional)</label><input id="su-aliases" type="text" value="' + esc(d.aliases) + '" placeholder="e.g. Lighthouse, Lighthouse Marketing Inc." ' + attr('input', e => { d.aliases = e.target.value; }) + '>' +
       '</div>' +
       '<div class="card">' +
       '<div class="listhead"><h2>Topics you want to track</h2></div>' +
@@ -158,7 +169,6 @@
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
     const TYPE_FG = { statement: '#1A3A9C', definition: '#3A3D45', figure: '#16181D', case: '#9A3412', quote: '#5B2A86', faq: '#1F5C55' };
-    const C = { fg: '#16181D', muted: '#6B6F78', faint: '#9A9DA5', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
     // Namespaced per mode so switching demo <-> own brand never mixes up
     // activations/custom questions/drafts/audit checkmarks between the two.
     const STORE_KEY = 'geo-engine:v1:' + mode;
@@ -288,6 +298,31 @@
     }
 
     // ---------- Views ----------
+    // Shown instead of viewOverview right after setup, while there's still
+    // nothing real to show a dashboard of. A checklist, not a confusing
+    // "0% everywhere" chart. Steps through to viewOverview once any real
+    // data exists (so this never becomes a permanent extra screen to navigate).
+    function viewGettingStarted() {
+      const l = L();
+      const steps = [
+        { done: true, title: l.gsStep1Title, text: l.gsStep1Text },
+        { done: allBlocksList().length > 0, title: l.gsStep2Title, text: l.gsStep2Text, actionLabel: l.gsStep2Action, action: () => set({ tab: 'library' }) },
+        { done: D.audit.length > 0 || D.pages.length > 0, title: l.gsStep3Title, text: l.gsStep3Text, actionLabel: l.gsStep3Action, action: () => set({ tab: 'website' }) },
+        { done: Object.keys(D.demo.results).length > 0, title: l.gsStep4Title, text: l.gsStep4Text, actionLabel: l.gsStep4Action, action: () => set({ tab: 'sources' }) }
+      ];
+      const rows = steps.map(s =>
+        '<div class="card" style="flex-direction:row;align-items:flex-start;gap:16px;padding:20px 24px">' +
+        '<span style="flex-shrink:0;margin-top:1px;color:' + (s.done ? C.accent : C.faint) + '">' + (s.done ? iconCheck(20) : iconCircle(20)) + '</span>' +
+        '<div style="display:flex;flex-direction:column;gap:4px;flex-grow:1;min-width:0">' +
+        '<span style="font-weight:500' + (s.done ? ';color:' + C.muted : '') + '">' + esc(s.title) + '</span>' +
+        '<span class="s14 muted">' + esc(s.text) + '</span></div>' +
+        (s.action && !s.done ? '<button class="btn sm plain" style="flex-shrink:0" ' + click(s.action) + '>' + esc(s.actionLabel) + '</button>' : '') +
+        '</div>'
+      ).join('');
+      return '<section><div class="head"><h1>' + esc(l.gsTitle(BRAND.short)) + '</h1><p>' + esc(l.gsSub) + '</p></div>' +
+        '<div style="display:flex;flex-direction:column;gap:12px">' + rows + '</div></section>';
+    }
+
     function viewOverview(ctx) {
       const l = L();
       const kpis = ctx.kpis.map(k => '<div class="kpi"><span style="color:#3A3D45">' + k.name + '</span>' + track(k.pct) + '<span class="mono" style="text-align:right">' + k.pct + '%</span></div>').join('');
@@ -567,22 +602,25 @@
       };
 
       const curGroup = GROUP_OF[state.tab];
-      const tabs = [tabBtn(l.tabs.overview, state.tab === 'overview', () => set({ tab: 'overview' }))]
-        .concat(Object.keys(GROUPS).map(g => tabBtn(l.groups[g], curGroup === g, () => { if (curGroup !== g) set({ tab: GROUPS[g][0] }); })))
+      const NAV_ICON = { overview: iconGrid(16), monitor: iconEye(16), improve: iconSliders(16) };
+      const mainTabBtn = (key, label, on_, fn) => '<button class="tab' + (on_ ? ' on' : '') + '" style="display:flex;align-items:center;gap:7px" ' + click(fn) + '>' + NAV_ICON[key] + esc(label) + '</button>';
+      const tabs = [mainTabBtn('overview', l.tabs.overview, state.tab === 'overview', () => set({ tab: 'overview' }))]
+        .concat(Object.keys(GROUPS).map(g => mainTabBtn(g, l.groups[g], curGroup === g, () => { if (curGroup !== g) set({ tab: GROUPS[g][0] }); })))
         .join('');
       const subnav = curGroup
         ? '<nav class="subtabs" style="margin-bottom:8px" aria-label="' + esc(l.groups[curGroup]) + '"><div style="display:flex;flex-wrap:wrap;gap:4px">' +
           GROUPS[curGroup].map(id => tabBtn(l.tabs[id], state.tab === id, () => set({ tab: id }))).join('') + '</div></nav>'
         : '';
+      const isFreshOwn = mode === 'own' && allBlocksList().length === 0 && D.audit.length === 0 && D.pages.length === 0 && Object.keys(D.demo.results).length === 0;
       const views = {
-        overview: viewOverview, questions: viewQuestions, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
+        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
         write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
       };
       document.documentElement.lang = state.lang;
       const modeSwitch = '<div class="lang" role="group" aria-label="Mode">' +
         '<button class="' + (mode === 'demo' ? 'on' : '') + '" ' + click(() => { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }) + '>' + esc(l.modeDemo) + '</button>' +
         '<button class="' + (mode === 'own' ? 'on' : '') + '" ' + click(() => { if (mode !== 'own') { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); } }) + '>' + esc(own ? own.brand.short : l.modeOwn) + '</button></div>';
-      const editSetup = mode === 'own' ? '<button class="link s13" ' + click(() => { initSetupDraft(); renderSetup(); }) + '>⚙ ' + esc(l.editSetup) + '</button>' : '';
+      const editSetup = mode === 'own' ? '<button class="link s13" style="display:flex;align-items:center;gap:6px" ' + click(() => { initSetupDraft(); renderSetup(); }) + '>' + iconGear(14) + esc(l.editSetup) + '</button>' : '';
       root.innerHTML =
         '<header><div class="bar"><div class="brand"><b>' + esc(BRAND.short) + '</b><span class="s13 muted">GEO Engine</span></div>' +
         '<nav class="tabs" aria-label="' + esc(l.sections) + '">' + tabs + '</nav>' +

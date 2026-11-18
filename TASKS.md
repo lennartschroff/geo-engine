@@ -113,6 +113,25 @@ every user brings their own API key for anything that costs money, never yours.*
 - [x] **F2c.** Guided empty states: Website/Sources/Impact show the exact local
   command to run (`audit_crawl.py`, `score_pages.py`, `monitoring/run.py --dry-run`)
   instead of a bare "no data" message, when in own-brand mode with nothing loaded yet.
+- [x] **F2d.** "Getting Started" checklist replaces the Overview dashboard right
+  after setup, instead of landing on a confusing "0% everywhere" chart with nothing
+  to show yet. 4 steps (brand done, add a block, audit your site, check visibility),
+  each linking to the right tab. Reverts to the normal Overview automatically once
+  any real data exists (`allBlocksList().length` / `D.audit`/`D.pages` /
+  `D.demo.results` all empty is the only trigger) — verified it's not a permanent
+  extra screen via a smoke-test scenario that adds one block and checks the
+  checklist is gone.
+- [x] **F2e.** Design pass: removed all emoji (Welcome screen, "Edit setup" link) —
+  replaced with small inline-SVG line icons (`iconEye`, `iconSliders`, `iconGear`,
+  `iconGrid`, `iconCheck`, `iconCircle`) matching the app's existing monochrome
+  visual language instead of introducing a generic "AI chatbot" look. Added icons
+  to the 3 main nav tabs for scannability. Fixed a responsive bug: `.right` in the
+  header (mode toggle + edit-setup link + language toggle) had no `flex-wrap`, so
+  at medium window widths it overflowed/squeezed instead of wrapping — this is
+  what "looks weird when the screen isn't full width" was.
+- [x] **F2f.** Replaced the setup wizard's placeholder example ("Acme Robotics" —
+  too narrow/unclear a niche) with "Lighthouse Marketing", a generic B2B-services
+  example anyone filling the form can immediately map to their own company.
 - [ ] **F3.** File import: a drag-and-drop/file-picker in the app so the output of
   the local scripts above (crawl results, monitoring runs) loads straight into the
   running app via `FileReader` — no rebuild, no redeploy. Still the real gap between
