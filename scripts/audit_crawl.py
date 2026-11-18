@@ -25,6 +25,7 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -62,6 +63,33 @@ def sitemap_urls(base: str, sitemaps: list[str]) -> list[str]:
         else:
             urls += locs
     return list(dict.fromkeys(urls))
+
+
+def discover_urls_via_links(base: str) -> list[str]:
+    """Fallback page discovery for sites with no sitemap (confirmed common in
+    practice, not a theoretical edge case -- plenty of real sites, e.g. ones
+    built on page builders, don't publish one). Fetches the homepage and
+    follows same-domain links found on it. One level deep only: cheap, fast,
+    and good enough to find a site's main nav/footer pages, which is what
+    GEO signals (crawler access, structured data, FAQ coverage) mostly live on.
+    """
+    home = base.rstrip("/") + "/"
+    try:
+        html = get(home).text
+    except requests.RequestException as e:
+        print(f"Could not fetch {home}: {e}", file=sys.stderr)
+        return [home]
+    soup = BeautifulSoup(html, "lxml")
+    domain = urlparse(base).netloc
+    seen = {home}
+    for a in soup.find_all("a", href=True):
+        absolute = urljoin(home, a["href"])
+        parsed = urlparse(absolute)
+        if parsed.netloc != domain or parsed.scheme not in ("http", "https"):
+            continue
+        clean = parsed._replace(query="", fragment="").geturl()
+        seen.add(clean)
+    return list(seen)
 
 
 def schema_types(soup: BeautifulSoup) -> list[str]:
@@ -128,6 +156,9 @@ def main() -> None:
     base = args.base.rstrip("/")
     today = datetime.date.today().isoformat()
     urls = sitemap_urls(base, args.sitemap or ["/sitemap.xml"])
+    if not urls:
+        print("No sitemap found — falling back to links found on the homepage.", file=sys.stderr)
+        urls = discover_urls_via_links(base)
     if args.limit:
         urls = urls[: args.limit]
     print(f"Checking {len(urls)} URLs …", file=sys.stderr)

@@ -262,6 +262,82 @@ describe('generateForCategory / generateQuestions (parity with scripts/generate_
   });
 });
 
+describe('tokenize', () => {
+  test('lowercases and strips punctuation', () => {
+    assert.deepEqual(CORE.tokenize('What is RAG?'), ['what', 'is', 'rag']);
+  });
+
+  test('strips accents/diacritics', () => {
+    assert.deepEqual(CORE.tokenize('café'), ['cafe']);
+  });
+
+  test('drops single-character tokens', () => {
+    assert.deepEqual(CORE.tokenize('a b is OK'), ['is', 'ok']);
+  });
+
+  test('handles German umlauts', () => {
+    assert.deepEqual(CORE.tokenize('Für Künstliche Intelligenz'), ['fur', 'kunstliche', 'intelligenz']);
+  });
+});
+
+describe('bm25Score / rankByRelevance', () => {
+  test('a document containing the query terms outscores one that does not', () => {
+    const docs = [
+      { id: 'match', text: 'Retrieval-augmented generation combines a language model with search.' },
+      { id: 'nomatch', text: 'Our team ran a marathon last weekend for charity.' },
+    ];
+    const ranked = CORE.rankByRelevance('How do I build a retrieval augmented generation pipeline?', docs);
+    assert.equal(ranked[0].id, 'match');
+    assert.equal(ranked[0].relevance, 1);
+    assert.equal(ranked[1].relevance, 0);
+  });
+
+  test('relevance is normalized to [0, 1] relative to the best match in the set', () => {
+    const docs = [
+      { id: 'a', text: 'red teaming exercise for an LLM agent' },
+      { id: 'b', text: 'red teaming exercise for an LLM agent, extended with more context about agents' },
+    ];
+    const ranked = CORE.rankByRelevance('LLM red teaming exercise', docs);
+    ranked.forEach(r => { assert.ok(r.relevance >= 0 && r.relevance <= 1); });
+    assert.equal(Math.max(...ranked.map(r => r.relevance)), 1);
+  });
+
+  test('a term that appears in every document contributes little (low IDF)', () => {
+    // "the" appears everywhere, so it shouldn't be what drives the ranking --
+    // the distinctive shared word "rag" should decide it instead.
+    const docs = [
+      { id: 'rag', text: 'the the the the RAG pipeline the the the' },
+      { id: 'other', text: 'the the the the the the the the the' },
+    ];
+    const ranked = CORE.rankByRelevance('the RAG pipeline', docs);
+    assert.equal(ranked[0].id, 'rag');
+  });
+
+  test('no overlap at all with any document gives everything 0 relevance', () => {
+    const docs = [{ id: 'x', text: 'completely unrelated content about gardening' }];
+    const ranked = CORE.rankByRelevance('retrieval augmented generation', docs);
+    assert.equal(ranked[0].relevance, 0);
+  });
+
+  test('is deterministic: same query and corpus always rank the same way', () => {
+    const docs = [{ id: 'a', text: 'alpha beta gamma' }, { id: 'b', text: 'beta gamma delta' }];
+    const r1 = CORE.rankByRelevance('beta gamma', docs);
+    const r2 = CORE.rankByRelevance('beta gamma', docs);
+    assert.deepEqual(r1.map(r => r.id), r2.map(r => r.id));
+    assert.deepEqual(r1.map(r => r.relevance), r2.map(r => r.relevance));
+  });
+
+  test('empty query gives every document 0 relevance, not an error', () => {
+    const docs = [{ id: 'a', text: 'some content' }];
+    const ranked = CORE.rankByRelevance('', docs);
+    assert.equal(ranked[0].relevance, 0);
+  });
+
+  test('empty corpus returns an empty ranking, not an error', () => {
+    assert.deepEqual(CORE.rankByRelevance('anything', []), []);
+  });
+});
+
 describe('toHtml', () => {
   test('is a complete, parseable HTML document with the title set', () => {
     const html = CORE.toHtml([{ type: 'statement', text: 'Hello.' }], 'My Title');

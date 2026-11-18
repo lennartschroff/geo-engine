@@ -4,28 +4,51 @@ Per CLAUDE.md: "Estimate API cost before runs with many calls and ask
 before running." This module does the arithmetic; run.py is responsible
 for actually showing the estimate and getting confirmation.
 
-The per-token prices below are PLACEHOLDERS (see CLAUDE.md: "Unknown facts
-are marked [placeholder]"). Provider pricing changes and must be checked
-against the current pricing page for each provider before trusting a
-dollar figure from this module — don't wire this into a real paid run
-without updating PRICING_USD_PER_1K_TOKENS first.
+Pricing for "claude" is verified against Anthropic's own docs as of
+2026-11-18 (platform.claude.com/docs — Haiku 4.5 token pricing, and the
+web search tool's pricing page: "$10 USD per 1,000 searches" in addition
+to token costs). "gpt" and "gemini" are still [placeholder] — verify
+against their current pricing pages before trusting a dollar figure for
+those two.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-# [placeholder] verify against each provider's current pricing page before a real run.
 PRICING_USD_PER_1K_TOKENS: dict[str, dict[str, float]] = {
-    "claude": {"input": 0.003, "output": 0.015},
-    "gpt": {"input": 0.0025, "output": 0.01},
-    "gemini": {"input": 0.00125, "output": 0.005},
+    # claude-sonnet-5, verified 2026-11-18. Chosen over the cheaper Haiku 4.5
+    # for the first real run because Sonnet 5 is unambiguously confirmed
+    # (both in Anthropic's pricing table and in the web search tool's
+    # supported-models list) — Haiku 4.5's web-search support was only
+    # listed for a dated snapshot, not the bare model id, which wasn't worth
+    # risking a failed first real call over a cost difference this run's
+    # token counts make negligible (the web search fee below dominates).
+    "claude": {"input": 0.002, "output": 0.01},
+    "gpt": {"input": 0.0025, "output": 0.01},  # [placeholder]
+    "gemini": {"input": 0.00125, "output": 0.005},  # [placeholder]
 }
 
-# Rough defaults for a question + web-search-enabled answer. Real answers vary
-# a lot — these exist so the estimate is in the right order of magnitude, not
-# to be precise. [placeholder]
-DEFAULT_INPUT_TOKENS = 400
-DEFAULT_OUTPUT_TOKENS = 700
+# Web search is billed per search, on top of token costs -- not a per-token
+# rate, so it isn't in PRICING_USD_PER_1K_TOKENS above. $10 per 1,000
+# searches = $0.01/search. Verified 2026-11-18. Only "claude" has this;
+# other engines' search tools (if/when wired in) will need their own entry.
+WEB_SEARCH_USD_PER_SEARCH: dict[str, float] = {
+    "claude": 0.01,
+}
+
+# Defaults for a question + web-search-enabled claude-sonnet-5 answer.
+# input_tokens was [placeholder] at 400 until a real test call on 2026-11-18
+# measured 22,250 input tokens for a 2-search question (search result content
+# loaded into context is the dominant cost, far more than the question text
+# itself) — raised to 15000 as a realistic planning number, still rough since
+# some questions trigger 0 searches and others more, but no longer a guess
+# off by 55x. output_tokens (1163 measured, no thinking) raised to 1000 to
+# match. See monitoring/run.py's call_claude(): thinking is explicitly
+# disabled, since thinking tokens are billed as output even when hidden, and
+# a first test run without this disabled cost noticeably more than estimated.
+DEFAULT_INPUT_TOKENS = 15000
+DEFAULT_OUTPUT_TOKENS = 1000
+DEFAULT_SEARCHES_PER_CALL = 2
 
 
 @dataclass
@@ -43,10 +66,19 @@ def estimate_cost(
     runs_per_question: int,
     input_tokens: int = DEFAULT_INPUT_TOKENS,
     output_tokens: int = DEFAULT_OUTPUT_TOKENS,
+    searches_per_call: int = DEFAULT_SEARCHES_PER_CALL,
     pricing: dict[str, dict[str, float]] | None = None,
+    search_pricing: dict[str, float] | None = None,
 ) -> CostEstimate:
-    """Estimates total cost for num_questions x engines x runs_per_question calls."""
+    """Estimates total cost for num_questions x engines x runs_per_question calls.
+
+    Each call is assumed to use `searches_per_call` web searches (billed per
+    search, separate from token cost — see WEB_SEARCH_USD_PER_SEARCH) in
+    addition to `input_tokens`/`output_tokens`. An engine with no entry in
+    `search_pricing` is assumed to have no separate search fee (0).
+    """
     pricing = pricing if pricing is not None else PRICING_USD_PER_1K_TOKENS
+    search_pricing = search_pricing if search_pricing is not None else WEB_SEARCH_USD_PER_SEARCH
     per_engine_usd: dict[str, float] = {}
     for engine in engines:
         if engine not in pricing:
@@ -54,7 +86,8 @@ def estimate_cost(
         calls = num_questions * runs_per_question
         input_cost = input_tokens / 1000 * pricing[engine]["input"]
         output_cost = output_tokens / 1000 * pricing[engine]["output"]
-        per_engine_usd[engine] = round(calls * (input_cost + output_cost), 4)
+        search_cost = searches_per_call * search_pricing.get(engine, 0.0)
+        per_engine_usd[engine] = round(calls * (input_cost + output_cost + search_cost), 4)
 
     num_calls = num_questions * len(engines) * runs_per_question
     return CostEstimate(

@@ -3,22 +3,24 @@
 Sends the tracked questions to each engine, detects brand mentions, and
 writes one row per (question, engine, run) to SQLite.
 
-Real API calls are NOT implemented yet — see TASKS.md Epic C4, gated on:
-  - which provider(s) to integrate first (your decision)
-  - a weekly spend ceiling (your decision)
-Calling this without --dry-run currently raises NotImplementedError. Use
---dry-run to exercise the whole pipeline (question selection, mention
-detection, SQLite write) against recorded fixtures, at zero cost.
+Real API calls: only "claude" is implemented so far (TASKS.md C4), using
+claude-sonnet-5 with the web search tool, reading ANTHROPIC_API_KEY from a
+local .env — never shared, never sent anywhere but Anthropic's API. "gpt"
+and "gemini" still raise NotImplementedError outside --dry-run. Use
+--dry-run to exercise the whole pipeline against recorded fixtures at zero
+cost; real runs always print a cost estimate first and require --yes above
+the configured threshold (see cost_estimate.py).
 
 Usage:
     python monitoring/run.py --dry-run
     python monitoring/run.py --dry-run --questions q1,q2 --engines claude,gpt
-    python monitoring/run.py --dry-run --db /tmp/test.sqlite
+    python monitoring/run.py --questions q1,q2,q3 --engines claude --runs 1 --yes
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from datetime import UTC, datetime
@@ -32,6 +34,62 @@ from monitoring.mention_detection import detect_mention, normalize_domains  # no
 
 ALL_ENGINES = ["claude", "gpt", "gemini"]
 FIXTURES_PATH = ROOT / "monitoring" / "fixtures" / "sample_answers.json"
+CLAUDE_MODEL = "claude-sonnet-5"
+CLAUDE_MAX_SEARCHES = 2
+
+
+def _load_dotenv() -> None:
+    """Minimal .env loader (no new dependency): KEY=VALUE lines, '#' comments."""
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+def call_claude(question_text: str) -> dict:
+    """One real call to claude-sonnet-5 with web search enabled.
+
+    Returns {"answer_text": str, "cited_urls": list[str]}. Raises RuntimeError
+    with a clear message if the API key is missing or the call fails — never
+    silently returns a fake result.
+    """
+    try:
+        import anthropic
+    except ImportError as e:
+        raise RuntimeError("The 'anthropic' package isn't installed — run: pip install -r requirements.txt") from e
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set — add it to .env (see .env.example).")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=1024,
+        # Thinking defaults to on (adaptive) on claude-sonnet-5 when omitted, and
+        # thinking tokens are billed as output tokens even though never shown --
+        # a real cost driver for a simple "ask, maybe search, check the answer"
+        # task like this one, confirmed by real spend exceeding the estimate on
+        # the first test run. Disabled explicitly (accepted on Sonnet 5).
+        thinking={"type": "disabled"},
+        messages=[{"role": "user", "content": question_text}],
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": CLAUDE_MAX_SEARCHES}],
+    )
+
+    answer_text = "".join(block.text for block in response.content if block.type == "text")
+    cited_urls = [
+        result.url
+        for block in response.content
+        if block.type == "web_search_tool_result" and isinstance(block.content, list)
+        for result in block.content
+        if getattr(result, "type", None) == "web_search_result"
+    ]
+    return {"answer_text": answer_text, "cited_urls": cited_urls}
 
 # [placeholder] no maintained competitor list exists yet (see ROADMAP.md).
 # These match the fictional names already used in data/demo_monitoring.json,
@@ -78,20 +136,25 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
 
 
 def run_one(question: dict, engine: str, run_index: int, brand_aliases: list[str], dry_run: bool) -> dict:
-    if not dry_run:
+    if dry_run:
+        answer = load_fixture_answer(question["id"], engine)
+        if answer is None:
+            raise ValueError(f"No fixture answer for {question['id']!r}/{engine!r} in {FIXTURES_PATH.name}")
+        model = "fixture"
+    elif engine == "claude":
+        answer = call_claude(question["text"])
+        model = CLAUDE_MODEL
+    else:
         raise NotImplementedError(
-            "Real API calls are not implemented yet (TASKS.md C4) — pending your decision on "
-            "which provider(s) to use and a spend cap. Use --dry-run to test the pipeline."
+            f"Real API calls for engine={engine!r} are not implemented yet (TASKS.md C4). "
+            "Only 'claude' is wired in so far. Use --dry-run, or --engines claude."
         )
-    answer = load_fixture_answer(question["id"], engine)
-    if answer is None:
-        raise ValueError(f"No fixture answer for question={question['id']!r} engine={engine!r} in {FIXTURES_PATH.name}")
 
     result = detect_mention(answer["answer_text"], brand_aliases, COMPETITOR_NAMES)
     return {
         "question_id": question["id"],
         "engine": engine,
-        "model": "fixture",
+        "model": model,
         "run_index": run_index,
         "timestamp": datetime.now(UTC).isoformat(),
         "language": None,  # TODO: not derivable from questions.json yet (text is mixed-language by design)
@@ -114,6 +177,7 @@ def main() -> int:
     ap.add_argument("--yes-threshold-usd", type=float, default=1.0, help="Est. cost above which --yes is required.")
     args = ap.parse_args()
 
+    _load_dotenv()
     question_ids = args.questions.split(",") if args.questions else None
     engines = args.engines.split(",")
     questions = load_questions(question_ids)
@@ -121,12 +185,16 @@ def main() -> int:
         print("No matching questions found.", file=sys.stderr)
         return 1
 
-    estimate = estimate_cost(len(questions), engines, args.runs)
+    estimate = estimate_cost(len(questions), engines, args.runs, searches_per_call=CLAUDE_MAX_SEARCHES)
     print(f"Questions: {len(questions)}  Engines: {engines}  Runs/question: {args.runs}")
     print(f"Estimated calls: {estimate.num_calls}  Estimated cost: ${estimate.total_usd:.4f} "
           f"({', '.join(f'{e}=${c:.4f}' for e, c in estimate.per_engine_usd.items())})")
     if not args.dry_run:
-        print("[placeholder pricing — verify against current provider pricing before trusting this number]")
+        non_claude = set(engines) - {"claude"}
+        if non_claude:
+            print(f"[pricing for {sorted(non_claude)} is still placeholder — not implemented, would raise below]")
+        print("Token-count assumptions are still rough; the per-token and per-search unit prices for "
+              "claude-sonnet-5 are verified (2026-11-18). Real cost depends on actual answer length.")
 
     try:
         check_call_budget(estimate.num_calls, args.max_calls)

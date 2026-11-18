@@ -44,8 +44,6 @@
   const icon = (size, path) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-' + Math.round(size * 0.16) + 'px;flex-shrink:0">' + path + '</svg>';
   const iconEye = size => icon(size, '<path d="M2 12s3.4-6.5 10-6.5S22 12 22 12s-3.4 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>');
   const iconSliders = size => icon(size, '<line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"/>');
-  const iconGear = size => icon(size, '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>');
-  const iconGrid = size => icon(size, '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>');
   const iconCheck = size => icon(size, '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>');
   const iconCircle = size => icon(size, '<circle cx="12" cy="12" r="9"/>');
 
@@ -94,8 +92,17 @@
     setupDraft = {
       name: b.name || '', domain: b.domain || '', aliases: (b.aliases || []).join(', '),
       topics: cats.length ? cats.map(c => ({ label: c.label_en, keywords: c.keywords.join(', ') })) : [{ label: '', keywords: '' }, { label: '', keywords: '' }],
-      error: ''
+      error: '', topicsMsg: ''
     };
+  }
+  // A plain-language numbered step, not a code block -- the exact command
+  // (for whoever on the team is technical enough to run it) goes behind an
+  // optional <details> disclosure passed in as `extra`, never shown by default.
+  function stepRow(n, text, extra) {
+    return '<div style="display:flex;gap:12px;align-items:flex-start">' +
+      '<span style="flex-shrink:0;width:22px;height:22px;border-radius:11px;background:var(--soft);color:' + C.fg + ';font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">' + n + '</span>' +
+      '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:1px"><span class="s14">' + esc(text) + '</span>' + (extra || '') + '</div>' +
+      '</div>';
   }
   function renderSetup() {
     if (!setupDraft) initSetupDraft();
@@ -122,9 +129,47 @@
       topicRows +
       '<button class="btn sm plain" style="align-self:flex-start" ' + click(() => { d.topics.push({ label: '', keywords: '' }); renderSetup(); }) + '>+ Add topic</button>' +
       '</div>' +
+      '<div class="card">' +
+      '<div class="listhead" style="min-height:0"><h2>Already have a website?</h2></div>' +
+      stepRow(1, 'Scan it on your own computer — free, takes under a minute, nothing is sent to us.',
+        '<details style="margin-top:2px"><summary class="s13" style="color:' + C.accent + ';cursor:pointer">Show me how (for a developer on your team)</summary>' +
+        '<code class="mono s13" style="display:block;white-space:pre-wrap;background:var(--bg);border:1px solid var(--input);border-radius:6px;padding:10px 12px;margin-top:8px">python scripts/audit_crawl.py --base https://yoursite.com\npython scripts/suggest_topics.py</code></details>') +
+      stepRow(2, 'Upload the file it creates.',
+        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">' +
+        '<label for="su-topics-file" class="btn sm plain" style="cursor:pointer">Choose file…</label>' +
+        '<input id="su-topics-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadTopicsFile) + '>' +
+        (d.topicsMsg ? '<span class="s13" style="color:' + C.accent + '">' + esc(d.topicsMsg) + '</span>' : '') + '</div>') +
+      '</div>' +
       (d.error ? '<span class="s13 warn">' + esc(d.error) + '</span>' : '') +
       '<button class="btn" style="align-self:flex-start" ' + click(submitSetup) + '>Generate my starter kit →</button>' +
       '</div>';
+  }
+  // Reads the JSON scripts/suggest_topics.py produces -- pure client-side
+  // file read (FileReader), no network call, CSP-safe. Keeps any topic row
+  // you've already started filling in; appends the suggestions after it.
+  function loadTopicsFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!Array.isArray(parsed) || !parsed.length) throw new Error('empty');
+        const rows = parsed
+          .filter(t => t && t.label)
+          .map(t => ({ label: String(t.label), keywords: Array.isArray(t.keywords) ? t.keywords.join(', ') : String(t.keywords || '') }));
+        if (!rows.length) throw new Error('no usable rows');
+        const kept = setupDraft.topics.filter(t => t.label.trim() || t.keywords.trim());
+        setupDraft.topics = kept.concat(rows);
+        setupDraft.error = '';
+        setupDraft.topicsMsg = 'Loaded ' + rows.length + ' topic' + (rows.length === 1 ? '' : 's') + ' — review them below before generating your starter kit.';
+      } catch (err) {
+        setupDraft.topicsMsg = '';
+        setupDraft.error = 'Could not read that file — expected the JSON scripts/suggest_topics.py produces.';
+      }
+      renderSetup();
+    };
+    reader.readAsText(file);
   }
   function submitSetup() {
     const d = setupDraft;
@@ -165,7 +210,11 @@
     // Top-level nav is Overview + 2 groups, instead of 7 flat tabs: "Monitor" is
     // what the engines are doing (the read side), "Improve" is what to do about
     // it (the act side). Each group's children render as a second-level tab row.
-    const GROUPS = { monitor: ['questions', 'sources', 'impact'], improve: ['website', 'library', 'write'] };
+    // Website (find the gap) and Write (close it) are the actual workflow;
+    // Library is reference material you dip into, not a destination -- kept
+    // last/rightmost so it's still one click away without competing with the
+    // two active steps.
+    const GROUPS = { monitor: ['questions', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
     const TYPE_FG = { statement: '#1A3A9C', definition: '#3A3D45', figure: '#16181D', case: '#9A3412', quote: '#5B2A86', faq: '#1F5C55' };
@@ -457,18 +506,33 @@
         '<span class="small muted">' + esc(l.impNote) + '</span></section>';
     }
 
+    function placeholderBadge() {
+      return '<span class="badge" style="background:#FBEBDD;color:' + C.warn + '">' + esc(L().closeNow) + '</span>';
+    }
+
+    function libraryRow(o) {
+      const l = L();
+      return '<div class="row lgrid"><span class="mono small" style="color:' + TYPE_FG[o.b.type] + '">' + esc(l.types[o.b.type]) + '</span>' +
+        '<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span>' + esc(blockText(o.b)) + '</span>' +
+        (o.b.placeholder ? placeholderBadge() : '<span class="small muted">' + esc(o.b.source ? BRAND.domain + o.b.source : '') + '</span>') + '</div>' +
+        '<span class="s13" style="text-align:right;color:' + (o.cov ? C.warn : C.faint) + '">' + esc(o.cov ? l.openQs(o.cov) : '–') + '</span></div>';
+    }
+
+    // Library is reworked as a worklist, not a flat catalog: blocks that still
+    // need real content (placeholders) are their own section, surfaced first
+    // with a "Close now" badge, so there's something to act on rather than a
+    // buried "[placeholder]" label mixed in among finished content.
     function viewLibrary(ctx) {
       const l = L();
       const blocksNow = allBlocksList();
       const coverage = b => ctx.gapQs.filter(q => overlaps(b.tags, q.tags)).length;
       const catTabs = [{ id: 'all' }].concat(CATS).map(c => tabBtn(c.id === 'all' ? l.all : catLabel(c.id), state.libCat === c.id, () => set({ libCat: c.id }))).join('');
       const typePills = ['all'].concat(TYPES).map(t => '<button class="pill' + (state.libType === t ? ' on' : '') + '" ' + click(() => set({ libType: t })) + '>' + esc(t === 'all' ? l.all : l.types[t]) + '</button>').join('');
-      const list = blocksNow.filter(b => (state.libCat === 'all' || b.tags.indexOf(state.libCat) !== -1) && (state.libType === 'all' || b.type === state.libType))
+      const filtered = blocksNow.filter(b => (state.libCat === 'all' || b.tags.indexOf(state.libCat) !== -1) && (state.libType === 'all' || b.type === state.libType))
         .map(b => ({ b, cov: coverage(b) }))
-        .sort((x, y) => (y.cov - x.cov) || (TYPES.indexOf(x.b.type) - TYPES.indexOf(y.b.type)))
-        .map(o => '<div class="row lgrid"><span class="mono small" style="color:' + TYPE_FG[o.b.type] + '">' + esc(l.types[o.b.type]) + '</span>' +
-          '<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span>' + esc(blockText(o.b)) + '</span><span class="small muted">' + esc(o.b.source ? BRAND.domain + o.b.source : '[placeholder]') + '</span></div>' +
-          '<span class="s13" style="text-align:right;color:' + (o.cov ? C.warn : C.faint) + '">' + esc(o.cov ? l.openQs(o.cov) : '–') + '</span></div>').join('');
+        .sort((x, y) => (y.cov - x.cov) || (TYPES.indexOf(x.b.type) - TYPES.indexOf(y.b.type)));
+      const needsContent = filtered.filter(o => o.b.placeholder);
+      const ready = filtered.filter(o => !o.b.placeholder);
       const withSource = blocksNow.filter(b => !b.placeholder).length;
       const typeOpts = TYPES.map(t => '<option value="' + t + '"' + (state.newBlockType === t ? ' selected' : '') + '>' + esc(l.types[t]) + '</option>').join('');
       const catPills = CATS.map(c => '<button class="pill' + (state.newBlockCats.indexOf(c.id) !== -1 ? ' on' : '') + '" ' + click(() => {
@@ -483,7 +547,9 @@
         '<button class="btn" style="align-self:flex-start" ' + click(addBlock) + '>' + esc(l.saveBlock) + '</button>' +
         '<span class="small" style="color:' + (state.blockMsg ? '#1A3A9C' : C.muted) + '">' + esc(state.blockMsg ? l.msg[state.blockMsg] : l.blockFormHint) + '</span></div>' +
         '<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
-        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(state.libCat === 'all' ? l.libAll : l.libRec(catLabel(state.libCat))) + '</h2>' + (list || '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></section>';
+        (needsContent.length ? '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px;color:' + C.warn + '">' + esc(l.libNeedsContent) + ' (' + needsContent.length + ')</h2>' + needsContent.map(libraryRow).join('') + '</div>' : '') +
+        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(state.libCat === 'all' ? l.libReady : l.libRec(catLabel(state.libCat))) + '</h2>' +
+        (ready.length ? ready.map(libraryRow).join('') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></section>';
     }
     function addBlock() {
       const text = state.newBlockText.trim();
@@ -520,19 +586,43 @@
     function viewStudio() {
       const l = L();
       const sel = allQ().find(q => q.id === state.selectedQ) || QUESTIONS[0];
-      const rel = b => sel.tags.length ? b.tags.filter(t => sel.tags.indexOf(t) !== -1).length / sel.tags.length : 0;
       const ids = state.drafts[sel.id] || [];
       const blocksNow = allBlocksList();
       const draftBlocks = ids.map(id => blocksNow.find(b => b.id === id)).filter(Boolean);
       const n = draftBlocks.length;
 
-      const sugg = blocksNow.map(b => ({ b, r: rel(b) })).filter(o => state.allBlocks || o.r > 0).sort((x, y) => y.r - x.r).map(o => {
-        const b = o.b; const used = ids.indexOf(b.id) !== -1;
-        return '<div class="sugg' + (used ? ' used' : '') + '" draggable="true" ' + attr('dragstart', e => { drag = { kind: 'lib', id: b.id }; try { e.dataTransfer.setData('text/plain', b.id); e.dataTransfer.effectAllowed = 'copyMove'; } catch (err) { /* ignore */ } }) + ' ' + attr('dragend', clearDrag) + '>' +
-          '<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span class="mono" style="color:' + TYPE_FG[b.type] + '">' + esc(l.types[b.type]) + '</span><span class="muted">' + esc(o.r > 0 ? l.rel(Math.round(o.r * 100)) : l.relLow) + '</span></div>' +
-          '<span class="s14">' + esc(blockText(b)) + '</span>' +
-          '<button class="link s13" style="align-self:flex-start;color:' + (used ? C.muted : C.accent) + '" aria-label="' + esc(used ? l.inDraft : l.ariaAdd) + '" ' + click(() => { if (!used) setDraft(getDraft().concat([b.id])); }) + '>' + esc(used ? l.inDraft : l.add) + '</button></div>';
-      }).join('');
+      // Relevance is BM25 (see app/core.js) against the question's literal
+      // text, not just whether block and question share a topic tag -- this
+      // is the same kind of ranking a retrieval step in a real RAG pipeline
+      // would do: which passage's actual wording best matches the query.
+      // Both language variants of each block are concatenated into one
+      // "document" so a German question can still match an English-authored
+      // block (and vice versa) without needing translation.
+      const relevanceMap = {};
+      CORE.rankByRelevance(sel.text, blocksNow.map(b => ({ id: b.id, text: b.en + ' ' + b.de })))
+        .forEach(r => { relevanceMap[r.id] = r.relevance; });
+      const rel = b => relevanceMap[b.id] || 0;
+
+      // Block ranking, fully rule-based (no AI, nothing to guess at):
+      //   1. Blocks of a type the draft is still missing for the GEO score
+      //      (figure/case/quote/faq -- exactly what scoreDraft() checks via
+      //      has(type)) are surfaced first, since adding one directly raises
+      //      the score.
+      //   2. Within that, blocks are ranked by topic match: the fraction of
+      //      the target question's own tags that the block shares with it.
+      const neededTypes = ['figure', 'case', 'quote', 'faq'].filter(t => !draftBlocks.some(b => b.type === t));
+      const sugg = blocksNow.map(b => ({ b, r: rel(b), fillsGap: neededTypes.indexOf(b.type) !== -1 }))
+        .filter(o => state.allBlocks || o.r > 0)
+        .sort((x, y) => (y.fillsGap - x.fillsGap) || (y.r - x.r))
+        .map(o => {
+          const b = o.b; const used = ids.indexOf(b.id) !== -1;
+          const relText = o.r > 0 ? l.rel(Math.round(o.r * 100)) : l.relLow;
+          return '<div class="sugg' + (used ? ' used' : '') + '" draggable="true" ' + attr('dragstart', e => { drag = { kind: 'lib', id: b.id }; try { e.dataTransfer.setData('text/plain', b.id); e.dataTransfer.effectAllowed = 'copyMove'; } catch (err) { /* ignore */ } }) + ' ' + attr('dragend', clearDrag) + '>' +
+            '<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span class="mono" style="color:' + TYPE_FG[b.type] + '">' + esc(l.types[b.type]) + '</span><span class="muted">' + esc(o.fillsGap && !used ? l.closesScoreGap + ' · ' + relText : relText) + '</span></div>' +
+            (b.placeholder ? placeholderBadge() : '') +
+            '<span class="s14">' + esc(blockText(b)) + '</span>' +
+            '<button class="link s13" style="align-self:flex-start;color:' + (used ? C.muted : C.accent) + '" aria-label="' + esc(used ? l.inDraft : l.ariaAdd) + '" ' + click(() => { if (!used) setDraft(getDraft().concat([b.id])); }) + '>' + esc(used ? l.inDraft : l.add) + '</button></div>';
+        }).join('');
 
       const slotEvents = i => attr('dragover', (e, el) => { e.preventDefault(); markOver(el); }) + ' ' + attr('dragleave', (e, el) => el.classList.remove('over')) + ' ' + attr('drop', e => { e.preventDefault(); dropAt(i); });
       const draft = draftBlocks.map((b, i) =>
@@ -602,10 +692,8 @@
       };
 
       const curGroup = GROUP_OF[state.tab];
-      const NAV_ICON = { overview: iconGrid(16), monitor: iconEye(16), improve: iconSliders(16) };
-      const mainTabBtn = (key, label, on_, fn) => '<button class="tab' + (on_ ? ' on' : '') + '" style="display:flex;align-items:center;gap:7px" ' + click(fn) + '>' + NAV_ICON[key] + esc(label) + '</button>';
-      const tabs = [mainTabBtn('overview', l.tabs.overview, state.tab === 'overview', () => set({ tab: 'overview' }))]
-        .concat(Object.keys(GROUPS).map(g => mainTabBtn(g, l.groups[g], curGroup === g, () => { if (curGroup !== g) set({ tab: GROUPS[g][0] }); })))
+      const tabs = [tabBtn(l.tabs.overview, state.tab === 'overview', () => set({ tab: 'overview' }))]
+        .concat(Object.keys(GROUPS).map(g => tabBtn(l.groups[g], curGroup === g, () => { if (curGroup !== g) set({ tab: GROUPS[g][0] }); })))
         .join('');
       const subnav = curGroup
         ? '<nav class="subtabs" style="margin-bottom:8px" aria-label="' + esc(l.groups[curGroup]) + '"><div style="display:flex;flex-wrap:wrap;gap:4px">' +
@@ -617,14 +705,18 @@
         write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
       };
       document.documentElement.lang = state.lang;
+      // One compact control instead of three separate ones: clicking your own
+      // brand's button when it's already active reopens the setup editor,
+      // instead of a dedicated extra "Edit setup" link next to it.
       const modeSwitch = '<div class="lang" role="group" aria-label="Mode">' +
         '<button class="' + (mode === 'demo' ? 'on' : '') + '" ' + click(() => { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }) + '>' + esc(l.modeDemo) + '</button>' +
-        '<button class="' + (mode === 'own' ? 'on' : '') + '" ' + click(() => { if (mode !== 'own') { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); } }) + '>' + esc(own ? own.brand.short : l.modeOwn) + '</button></div>';
-      const editSetup = mode === 'own' ? '<button class="link s13" style="display:flex;align-items:center;gap:6px" ' + click(() => { initSetupDraft(); renderSetup(); }) + '>' + iconGear(14) + esc(l.editSetup) + '</button>' : '';
+        '<button class="' + (mode === 'own' ? 'on' : '') + '" ' + click(() => {
+          if (mode !== 'own') { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); } else { initSetupDraft(); renderSetup(); }
+        }) + '>' + esc(own ? own.brand.short : l.modeOwn) + '</button></div>';
       root.innerHTML =
         '<header><div class="bar"><div class="brand"><b>' + esc(BRAND.short) + '</b><span class="s13 muted">GEO Engine</span></div>' +
         '<nav class="tabs" aria-label="' + esc(l.sections) + '">' + tabs + '</nav>' +
-        '<div class="right">' + (mode === 'demo' ? '<span class="small muted">' + esc(l.demo) + '</span>' : editSetup) + modeSwitch +
+        '<div class="right">' + modeSwitch +
         '<div class="lang" role="group" aria-label="Language">' +
         '<button class="' + (state.lang === 'en' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'en') + '" ' + click(() => set({ lang: 'en' })) + '>EN</button>' +
         '<button class="' + (state.lang === 'de' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'de') + '" ' + click(() => set({ lang: 'de' })) + '>DE</button></div></div></div></header>' +

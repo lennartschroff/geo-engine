@@ -69,12 +69,23 @@ each task below gets its own PR and its own review before running against real k
   wired into `run.py`. Per-token prices are explicitly marked `[placeholder]` —
   **verify against each provider's current pricing page before trusting a dollar
   figure from this in a real run.** 11 unit tests in `tests/test_cost_estimate.py`.
-- [ ] **C4.** Wire real provider calls into `monitoring/run.py` (currently raises
-  `NotImplementedError` outside `--dry-run`, on purpose). Needs: which provider(s)
-  (OpenAI/Anthropic/Gemini, one or all three), API keys in `.env`, and a verified
-  (not placeholder) pricing table in `cost_estimate.py`.
-  **Gate: review cost estimate with you before the first real run.** — *L, medium —
-  real API spend, real external calls*
+- [x] **C4a. `claude` engine: done and verified with real spend.**
+  `monitoring/run.py`'s `call_claude()` calls `claude-sonnet-5` with the
+  `web_search_20250305` tool, reading `ANTHROPIC_API_KEY` from a local `.env`.
+  Verified against real questions from `data/questions.json`: real web
+  searches ran, real citations extracted, mention detection correctly
+  reported "not mentioned" (Contoso AI is fictional — a true negative, not a
+  failure). Two real bugs found and fixed by that real test, not by unit
+  tests: (1) Sonnet 5 runs "thinking" by default and thinking tokens are
+  billed as output even though hidden — now explicitly disabled
+  (`thinking={"type":"disabled"}`); (2) `DEFAULT_INPUT_TOKENS` was off by
+  ~55x (400 vs a measured 22,250 for a 2-search call, dominated by search
+  result content loaded into context) — corrected to 15000 in
+  `cost_estimate.py`, with the real measurement documented inline.
+- [ ] **C4b.** `gpt` and `gemini` engines — still raise `NotImplementedError`
+  outside `--dry-run`. Not started; same gate as below applies per-provider.
+  **Gate: review cost estimate with you before the first real run of each
+  engine.** — *L, medium — real API spend, real external calls*
 - [ ] **C5.** Export: SQLite → `data/monitoring.json`, point the app at it instead of
   `demo_monitoring.json`. **Gate: you review the generated data before it replaces
   the demo file.** — *S, medium — changes what the live demo shows*
@@ -132,10 +143,18 @@ every user brings their own API key for anything that costs money, never yours.*
 - [x] **F2f.** Replaced the setup wizard's placeholder example ("Acme Robotics" —
   too narrow/unclear a niche) with "Lighthouse Marketing", a generic B2B-services
   example anyone filling the form can immediately map to their own company.
-- [ ] **F3.** File import: a drag-and-drop/file-picker in the app so the output of
-  the local scripts above (crawl results, monitoring runs) loads straight into the
-  running app via `FileReader` — no rebuild, no redeploy. Still the real gap between
-  "guided to run a command" and "see the result without touching a terminal again."
+- [x] **F3a.** `scripts/suggest_topics.py` + a file-picker in the Setup wizard:
+  turns a real site crawl's H2/H3 headings into candidate topics (frequency-
+  ranked, boilerplate headings like Contact/Imprint/Privacy filtered, EN+DE),
+  loaded into the wizard via `FileReader` (no network call from the app — the
+  crawl itself runs locally via `audit_crawl.py`, which the app can't do itself
+  since its CSP blocks all network calls). 11 unit tests. This was explicitly
+  requested as "autofill topics from my website" — the honest version of that,
+  given the app has no network access by design.
+- [ ] **F3b.** File import for the *other* local script outputs (real crawl/score
+  results for Website, monitoring runs for Sources/Impact) — same `FileReader`
+  pattern as F3a, not yet built for these. Still the real gap between "guided to
+  run a command" (F2c) and "see the result without touching a terminal again."
   — *M, none (client-side file read only)*
 - [ ] **F4.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
   flow into `monitoring/run.py`, so "connect your own API, you're ready to go" is a

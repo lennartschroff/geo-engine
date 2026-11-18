@@ -205,8 +205,76 @@
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'topic';
   }
 
+  // ---------- BM25 text relevance ----------
+  // This is the actual algorithm underneath most search engines and the
+  // first-pass retrieval step in many retrieval-augmented-generation
+  // pipelines (before or alongside embeddings) — not an invented heuristic.
+  // Deterministic: same corpus + same query always gives the same ranking.
+  // Rationale: an AI answer engine doesn't retrieve a whole page for a
+  // query, it retrieves the *passage* whose wording best matches the
+  // question — so "is this content relevant" should be measured the same
+  // way a retrieval system would measure it (shared, rare/distinctive
+  // words), not by whether someone tagged it with the same topic id.
+  const TOKEN_RE = /[^\p{L}\p{N}]+/u;
+  function tokenize(text) {
+    return String(text).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .split(TOKEN_RE).filter(t => t.length > 1);
+  }
+
+  /** Document frequency + average length for a tokenized corpus. */
+  function buildCorpusStats(tokenizedDocs) {
+    const N = tokenizedDocs.length;
+    const df = {};
+    tokenizedDocs.forEach(tokens => {
+      new Set(tokens).forEach(t => { df[t] = (df[t] || 0) + 1; });
+    });
+    const totalLen = tokenizedDocs.reduce((a, d) => a + d.length, 0);
+    return { N, df, avgdl: N ? totalLen / N : 0 };
+  }
+
+  function idf(term, stats) {
+    const n = stats.df[term] || 0;
+    return Math.log((stats.N - n + 0.5) / (n + 0.5) + 1);
+  }
+
+  /** Standard BM25 (k1=1.5, b=0.75 — the usual defaults; not tuned per corpus). */
+  function bm25Score(queryTokens, docTokens, stats, k1, b) {
+    k1 = k1 == null ? 1.5 : k1;
+    b = b == null ? 0.75 : b;
+    const tf = {};
+    docTokens.forEach(t => { tf[t] = (tf[t] || 0) + 1; });
+    const dl = docTokens.length;
+    let score = 0;
+    new Set(queryTokens).forEach(t => {
+      const f = tf[t] || 0;
+      if (!f) return;
+      score += idf(t, stats) * (f * (k1 + 1)) / (f + k1 * (1 - b + b * (dl / (stats.avgdl || 1))));
+    });
+    return score;
+  }
+
+  /**
+   * Ranks `docs` ({id, text}) by BM25 relevance to `queryText`, with each
+   * score normalized to [0, 1] relative to the best-scoring doc in this set
+   * (0 if nothing in the set matches at all) — "how good a match is this,
+   * relative to the best match available," which is what a 0-100% figure
+   * actually means to someone reading it, since raw BM25 scores aren't
+   * bounded and aren't comparable across different queries/corpora.
+   */
+  function rankByRelevance(queryText, docs) {
+    const queryTokens = tokenize(queryText);
+    const tokenized = docs.map(d => tokenize(d.text));
+    const stats = buildCorpusStats(tokenized);
+    const raw = docs.map((d, i) => bm25Score(queryTokens, tokenized[i], stats, 1.5, 0.75));
+    const max = Math.max(0, ...raw);
+    return docs
+      .map((d, i) => Object.assign({}, d, { relevance: max > 0 ? raw[i] / max : 0 }))
+      .sort((a, b) => b.relevance - a.relevance);
+  }
+
   return {
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,
     QUESTION_TEMPLATES, generateForCategory, generateQuestions, slugify,
+    tokenize, buildCorpusStats, idf, bm25Score, rankByRelevance,
   };
 });

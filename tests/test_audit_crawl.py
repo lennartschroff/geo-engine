@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from bs4 import BeautifulSoup
 
@@ -86,3 +87,67 @@ class TestSchemaTypes:
     def test_no_ld_json_returns_empty(self):
         soup = BeautifulSoup("<html><body><p>hi</p></body></html>", "lxml")
         assert ac.schema_types(soup) == []
+
+
+class TestDiscoverUrlsViaLinks:
+    """Fallback page discovery for sites with no sitemap.xml -- confirmed
+    necessary against a real site (de.safenow.app, a Webflow site with no
+    sitemap at all: audit_crawl.py found 0 pages before this fallback
+    existed). Network calls are mocked here; the real-site check is manual.
+    """
+
+    def _mock_response(self, html):
+        resp = Mock()
+        resp.text = html
+        return resp
+
+    def test_finds_same_domain_links(self):
+        html = """
+        <html><body>
+          <a href="/pricing">Pricing</a>
+          <a href="/about">About</a>
+          <a href="https://de.safenow.app/contact">Contact</a>
+        </body></html>
+        """
+        with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert "https://de.safenow.app/" in urls
+        assert "https://de.safenow.app/pricing" in urls
+        assert "https://de.safenow.app/about" in urls
+        assert "https://de.safenow.app/contact" in urls
+
+    def test_ignores_external_links(self):
+        html = '<a href="https://other-site.example/page">External</a>'
+        with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert not any("other-site" in u for u in urls)
+
+    def test_ignores_mailto_and_tel_links(self):
+        html = '<a href="mailto:hi@example.com">Mail</a><a href="tel:+123">Call</a>'
+        with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert all(u.startswith("http") for u in urls)
+
+    def test_strips_query_and_fragment(self):
+        html = '<a href="/page?utm_source=x#section">Page</a>'
+        with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert "https://de.safenow.app/page" in urls
+        assert not any("?" in u or "#" in u for u in urls)
+
+    def test_deduplicates_repeated_links(self):
+        html = '<a href="/page">A</a><a href="/page">B</a><a href="/page">C</a>'
+        with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert urls.count("https://de.safenow.app/page") == 1
+
+    def test_no_links_still_returns_the_homepage(self):
+        with patch("audit_crawl.requests.get", return_value=self._mock_response("<html></html>")):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert urls == ["https://de.safenow.app/"]
+
+    def test_request_failure_returns_just_the_homepage_not_an_exception(self):
+        import requests
+        with patch("audit_crawl.requests.get", side_effect=requests.RequestException("boom")):
+            urls = ac.discover_urls_via_links("https://de.safenow.app")
+        assert urls == ["https://de.safenow.app/"]

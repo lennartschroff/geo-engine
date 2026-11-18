@@ -45,6 +45,7 @@ app/         Static web app (vanilla JS, no framework, no build tooling)
 scripts/     build_web_data.py  → bundles data/*.json into app/data.js
              audit_crawl.py     → crawls a website's sitemap and extracts GEO signals
              score_pages.py     → turns a crawl into data/page_scores.json
+             suggest_topics.py  → turns a crawl's headings into candidate topics for the Setup wizard
 monitoring/  run.py             → sends tracked questions to the engines, writes SQLite
              (real provider calls not wired in yet — --dry-run uses recorded fixtures;
              see TASKS.md Epic C)
@@ -101,7 +102,11 @@ their own key in their own local `.env`, never shared with anyone else.
 
 1. Edit `data/brand.json` (name, domain, aliases used for mention detection).
 2. Write `data/categories.json` for your market (topic id, EN/DE label, matching keywords) —
-   this is real domain knowledge about your business that can't be auto-generated.
+   this is real domain knowledge about your business that can't be auto-generated. Or skip the
+   file editing entirely: open the app, choose "Set up my own brand," and either type topics
+   in by hand or load candidates suggested from your own site's headings (run
+   `audit_crawl.py` then `suggest_topics.py` locally first, then load the result in the wizard
+   — the app itself never fetches your site; that step runs on your machine).
 3. Run `python3 scripts/generate_questions.py` to get a starter `data/questions.json` from
    those categories via templates (zero cost, no API key, instant) — then edit the generated
    phrasing to match how your actual customers ask.

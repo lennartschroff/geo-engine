@@ -13,6 +13,7 @@ button, input, select { font-family: inherit; }
    borderless buttons) default focus outline. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 button { cursor: pointer; }
+button, .track > div, .dropzone { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); } .small { font-size: 12px; } .s13 { font-size: 13px; } .s14 { font-size: 14px; }
@@ -126,6 +127,13 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--fg); curso
 .crit > span { flex-shrink: 0; width: 16px; text-align: center; font-weight: 600; }
 .crit > div { display: flex; flex-direction: column; gap: 2px; }
 .actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* A window narrower than the content's natural width but wider than the phone
+   breakpoint below (e.g. a non-maximized laptop window) gets a tighter header
+   instead of relying on the same 40px gap used on a full-width monitor. */
+@media (max-width: 1000px) {
+  .bar { gap: 8px 20px; padding-left: 24px; padding-right: 24px; }
+}
 
 @media (max-width: 640px) {
   .bar, main { padding-left: 16px; padding-right: 16px; }

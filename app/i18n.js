@@ -3,15 +3,15 @@
 
 window.makeStrings = function makeStrings(b) {
   const en = {
-    demo: 'Demo · simulated data', sections: 'Sections',
-    modeDemo: 'Demo', modeOwn: 'My brand', editSetup: 'Edit setup',
+    sections: 'Sections',
+    modeDemo: 'Demo', modeOwn: 'My brand',
     emptyHintTitle: 'Get real data for this',
     srcHint: 'Runs on your machine. Export the real results to data/monitoring.json once that script supports your provider (see TASKS.md).',
     webHint: 'Crawls your own site to check crawler access, structured data and FAQ coverage. No API key needed.',
     webHint2: 'Turns the crawl into page scores. Run this right after the command above.',
     impHint: 'The trend builds up automatically once you have a few weeks of real monitoring runs.',
     tabs: { overview: 'Overview', questions: 'Questions', sources: 'Sources', website: 'Website', impact: 'Impact', library: 'Library', write: 'Write' },
-    groups: { monitor: 'Monitor', improve: 'Improve' },
+    groups: { monitor: 'Monitor', improve: 'Content' },
     types: { statement: 'Key statement', definition: 'Definition', figure: 'Figure', case: 'Case example', quote: 'Quote', faq: 'FAQ' },
 
     gsTitle: b2 => 'Getting started with ' + b2,
@@ -69,7 +69,8 @@ window.makeStrings = function makeStrings(b) {
     impNote: 'Demo data. Effects show correlation, not causation. Draw conclusions only after at least 4 weeks of observation.',
 
     libSub: (n, r) => n + ' building blocks: ' + r + ' with a source, ' + (n - r) + ' placeholders for content still missing. Pick a topic for recommended blocks.',
-    libAll: 'All building blocks · sorted by open questions', libRec: c => 'Recommended blocks · ' + c, openQs: n => n + ' open questions',
+    libReady: 'Ready to use · sorted by open questions', libRec: c => 'Recommended blocks · ' + c, openQs: n => n + ' open questions',
+    closeNow: 'Close now', libNeedsContent: 'Needs content',
     addBlockTitle: 'Add a building block', blockTypeLabel: 'Block type', blockTextLabel: 'Text',
     blockTextPh: 'e.g. a figure, a short case study, an FAQ in "Question – Answer" form …', blockCatLabel: 'Topics',
     saveBlock: 'Save block', blockFormHint: 'Stored in this browser only — no account, no server, no API key needed for this.',
@@ -83,6 +84,7 @@ window.makeStrings = function makeStrings(b) {
     changeTopic: '← Change topic', targetQ: 'Target question', matchingBlocks: 'Matching building blocks', showAll: 'Show all', onlyMatching: 'Matching only',
     draftTitle: 'Draft', blocksN: n => n + ' blocks', scoreTitle: 'Score', up: 'Move up', down: 'Move down', remove: 'Remove',
     rel: p => p + '% match', relLow: 'weak match', inDraft: 'In draft', add: '+ Add', ariaAdd: 'Add block to draft',
+    closesScoreGap: 'Closes a scoring gap',
     dropEmpty: 'Drag building blocks here', dropHere: 'Drop here', copy: 'Copy as text', copied: 'Copied',
     copyMd: 'Copy as Markdown', copyHtml: 'Copy as HTML (+ FAQ schema)',
     crit: [['Direct answer first', 'Start with a key statement or definition.'], ['Verifiable figure', 'Models prefer to adopt checkable data.'], ['Case example', 'Links ' + b + ' as an entity to the question.'], ['Expert voice', 'A named quote makes the content more citable.'], ['FAQ block', 'Mirrors how users ask.'], ['Fits the target question', 'At least 60% match (currently {p}%).'], ['3–7 blocks', 'Enough substance without diluting.']],
@@ -91,15 +93,15 @@ window.makeStrings = function makeStrings(b) {
   };
 
   const de = Object.assign({}, en, {
-    demo: 'Demo · simulierte Daten', sections: 'Bereiche',
-    modeDemo: 'Demo', modeOwn: 'Meine Marke', editSetup: 'Einrichtung bearbeiten',
+    sections: 'Bereiche',
+    modeDemo: 'Demo', modeOwn: 'Meine Marke',
     emptyHintTitle: 'Echte Daten dafür bekommen',
     srcHint: 'Läuft auf deinem Rechner. Echte Ergebnisse nach data/monitoring.json exportieren, sobald das Skript deinen Anbieter unterstützt (siehe TASKS.md).',
     webHint: 'Crawlt die eigene Website und prüft Crawler-Zugang, strukturierte Daten und FAQ-Abdeckung. Kein API-Key nötig.',
     webHint2: 'Wandelt den Crawl in Seiten-Scores um. Direkt nach dem Befehl oben ausführen.',
     impHint: 'Der Trend baut sich automatisch auf, sobald einige Wochen echter Monitoring-Läufe vorliegen.',
     tabs: { overview: 'Übersicht', questions: 'Fragen', sources: 'Quellen', website: 'Website', impact: 'Wirkung', library: 'Bibliothek', write: 'Verfassen' },
-    groups: { monitor: 'Monitor', improve: 'Verbessern' },
+    groups: { monitor: 'Monitor', improve: 'Content' },
     types: { statement: 'Kernaussage', definition: 'Definition', figure: 'Zahl', case: 'Fallbeispiel', quote: 'Zitat', faq: 'FAQ' },
     gsTitle: b2 => 'Erste Schritte mit ' + b2,
     gsSub: 'Ein paar Schritte von der leeren Einrichtung zu echten Sichtbarkeitsdaten. Nichts davon kostet etwas oder braucht einen Account.',
@@ -151,7 +153,8 @@ window.makeStrings = function makeStrings(b) {
     ptypes: { guide: 'Leitfaden', article: 'Artikel', faq: 'FAQ-Seite' },
     impNote: 'Demo-Daten. Effekte sind Korrelation, keine Kausalität. Aussagen erst nach mindestens 4 Wochen Beobachtung.',
     libSub: (n, r) => n + ' Bausteine: ' + r + ' mit Quelle, ' + (n - r) + ' Platzhalter für Inhalte, die noch fehlen. Wähle ein Thema für empfohlene Bausteine.',
-    libAll: 'Alle Bausteine · nach offenen Fragen sortiert', libRec: c => 'Empfohlene Bausteine · ' + c, openQs: n => n + ' offene Fragen',
+    libReady: 'Einsatzbereit · nach offenen Fragen sortiert', libRec: c => 'Empfohlene Bausteine · ' + c, openQs: n => n + ' offene Fragen',
+    closeNow: 'Jetzt schließen', libNeedsContent: 'Braucht Inhalt',
     addBlockTitle: 'Baustein hinzufügen', blockTypeLabel: 'Bausteintyp', blockTextLabel: 'Text',
     blockTextPh: 'z. B. eine Zahl, ein kurzes Fallbeispiel, eine FAQ im Format „Frage – Antwort" …', blockCatLabel: 'Themen',
     saveBlock: 'Baustein speichern', blockFormHint: 'Nur in diesem Browser gespeichert — kein Account, kein Server, kein API-Key nötig.',
@@ -164,6 +167,7 @@ window.makeStrings = function makeStrings(b) {
     changeTopic: '← Thema ändern', targetQ: 'Zielfrage', matchingBlocks: 'Passende Bausteine', showAll: 'Alle zeigen', onlyMatching: 'Nur passende',
     draftTitle: 'Entwurf', blocksN: n => n + ' Bausteine', scoreTitle: 'Bewertung', up: 'Nach oben', down: 'Nach unten', remove: 'Entfernen',
     rel: p => p + '% passend', relLow: 'kaum passend', inDraft: 'Im Entwurf', add: '+ Hinzufügen', ariaAdd: 'Baustein zum Entwurf hinzufügen',
+    closesScoreGap: 'Schließt eine Bewertungslücke',
     dropEmpty: 'Bausteine hierher ziehen', dropHere: 'Hier ablegen', copy: 'Als Text kopieren', copied: 'Kopiert',
     copyMd: 'Als Markdown kopieren', copyHtml: 'Als HTML kopieren (+ FAQ-Schema)',
     crit: [['Direkte Antwort zuerst', 'Mit Kernaussage oder Definition beginnen.'], ['Belegbare Zahl', 'Modelle übernehmen bevorzugt überprüfbare Daten.'], ['Fallbeispiel', 'Verknüpft ' + b + ' als Entität mit der Frage.'], ['Expertenstimme', 'Namentliches Zitat erhöht die Zitierfähigkeit.'], ['FAQ-Baustein', 'Spiegelt, wie Nutzer:innen fragen.'], ['Passt zur Zielfrage', 'Mind. 60 % Passung (aktuell {p} %).'], ['3–7 Bausteine', 'Genug Substanz, ohne zu verwässern.']],
