@@ -196,6 +196,12 @@
 
     own = emptyOwnData(brand, categories, questions);
     saveOwn(own);
+    // Regenerating assigns question ids from scratch (q1, q2, ...) -- without
+    // this, a draft/activation/audit-checkmark saved against the *old* set of
+    // ids would silently reattach to whatever unrelated question happens to
+    // get the same id this time. Clearing is the honest behavior: redoing
+    // your topics means your old gap-tracking state doesn't carry over.
+    try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (e) { /* storage unavailable */ }
     setupDraft = null;
     boot();
   }

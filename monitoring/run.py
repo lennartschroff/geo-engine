@@ -39,7 +39,11 @@ CLAUDE_MAX_SEARCHES = 2
 
 
 def _load_dotenv() -> None:
-    """Minimal .env loader (no new dependency): KEY=VALUE lines, '#' comments."""
+    """Minimal .env loader (no new dependency): KEY=VALUE lines, '#' comments.
+    Strips one layer of matching quotes around the value (KEY="value" and
+    KEY='value' are both common .env conventions) -- without this, a quoted
+    key would silently include the literal quote characters and fail auth.
+    """
     env_path = ROOT / ".env"
     if not env_path.exists():
         return
@@ -48,7 +52,10 @@ def _load_dotenv() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip())
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ.setdefault(key.strip(), value)
 
 
 def call_claude(question_text: str) -> dict:

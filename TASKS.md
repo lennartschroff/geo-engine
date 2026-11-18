@@ -86,9 +86,18 @@ each task below gets its own PR and its own review before running against real k
   outside `--dry-run`. Not started; same gate as below applies per-provider.
   **Gate: review cost estimate with you before the first real run of each
   engine.** — *L, medium — real API spend, real external calls*
-- [ ] **C5.** Export: SQLite → `data/monitoring.json`, point the app at it instead of
-  `demo_monitoring.json`. **Gate: you review the generated data before it replaces
-  the demo file.** — *S, medium — changes what the live demo shows*
+- [ ] **C5. THE biggest real gap right now.** C4a proved real API calls work and
+  write real results to `monitoring/runs.sqlite` — but nothing reads that file
+  into the app yet. Right now a real monitoring run is a dead end: the data
+  exists, correctly, and is completely invisible in the UI. Export:
+  SQLite → `data/monitoring.json`, point the app at it instead of
+  `demo_monitoring.json`. **Gate: you review the generated data before it
+  replaces the demo file.** — *S, medium — changes what the live demo shows*
+- [ ] **C5a.** `COMPETITOR_NAMES` in `run.py` is still the fictional placeholder
+  list (`"Competitor A".."D"`) from the demo data. For a real brand, "mentioned/
+  not mentioned" is correct, but "position" (rank among named providers) will
+  be meaningless since none of the real competitor names in a real answer will
+  match these placeholders. No maintained real competitor list exists yet.
 - [ ] **C6.** Weekly schedule: GitHub Action with API keys as encrypted repo secrets.
   **Gate: you add the secrets yourself in Settings; I never see the keys.** — *M,
   medium — recurring spend, needs your explicit go-ahead on the cadence/cost*
