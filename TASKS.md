@@ -9,6 +9,32 @@ how reversible / how much it touches running behavior.
 
 ---
 
+## Next session — pick up here
+
+Left off 2026-11-19 after wiring the real Gemini engine (C4b, committed and pushed —
+`a51bef7`). In priority order:
+
+1. **C5a — real competitor list.** `COMPETITOR_NAMES` in `monitoring/run.py` is still
+   the fictional demo placeholder (`"Competitor A".."D"`). Mention detection's
+   "mentioned/not mentioned" is correct for a real brand, but "position among
+   competitors" is meaningless until this is a real list. Cheap, no API cost.
+2. **C6 — weekly schedule.** GitHub Action on a cron, API keys as encrypted repo
+   secrets, so monitoring runs on its own instead of only when triggered by hand.
+   **Needs your explicit go-ahead on cadence/cost before I add it** — recurring
+   real spend.
+3. **C4b follow-up decision needed from you:** Gemini's Google Search grounding
+   returned a billing-gated 429 on your free-tier key (confirmed twice, see C4b
+   notes below) — plain generation works, grounded citations don't. Decide: attach
+   billing to unlock grounding, or leave Gemini on plain-generation-only / skip it
+   in real runs for now. Nothing to build either way until you decide.
+4. **`gpt` engine** — not started. Same pattern as `call_claude()`/`call_gemini()`,
+   same cost-estimate gate before first real spend.
+5. Explicitly declined for now: connecting Gemini to the webcrawler/topic-suggestion
+   feature — not worth building since it wouldn't add anything the free (BM25 /
+   heading-heuristic) path doesn't already cover.
+
+---
+
 ## Epic A — CI & safety nets
 *Goal: make it hard to break the app without noticing. No behavior change.*
 
