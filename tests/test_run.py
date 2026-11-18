@@ -19,6 +19,30 @@ import monitoring.run as run_module  # noqa: E402
 ENV_TEST_KEY = "GEO_ENGINE_TEST_DOTENV_VAR"
 
 
+class TestDetectLanguage:
+    def test_umlaut_is_german(self):
+        assert run_module.detect_language("Wie erkenne ich frühzeitig Trends?") == "de"
+
+    def test_eszett_is_german(self):
+        assert run_module.detect_language("Was muss ich groß planen?") == "de"
+
+    def test_common_german_word_without_umlauts(self):
+        assert run_module.detect_language("Was kostet eine RAG Implementierung") == "de"
+
+    def test_plain_english_question(self):
+        assert run_module.detect_language("Best consultancies for building production AI agents") == "en"
+
+    def test_english_with_no_german_markers(self):
+        assert run_module.detect_language("How to run an AI adoption sprint") == "en"
+
+    def test_all_real_questions_classify_as_expected(self):
+        # Spot-checks against data/questions.json rather than re-deriving the
+        # whole file's expected answer -- a handful of known cases in each
+        # language, not a brittle full-file assertion.
+        assert run_module.detect_language("RAG-Anbieter in den USA") == "en"  # named entities only, no DE marker word
+        assert run_module.detect_language("Wie baue ich eine Retrieval-Augmented-Generation-Pipeline auf?") == "de"
+
+
 @pytest.fixture
 def isolated_root(tmp_path, monkeypatch):
     """Points monitoring.run.ROOT at a scratch dir and cleans up the test env var."""

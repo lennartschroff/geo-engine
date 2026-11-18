@@ -82,6 +82,10 @@ each task below gets its own PR and its own review before running against real k
   ~55x (400 vs a measured 22,250 for a 2-search call, dominated by search
   result content loaded into context) — corrected to 15000 in
   `cost_estimate.py`, with the real measurement documented inline.
+  The DB's `language` column (was always `NULL`) is now filled via a small
+  heuristic (`detect_language()` — umlauts/common DE words) — 100% correct
+  against all 50 real questions in `data/questions.json`, not a real
+  language detector but good enough for this deliberately mixed-language set.
 - [ ] **C4b.** `gpt` and `gemini` engines — still raise `NotImplementedError`
   outside `--dry-run`. Not started; same gate as below applies per-provider.
   **Gate: review cost estimate with you before the first real run of each
@@ -160,11 +164,14 @@ every user brings their own API key for anything that costs money, never yours.*
   since its CSP blocks all network calls). 11 unit tests. This was explicitly
   requested as "autofill topics from my website" — the honest version of that,
   given the app has no network access by design.
-- [ ] **F3b.** File import for the *other* local script outputs (real crawl/score
-  results for Website, monitoring runs for Sources/Impact) — same `FileReader`
-  pattern as F3a, not yet built for these. Still the real gap between "guided to
-  run a command" (F2c) and "see the result without touching a terminal again."
-  — *M, none (client-side file read only)*
+- [x] **F3b (monitoring + page scores done; crawl audit findings still open).**
+  "Load monitoring results" on Sources (loads `scripts/export_monitoring.py`'s
+  output into `own.demo` — this is also C5, see Epic C) and "Already ran a real
+  crawl?" on Website (loads `scripts/score_pages.py`'s output into `own.pages`)
+  are both built, same `FileReader` pattern as F3a. **Still missing:** no script
+  generates audit findings (`own.audit`, the a1-a10-style list) yet, so Website's
+  action-items section stays empty in own-brand mode even after loading page
+  scores — nothing to load there until such a script exists.
 - [ ] **F4.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
   flow into `monitoring/run.py`, so "connect your own API, you're ready to go" is a
   literal, tested instruction, not just an architectural claim.

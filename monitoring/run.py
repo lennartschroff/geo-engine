@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import UTC, datetime
@@ -98,6 +99,18 @@ def call_claude(question_text: str) -> dict:
     ]
     return {"answer_text": answer_text, "cited_urls": cited_urls}
 
+# Heuristic EN/DE detection for the question text (README's own design is a
+# deliberately mixed-language question set) — looks for German umlauts or a
+# few common German function words. Not a real language detector; good
+# enough since individual questions are almost always unambiguously one or
+# the other, just not reliably tagged as such anywhere in questions.json.
+GERMAN_MARKERS = re.compile(r"[äöüßÄÖÜ]|(?<![\wäöü])(wie|was|welche|welcher|welches|für|ist|sind)(?![\wäöü])", re.I)
+
+
+def detect_language(text: str) -> str:
+    return "de" if GERMAN_MARKERS.search(text) else "en"
+
+
 # [placeholder] no maintained competitor list exists yet (see ROADMAP.md).
 # These match the fictional names already used in data/demo_monitoring.json,
 # just so dry-run mentions/rank logic has something real to rank against.
@@ -164,7 +177,7 @@ def run_one(question: dict, engine: str, run_index: int, brand_aliases: list[str
         "model": model,
         "run_index": run_index,
         "timestamp": datetime.now(UTC).isoformat(),
-        "language": None,  # TODO: not derivable from questions.json yet (text is mixed-language by design)
+        "language": detect_language(question["text"]),
         "mentioned": int(result.mentioned),
         "position": result.position,
         "cited_urls": json.dumps(normalize_domains(answer["cited_urls"])),
