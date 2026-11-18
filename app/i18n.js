@@ -4,6 +4,12 @@
 window.makeStrings = function makeStrings(b) {
   const en = {
     demo: 'Demo · simulated data', sections: 'Sections',
+    modeDemo: 'Demo', modeOwn: 'My brand', editSetup: 'Edit setup',
+    emptyHintTitle: 'Get real data for this',
+    srcHint: 'Runs on your machine. Export the real results to data/monitoring.json once that script supports your provider (see TASKS.md).',
+    webHint: 'Crawls your own site to check crawler access, structured data and FAQ coverage. No API key needed.',
+    webHint2: 'Turns the crawl into page scores. Run this right after the command above.',
+    impHint: 'The trend builds up automatically once you have a few weeks of real monitoring runs.',
     tabs: { overview: 'Overview', questions: 'Questions', sources: 'Sources', website: 'Website', impact: 'Impact', library: 'Library', write: 'Write' },
     groups: { monitor: 'Monitor', improve: 'Improve' },
     types: { statement: 'Key statement', definition: 'Definition', figure: 'Figure', case: 'Case example', quote: 'Quote', faq: 'FAQ' },
@@ -22,7 +28,11 @@ window.makeStrings = function makeStrings(b) {
     actActivate: 'Activate', actClose: 'Close gap', actExpand: 'Strengthen', actWait: 'Awaiting run',
     ariaOn: 'Activate: ', ariaOff: 'Deactivate: ',
     formHint: 'New questions are stored in this browser only and picked up by the next monitoring run.',
-    msg: { short: 'Please enter a complete question.', saved: 'Saved. It will be queried in the next monitoring run.' },
+    msg: {
+      short: 'Please enter a complete question.', saved: 'Saved. It will be queried in the next monitoring run.',
+      blockShort: 'Please enter at least 8 characters of block text.', noCat: 'Pick at least one topic for this block.',
+      blockSaved: 'Saved to your library — stored in this browser only.'
+    },
     dot: { cited: 'cited', mentioned: 'mentioned', absent: 'missing', notrun: 'not queried yet', inactive: 'inactive' },
     noData: 'no data', legendNote: 'Number = position of the mention',
 
@@ -54,6 +64,9 @@ window.makeStrings = function makeStrings(b) {
 
     libSub: (n, r) => n + ' building blocks: ' + r + ' with a source, ' + (n - r) + ' placeholders for content still missing. Pick a topic for recommended blocks.',
     libAll: 'All building blocks · sorted by open questions', libRec: c => 'Recommended blocks · ' + c, openQs: n => n + ' open questions',
+    addBlockTitle: 'Add a building block', blockTypeLabel: 'Block type', blockTextLabel: 'Text',
+    blockTextPh: 'e.g. a figure, a short case study, an FAQ in "Question – Answer" form …', blockCatLabel: 'Topics',
+    saveBlock: 'Save block', blockFormHint: 'Stored in this browser only — no account, no server, no API key needed for this.',
 
     writeQ: 'What do you want to write today?', briefPh: 'e.g. LinkedIn article on evaluating RAG systems', briefHint: 'Leave empty for a recommendation based on the biggest gaps.',
     kMatch: 'Matches the topic', kNo: 'No link to an open gap found – recommended instead', kDefault: 'Recommendation for today',
@@ -65,6 +78,7 @@ window.makeStrings = function makeStrings(b) {
     draftTitle: 'Draft', blocksN: n => n + ' blocks', scoreTitle: 'Score', up: 'Move up', down: 'Move down', remove: 'Remove',
     rel: p => p + '% match', relLow: 'weak match', inDraft: 'In draft', add: '+ Add', ariaAdd: 'Add block to draft',
     dropEmpty: 'Drag building blocks here', dropHere: 'Drop here', copy: 'Copy as text', copied: 'Copied',
+    copyMd: 'Copy as Markdown', copyHtml: 'Copy as HTML (+ FAQ schema)',
     crit: [['Direct answer first', 'Start with a key statement or definition.'], ['Verifiable figure', 'Models prefer to adopt checkable data.'], ['Case example', 'Links ' + b + ' as an entity to the question.'], ['Expert voice', 'A named quote makes the content more citable.'], ['FAQ block', 'Mirrors how users ask.'], ['Fits the target question', 'At least 60% match (currently {p}%).'], ['3–7 blocks', 'Enough substance without diluting.']],
     verdict: { empty: 'Empty', good: 'GEO-ready', mid: 'Needs work', low: 'Hardly citable' },
     ph: n => n + (n === 1 ? ' block still contains' : ' blocks still contain') + ' [placeholders].'
@@ -72,6 +86,12 @@ window.makeStrings = function makeStrings(b) {
 
   const de = Object.assign({}, en, {
     demo: 'Demo · simulierte Daten', sections: 'Bereiche',
+    modeDemo: 'Demo', modeOwn: 'Meine Marke', editSetup: 'Einrichtung bearbeiten',
+    emptyHintTitle: 'Echte Daten dafür bekommen',
+    srcHint: 'Läuft auf deinem Rechner. Echte Ergebnisse nach data/monitoring.json exportieren, sobald das Skript deinen Anbieter unterstützt (siehe TASKS.md).',
+    webHint: 'Crawlt die eigene Website und prüft Crawler-Zugang, strukturierte Daten und FAQ-Abdeckung. Kein API-Key nötig.',
+    webHint2: 'Wandelt den Crawl in Seiten-Scores um. Direkt nach dem Befehl oben ausführen.',
+    impHint: 'Der Trend baut sich automatisch auf, sobald einige Wochen echter Monitoring-Läufe vorliegen.',
     tabs: { overview: 'Übersicht', questions: 'Fragen', sources: 'Quellen', website: 'Website', impact: 'Wirkung', library: 'Bibliothek', write: 'Verfassen' },
     groups: { monitor: 'Monitor', improve: 'Verbessern' },
     types: { statement: 'Kernaussage', definition: 'Definition', figure: 'Zahl', case: 'Fallbeispiel', quote: 'Zitat', faq: 'FAQ' },
@@ -88,7 +108,11 @@ window.makeStrings = function makeStrings(b) {
     actActivate: 'Aktivieren', actClose: 'Lücke schließen', actExpand: 'Ausbauen', actWait: 'Wartet auf Lauf',
     ariaOn: 'Aktivieren: ', ariaOff: 'Deaktivieren: ',
     formHint: 'Neue Fragen werden nur in diesem Browser gespeichert und beim nächsten Monitoring-Lauf abgefragt.',
-    msg: { short: 'Bitte eine vollständige Frage eingeben.', saved: 'Gespeichert. Die Frage wird beim nächsten Monitoring-Lauf abgefragt.' },
+    msg: {
+      short: 'Bitte eine vollständige Frage eingeben.', saved: 'Gespeichert. Die Frage wird beim nächsten Monitoring-Lauf abgefragt.',
+      blockShort: 'Bitte mindestens 8 Zeichen Text eingeben.', noCat: 'Mindestens ein Thema für diesen Baustein auswählen.',
+      blockSaved: 'In deiner Bibliothek gespeichert — nur in diesem Browser.'
+    },
     dot: { cited: 'zitiert', mentioned: 'genannt', absent: 'fehlt', notrun: 'noch nicht abgefragt', inactive: 'inaktiv' },
     noData: 'keine Daten', legendNote: 'Zahl = Position der Nennung',
     srcSub: 'Welche Seiten die Engines in ihren Antworten auf die Key-Fragen zitieren – und wo ' + b + ' dort noch fehlt. Das ist die Zielliste für PR, Gastbeiträge und Listings.',
@@ -116,6 +140,9 @@ window.makeStrings = function makeStrings(b) {
     impNote: 'Demo-Daten. Effekte sind Korrelation, keine Kausalität. Aussagen erst nach mindestens 4 Wochen Beobachtung.',
     libSub: (n, r) => n + ' Bausteine: ' + r + ' mit Quelle, ' + (n - r) + ' Platzhalter für Inhalte, die noch fehlen. Wähle ein Thema für empfohlene Bausteine.',
     libAll: 'Alle Bausteine · nach offenen Fragen sortiert', libRec: c => 'Empfohlene Bausteine · ' + c, openQs: n => n + ' offene Fragen',
+    addBlockTitle: 'Baustein hinzufügen', blockTypeLabel: 'Bausteintyp', blockTextLabel: 'Text',
+    blockTextPh: 'z. B. eine Zahl, ein kurzes Fallbeispiel, eine FAQ im Format „Frage – Antwort" …', blockCatLabel: 'Themen',
+    saveBlock: 'Baustein speichern', blockFormHint: 'Nur in diesem Browser gespeichert — kein Account, kein Server, kein API-Key nötig.',
     writeQ: 'Was willst du heute verfassen?', briefPh: 'z. B. LinkedIn-Artikel über die Evaluierung von RAG-Systemen', briefHint: 'Leer lassen für eine Empfehlung auf Basis der größten Lücken.',
     kMatch: 'Passt zum Thema', kNo: 'Kein Bezug zu einer offenen Lücke erkannt – stattdessen empfohlen', kDefault: 'Empfehlung für heute',
     why: 'Warum', closesGaps: 'Diese Lücken schließt der Content', startDraft: 'Entwurf starten →',
@@ -126,6 +153,7 @@ window.makeStrings = function makeStrings(b) {
     draftTitle: 'Entwurf', blocksN: n => n + ' Bausteine', scoreTitle: 'Bewertung', up: 'Nach oben', down: 'Nach unten', remove: 'Entfernen',
     rel: p => p + '% passend', relLow: 'kaum passend', inDraft: 'Im Entwurf', add: '+ Hinzufügen', ariaAdd: 'Baustein zum Entwurf hinzufügen',
     dropEmpty: 'Bausteine hierher ziehen', dropHere: 'Hier ablegen', copy: 'Als Text kopieren', copied: 'Kopiert',
+    copyMd: 'Als Markdown kopieren', copyHtml: 'Als HTML kopieren (+ FAQ-Schema)',
     crit: [['Direkte Antwort zuerst', 'Mit Kernaussage oder Definition beginnen.'], ['Belegbare Zahl', 'Modelle übernehmen bevorzugt überprüfbare Daten.'], ['Fallbeispiel', 'Verknüpft ' + b + ' als Entität mit der Frage.'], ['Expertenstimme', 'Namentliches Zitat erhöht die Zitierfähigkeit.'], ['FAQ-Baustein', 'Spiegelt, wie Nutzer:innen fragen.'], ['Passt zur Zielfrage', 'Mind. 60 % Passung (aktuell {p} %).'], ['3–7 Bausteine', 'Genug Substanz, ohne zu verwässern.']],
     verdict: { empty: 'Noch leer', good: 'GEO-ready', mid: 'Ausbaufähig', low: 'Kaum zitierfähig' },
     ph: n => n + (n === 1 ? ' Baustein enthält' : ' Bausteine enthalten') + ' noch [Platzhalter].'

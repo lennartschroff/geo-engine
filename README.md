@@ -4,10 +4,8 @@
 
 When people ask ChatGPT, Claude or Gemini *"Which agencies are good at X?"*, the answer is the new search result. GEO Engine is a working prototype for **generative engine optimization (GEO)**. It tracks whether a brand appears in those answers, shows which sources the engines rely on, and helps a marketing team put together content that closes the gaps.
 
-> **Live demo:** `https://<your-github-user>.github.io/geo-engine/` (enable GitHub Pages, see below)
-> All data in the demo belongs to *Tailspin Robotics*, a **fictional** company.
-
-![Overview](docs/overview.png)
+> **Live demo:** https://lennartschroff.github.io/geo-engine/
+> All data in the demo belongs to *Contoso AI*, a **fictional** AI engineering & advisory firm (the classic placeholder-company name used across Microsoft's own docs). The first screen you'll see offers a choice: browse that demo, or set up your own brand — entirely in your browser, nothing sent anywhere.
 
 ## What it does
 
@@ -21,7 +19,7 @@ When people ask ChatGPT, Claude or Gemini *"Which agencies are good at X?"*, the
 | **Library** | Reusable, citable content blocks (statements, definitions, figures, cases, quotes, FAQs) tagged by topic |
 | **Write** | Pick a gap, drag blocks into a draft and get a live **GEO score** (0–100) with concrete tips |
 
-![Draft studio](docs/studio.png)
+*(Screenshots: `docs/overview.png` / `docs/studio.png` are from an earlier build and no longer match the current demo brand or layout — open the live demo above, or regenerate them locally and drop the new files in `docs/`.)*
 
 ### The GEO score
 
@@ -125,6 +123,10 @@ Go to *Settings → Pages → Source: GitHub Actions*. The workflow in `.github/
 - The web app has no network access by design (see CSP in `app/index.html`).
 
 See [SECURITY.md](SECURITY.md).
+
+## Case study
+
+See [docs/CASE_STUDY.md](docs/CASE_STUDY.md) for the problem, approach, scoring rationale and learnings.
 
 ## Roadmap
 

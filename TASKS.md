@@ -31,9 +31,13 @@ how reversible / how much it touches running behavior.
 *Goal: catch regressions in the logic that already exists.*
 
 - [x] **B1.** `ruff` config + CI step for `scripts/*.py`. — *S, none*
-- [ ] **B2.** `eslint` + `prettier` config + CI step for `app/*.js`. Decide rules once,
-  apply `--fix` once, commit as its own PR so it doesn't mix with feature diffs.
-  — *M, low — pure formatting/lint, no logic change*
+- [x] **B2. Decided: not doing this.** Adding ESLint/Prettier means adding a Node/npm
+  dev toolchain (package.json, node_modules, a lockfile) to a project whose explicit
+  design decision is "zero dependencies, no build tooling" (README.md). The
+  project already has lint-equivalent safety nets without that cost: `node --check`
+  for syntax, `node --test` for behavior, and manual review on every app.js diff.
+  Revisit only if app.js grows enough that style drift becomes a real problem —
+  it hasn't yet at ~550 lines.
 - [x] **B3.** Unit tests (pure functions, no DOM): GEO score calculation, gap ranking,
   `parseResult` mention-status parser — extract them from `app.js` into a small
   testable module if needed, or test via a headless JS runner (`node --test` is
@@ -91,10 +95,30 @@ every user brings their own API key for anything that costs money, never yours.*
   from a hand-authored `categories.json`. Zero cost, no API key, deterministic
   output. 7 unit tests. Explicitly the "free templates" option, not an LLM-assisted
   generator — chosen over the alternatives for simplicity and zero cost to everyone.
-- [ ] **F2.** Onboarding wizard (`scripts/init.py`?) that prompts for brand info and
-  walks through brand.json -> categories.json -> generate_questions.py -> audit_crawl.py
-  -> score_pages.py -> build_web_data.py, instead of a README checklist. — *M*
-- [ ] **F3.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
+- [x] **F2.** Onboarding wizard — built **in the app itself** (`app/app.js`: Welcome
+  screen -> Setup wizard -> live app), not as a CLI script. Pivoted from the original
+  plan because the actual ask was "help the user move through the platform," not
+  "give them another terminal command." Brand + topics entered in the browser,
+  starter questions generated instantly client-side (`CORE.generateQuestions`, the
+  same logic as `generate_questions.py`, zero cost, no API key). Stored in
+  localStorage only; a Demo / [your brand] toggle in the header switches between
+  the Tailspin^Hcontoso demo and your own setup without mixing their state
+  (`geo-engine:v1:<mode>` namespacing). Smoke-tested across 4 scenarios (first
+  visit, demo, setup-pending, own-brand-populated).
+- [x] **F2b.** In-browser content-block authoring (Library tab): add a block
+  (type + text + topics) with zero backend, zero API key — closes the one real gap
+  where "own brand" mode had literally no way to add content without hand-editing
+  JSON. Merges with the bundled blocks via `allBlocksList()`, same localStorage
+  pattern as custom questions.
+- [x] **F2c.** Guided empty states: Website/Sources/Impact show the exact local
+  command to run (`audit_crawl.py`, `score_pages.py`, `monitoring/run.py --dry-run`)
+  instead of a bare "no data" message, when in own-brand mode with nothing loaded yet.
+- [ ] **F3.** File import: a drag-and-drop/file-picker in the app so the output of
+  the local scripts above (crawl results, monitoring runs) loads straight into the
+  running app via `FileReader` — no rebuild, no redeploy. Still the real gap between
+  "guided to run a command" and "see the result without touching a terminal again."
+  — *M, none (client-side file read only)*
+- [ ] **F4.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
   flow into `monitoring/run.py`, so "connect your own API, you're ready to go" is a
   literal, tested instruction, not just an architectural claim.
 
@@ -117,14 +141,20 @@ every user brings their own API key for anything that costs money, never yours.*
 - [x] **E0.** Navigation IA: collapsed 7 flat top-level tabs into Overview + 2 groups
   (Monitor: Questions/Sources/Impact · Improve: Website/Library/Write), each with a
   second-level tab row. Requested directly, not originally in this backlog.
-- [ ] **E1.** Accessibility pass on the drag-and-drop draft studio: keyboard-only
-  alternative, contrast check against WCAG AA. *Partial check done: reorder (↑/↓/×)
-  and add-to-draft are already plain buttons with aria-labels, so keyboard users have
-  a full equivalent to drag-and-drop already — a real contrast/focus-visibility audit
-  is still open.* — *M*
+- [x] **E1.** Accessibility pass. Keyboard equivalent to drag-and-drop already existed
+  (reorder via ↑/↓/×, add via a plain button, all with aria-labels). Added: an explicit
+  `:focus-visible` outline (`app/styles.css`) instead of relying on each browser's
+  inconsistent default — every interactive element now gets the same high-contrast
+  ring. Ran the actual WCAG AA contrast numbers: `--fg`, `--fg2`, `--muted`, `--warn`,
+  `--accent`, `--amber` all pass (5:1+) against white. **Known gap, not fixed:**
+  `--faint` (#9A9DA5) is 2.71:1 — fails AA even for large text. It's used for
+  de-emphasized text (empty-state dashes, "weak match" labels) — fixing it means
+  picking a new color and reviewing the visual hierarchy it's part of, which is a
+  design call, not a mechanical one. Left as a flagged follow-up rather than
+  changed without your eyes on it.
+  — *M*
 - [ ] **E2.** Short screen recording/GIF of the draft studio for the README. — *S*
-- [ ] **E3.** Case-study write-up: problem, approach, scoring rationale, learnings.
-  — *S*
+- [x] **E3.** Case-study write-up: `docs/CASE_STUDY.md`, linked from README.md.
 
 ---
 

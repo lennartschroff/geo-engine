@@ -1,7 +1,7 @@
 # Project context for AI coding assistants
 
 ## What this is
-GEO Engine: a tool that tracks whether a brand is mentioned in ChatGPT, Claude and Gemini answers, shows cited sources, audits the brand's website and helps assemble citable content. The bundled data belongs to a fictional company (Tailspin Robotics).
+GEO Engine: a tool that tracks whether a brand is mentioned in ChatGPT, Claude and Gemini answers, shows cited sources, audits the brand's website and helps assemble citable content. The bundled data belongs to a fictional AI consultancy (Contoso AI — the classic placeholder-company name used across Microsoft's own docs).
 
 ## Layout
 - `data/` – JSON source of truth (brand, categories, questions, blocks, audit, page scores, demo monitoring results)
