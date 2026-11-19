@@ -100,8 +100,41 @@ def reference_errors() -> list[str]:
     return errors
 
 
+TARGET_FILES = ["brand", "competitors", "categories", "questions"]
+
+
+def target_errors() -> list[str]:
+    """Real monitoring targets (targets/<name>/): same schemas, plus references."""
+    errors = []
+    for tdir in sorted(p for p in (ROOT / "targets").glob("*") if p.is_dir()):
+        rel = tdir.relative_to(ROOT)
+        loaded = {}
+        for key in TARGET_FILES:
+            path = tdir / FILES[key]
+            if not path.exists():
+                errors.append(f"{rel}/{FILES[key]}: missing")
+                continue
+            loaded[key] = json.loads(path.read_text(encoding="utf-8"))
+            schema = json.loads((SCHEMAS / f"{key}.schema.json").read_text(encoding="utf-8"))
+            for err in Draft7Validator(schema).iter_errors(loaded[key]):
+                where = "/".join(str(x) for x in err.absolute_path)
+                errors.append(f"{rel}/{FILES[key]}{'/' + where if where else ''}: {err.message}")
+        if len(loaded) < len(TARGET_FILES):
+            continue
+        cats = {c["id"] for c in loaded["categories"]}
+        for q in loaded["questions"]:
+            unknown = set(q["categories"]) - cats
+            if unknown:
+                errors.append(f"{rel}/questions.json/{q['id']}: unknown category id(s) {sorted(unknown)}")
+        aliases = {a.lower() for a in loaded["brand"]["aliases"]}
+        overlap = {n for n in loaded["competitors"]["names"] if n.lower() in aliases}
+        if overlap:
+            errors.append(f"{rel}/competitors.json: {sorted(overlap)} are also brand aliases")
+    return errors
+
+
 def main() -> int:
-    errors = schema_errors() + reference_errors()
+    errors = schema_errors() + reference_errors() + target_errors()
     if errors:
         print(f"{len(errors)} data validation error(s):\n")
         for e in errors:
