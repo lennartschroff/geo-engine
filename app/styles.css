@@ -1,5 +1,5 @@
 :root {
-  --fg: #16181D; --fg2: #3A3D45; --muted: #6B6F78; --faint: #9A9DA5;
+  --fg: #16181D; --fg2: #3A3D45; --muted: #6B6F78; --faint: #6B6F78; --graphic: #8A877F;
   --line: #E6E4DE; --line2: #EFEDE8; --input: #D6D3CB; --soft: #F7F6F2; --bg: #FFFFFF;
   --accent: #1F4FD1; --accent-soft: #C9D6F7; --warn: #C2410C; --amber: #B45309;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -15,6 +15,9 @@ button, input, select { font-family: inherit; }
 button { cursor: pointer; }
 button, .track > div, .dropzone { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+/* Skip link: hidden until focused with the keyboard (WCAG 2.4.1). */
+.skip { position: absolute; left: 8px; top: -60px; z-index: 10; padding: 10px 14px; background: var(--fg); color: #fff; border-radius: 6px; text-decoration: none; }
+.skip:focus { top: 8px; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); } .small { font-size: 12px; } .s13 { font-size: 13px; } .s14 { font-size: 14px; }
 .warn { color: var(--warn); } .accent { color: var(--accent); }
