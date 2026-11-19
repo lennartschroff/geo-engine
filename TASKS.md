@@ -237,12 +237,18 @@ every user brings their own API key for anything that costs money, never yours.*
 ---
 
 ## Epic D — Product features (depend on Epic C data)
-- [ ] **D1.** Answer viewer: full engine answer text with brand/competitor mentions
-  highlighted. — *M*
-- [ ] **D2.** Competitor share-of-voice per topic. — *M*
-- [ ] **D3.** Trend view with confidence intervals (answers vary run to run — don't
-  show single-run noise as a trend). — *M*
-- [ ] **D4.** Draft export to Markdown/HTML incl. `FAQPage` JSON-LD. — *S*
+- [x] **D1.** Answer viewer: Questions tab -> "Answers (n)" under a question shows each
+  engine's latest answer (and the rephrased variant prompt) with brand/competitor
+  mentions highlighted. Data from `export_monitoring.py` (`answers`); demo has 4
+  hand-written fictional answers, labelled as such.
+- [x] **D2.** Share of voice per topic on Sources: brand mentions / all brand+competitor
+  mentions, once per answer (`CORE.shareOfVoice`). Export now also fills the
+  `competitor` field (was always null).
+- [x] **D3.** Export writes weekly mention rate with a 95% Wilson interval
+  (`trend_ci`); Impact draws the range on each bar and says "within normal
+  variation" when the last two weeks' ranges overlap.
+- [x] **D4.** Draft export to Markdown/HTML incl. `FAQPage` JSON-LD. Already shipped in
+  `400c030` (Write tab -> copy Markdown / copy HTML); this box was just never ticked.
 - [x] **D5.** `audit_crawl.py` output feeds `page_scores.json` automatically instead of
   the hand-maintained static file. — *M*
 - [ ] **D6.** Block extraction suggestions from PDFs/transcripts/blog posts. — *L*
