@@ -36,6 +36,21 @@ drops unimplemented engines before the cost estimate. In priority order:
 
 ---
 
+## Epic G — Real monitoring of this project (2026-11-19)
+- [x] **G1.** Name kept as "GEO Engine" (alternatives checked, user chose to keep it).
+- [x] **G2.** `targets/geo-engine/`: brand (aliases "GEO Engine", "lennartschroff/geo-engine";
+  cited = links to lennartschroff.github.io), 15 real EN/DE questions, 4 topics, competitors
+  Peec, Otterly, Scrunch, AthenaHQ, Promptwatch, Mentionary (names only; Profound left out,
+  ordinary word). Validated by `validate_data.py`.
+- [x] **G3.** `run.py`/`export_monitoring.py` read the target from settings (`--target` overrides);
+  export carries a `setup` section; the setup wizard loads it in one step.
+- [ ] **G4.** "GEO Engine" is a generic phrase: after the first real runs, read the flagged
+  mentions in the answer viewer and check for false matches.
+- [ ] **G5.** Content: turn README/case study into Library blocks and publish a few
+  answer-first articles (Write tab) on the GitHub Pages site, then watch the trend.
+
+---
+
 ## Epic A — CI & safety nets
 *Goal: make it hard to break the app without noticing. No behavior change.*
 
