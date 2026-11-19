@@ -687,42 +687,158 @@ input[type=checkbox] {
   gap: 8px;
 }
 
-/* A window narrower than the content's natural width but wider than the phone
-   breakpoint below (e.g. a non-maximized laptop window) gets a tighter header
-   instead of relying on the same 40px gap used on a full-width monitor. */
-@media (max-width: 1000px) {
-  .bar { gap: 8px 20px; padding-left: 24px; padding-right: 24px; }
+/* ==========================================================================
+   9. Monitoring results, imports, articles
+   ========================================================================== */
+
+/* Answer viewer: full engine answers with highlighted names */
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 12px 36px;
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+.answer p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+mark.m-brand,
+mark.m-comp {
+  padding: 0 2px;
+  border-radius: 2px;
+  color: var(--fg);
+}
+mark.m-brand { background: var(--accent-soft); }
+mark.m-comp  { background: #FBEBDD; }
+
+/* Impact chart: 95% range drawn over each bar */
+.ci {
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--fg);
 }
 
+/* Library import: suggestions waiting for review */
+.card textarea,
+.cand textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font: inherit;
+  resize: vertical;
+}
+.cands {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.cand-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.btn[disabled] {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Write: blocks -> article (compose, polish, check) */
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.artstep {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.artstep h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.artstep p { margin: 0; }
+.artstep textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.preview {
+  max-height: 420px;
+  overflow: auto;
+  padding: 20px 24px;
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 14px;
+}
+.preview h1 { margin: 0 0 10px; font-size: 20px; }
+.preview h2 { margin: 18px 0 6px; font-size: 16px; }
+.preview h3 { margin: 12px 0 4px; font-size: 14px; }
+.preview p  { margin: 0 0 10px; }
+.preview blockquote {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 3px solid var(--input);
+  color: var(--fg2);
+}
+.factwarn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #F3C9A8;
+  border-radius: 8px;
+  background: #FFF8F2;
+}
+.flags ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   10. Smaller screens
+   ========================================================================== */
+
+/* Narrow desktop windows: tighter header spacing */
+@media (max-width: 1000px) {
+  .bar {
+    gap: 8px 20px;
+    padding-inline: 24px;
+  }
+}
+
+/* Phones */
 @media (max-width: 640px) {
-  .bar, main { padding-left: 16px; padding-right: 16px; }
+  .bar,
+  main { padding-inline: 16px; }
   main { padding-top: 32px; }
   .brief label { font-size: 26px; }
 }
-
-/* Answer viewer (D1) */
-.answers { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 12px 36px; padding: 16px 18px; background: var(--soft); border-radius: 8px; }
-.answer p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-mark.m-brand { background: #C9D6F7; color: var(--fg); padding: 0 2px; border-radius: 2px; }
-mark.m-comp { background: #FBEBDD; color: var(--fg); padding: 0 2px; border-radius: 2px; }
-/* 95% range whisker on trend bars (D3) */
-.ci { position: absolute; left: 50%; width: 2px; margin-left: -1px; background: var(--fg); }
-
-/* Library import review (suggested blocks) */
-.card textarea, .cand textarea { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--input); border-radius: 6px; font: inherit; resize: vertical; background: var(--bg); }
-.cands { display: flex; flex-direction: column; gap: 12px; }
-.cand { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
-.cand-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.btn[disabled] { opacity: .55; cursor: not-allowed; }
-
-/* Write: blocks -> article */
-.article { display: flex; flex-direction: column; gap: 24px; margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--line); }
-.artstep { display: flex; flex-direction: column; gap: 10px; }
-.artstep h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.artstep p { margin: 0; }
-.artstep textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--input); border-radius: 6px; font: inherit; font-size: 14px; resize: vertical; }
-.preview { padding: 20px 24px; background: var(--soft); border-radius: 8px; max-height: 420px; overflow: auto; font-size: 14px; }
-.preview h1 { font-size: 20px; margin: 0 0 10px; } .preview h2 { font-size: 16px; margin: 18px 0 6px; } .preview h3 { font-size: 14px; margin: 12px 0 4px; }
-.preview p { margin: 0 0 10px; } .preview blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--input); color: var(--fg2); }
-.factwarn { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid #F3C9A8; border-radius: 8px; background: #FFF8F2; }
-.flags ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
