@@ -23,12 +23,19 @@ jobs:
         run: pytest tests/ -v
       - name: monitoring dry-run smoke test (zero API cost)
         run: |
-          python monitoring/run.py --dry-run --questions q1,q2 --runs 1 --db /tmp/ci-check.sqlite
+          python monitoring/run.py --dry-run --questions q1,q2 --engines claude,gpt,gemini --runs 1 --variants 0 --db /tmp/ci-check.sqlite
           python -c "
           import sqlite3
           n = sqlite3.connect('/tmp/ci-check.sqlite').execute('SELECT COUNT(*) FROM runs').fetchone()[0]
           assert n == 6, f'expected 6 rows, got {n}'
           print('monitoring dry-run wrote', n, 'rows as expected')
+          """
+          python monitoring/run.py --dry-run --questions q1 --engines claude --runs 1 --variants 1 --seed 1 --db /tmp/ci-var.sqlite
+          python -c "
+          import sqlite3
+          rows = sqlite3.connect('/tmp/ci-var.sqlite').execute('SELECT variant, question_text FROM runs').fetchall()
+          assert sorted(r[0] for r in rows) == [0, 1], rows
+          print('variant rows:', rows)
           "
       - name: rebuild app/data.js and check it matches what's committed
         run: |
