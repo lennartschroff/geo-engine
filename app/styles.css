@@ -851,6 +851,103 @@ mark.m-comp  { background: #FBEBDD; }
 }
 
 /* ==========================================================================
+   11. App shell: dark sidebar navigation, content on a white sheet
+   ========================================================================== */
+#app > header {
+  border-bottom: 0;
+  background: var(--side);
+  color: var(--side-text);
+}
+#app > header .brand b { color: #fff; }
+#app > header .brand .muted { color: var(--side-muted); }
+#app > header nav.tabs .tab { color: var(--side-muted); border-bottom-color: transparent; }
+#app > header nav.tabs .tab:hover { color: var(--side-text); }
+#app > header nav.tabs .tab.on { color: #fff; border-bottom-color: var(--side-accent); }
+#app > header .lang { border-color: rgba(255, 255, 255, .18); }
+#app > header .lang button { background: transparent; color: var(--side-text); }
+#app > header .lang button.on { background: var(--side-accent); color: var(--side); }
+#app > header :focus-visible { outline-color: var(--side-accent); }
+
+main {
+  margin-block: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+
+/* Tabs inside the content: a segmented control instead of underlines */
+.subtabs { border-bottom: 0; }
+.subtabs .tab {
+  min-height: 36px;
+  margin: 2px;
+  border: 0;
+  border-radius: 999px;
+}
+.subtabs .tab.on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+@media (min-width: 1000px) {
+  #app:has(> header) {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr);
+    min-height: 100vh;
+  }
+  #app > header {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  #app > header .bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 32px;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 28px 16px;
+  }
+  #app > header .brand {
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 12px;
+  }
+  #app > header nav.tabs {
+    flex-direction: column;
+    flex-grow: 0;
+    gap: 4px;
+  }
+  #app > header nav.tabs .tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius);
+    text-align: left;
+  }
+  #app > header nav.tabs .tab.on {
+    background: rgba(255, 255, 255, .08);
+    box-shadow: inset 3px 0 0 var(--side-accent);
+  }
+  #app > header .right {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: auto;
+  }
+  #app > header .lang button { flex: 1 1 0; }
+  #app > main {
+    width: calc(100% - 48px);
+    max-width: 1180px;
+    margin: 24px auto;
+    padding: 40px 44px 64px;
+  }
+}
+
+/* ==========================================================================
    10. Smaller screens
    ========================================================================== */
 
@@ -863,9 +960,14 @@ mark.m-comp  { background: #FBEBDD; }
 }
 
 /* Phones */
+@media (max-width: 999px) {
+  #app > header .bar { padding-block: 12px; }
+  main { margin-inline: 12px; }
+}
+
 @media (max-width: 640px) {
   .bar,
   main { padding-inline: 16px; }
-  main { padding-top: 32px; }
+  main { padding-top: 32px; margin-inline: 0; border-inline: 0; border-radius: 0; }
   .brief label { font-size: 26px; }
 }
