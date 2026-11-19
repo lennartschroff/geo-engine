@@ -883,7 +883,7 @@
       const polished = (state.polished[sel.id] || '').trim();
       const current = polished || composed;
       const known = BRAND_NAMES.concat(COMPETITORS);
-      const facts = polished ? CORE.checkFacts(composed, polished, known) : null;
+      const facts = polished ? CORE.checkFacts(composed, polished, known, [String(new Date().getFullYear())]) : null;
       const dropped = polished ? CORE.blockCoverage(items, polished).filter(c => c.dropped) : [];
       const clean = !facts || (facts.ok && !dropped.length);
       const confirmed = !!state.factConfirm[sel.id];
