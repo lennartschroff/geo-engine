@@ -198,3 +198,22 @@ class TestBuildAnswers:
         assert [(a["engine"], a["variant"], a["text"]) for a in out] == [
             ("claude", 0, "c"), ("gemini", 0, "new"), ("claude", 1, "v")]
         assert out[2]["prompt"] == "Quick question: Q?"
+
+
+class TestExportMain:
+    def test_export_uses_target_and_includes_setup(self, tmp_path, monkeypatch):
+        import export_monitoring as em
+        db = tmp_path / "r.sqlite"
+        conn = sqlite3.connect(db)
+        conn.execute(V2_SCHEMA)
+        conn.execute("INSERT INTO runs VALUES ('q1','claude','m',0,'2026-11-23T06:00:00+00:00',NULL,1,1,"
+                     "'[\"lennartschroff.github.io\"]','GEO Engine is an open-source tool. Peec too.',0,NULL)")
+        conn.commit()
+        conn.close()
+        out = tmp_path / "out.json"
+        monkeypatch.setattr(sys, "argv", ["x", "--db", str(db), "--out", str(out), "--target", "targets/geo-engine"])
+        assert em.main() == 0
+        data = json.loads(out.read_text())
+        assert data["setup"]["brand"]["name"] == "GEO Engine"
+        assert len(data["setup"]["questions"]) == 15
+        assert data["results"]["q1"] == {"competitor": "Peec", "r": "c1 n n"}

@@ -255,6 +255,26 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "setup": {
+      "type": "object",
+      "description": "Brand, categories and questions of the monitoring target (exports only).",
+      "required": [
+        "brand",
+        "categories",
+        "questions"
+      ],
+      "properties": {
+        "brand": {
+          "type": "object"
+        },
+        "categories": {
+          "type": "array"
+        },
+        "questions": {
+          "type": "array"
+        }
+      }
     }
   }
 }

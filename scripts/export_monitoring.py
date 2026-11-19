@@ -63,6 +63,13 @@ def latest_per_question_engine(rows: list[sqlite3.Row]) -> dict[tuple[str, str],
     return latest
 
 
+def target_from_settings() -> str:
+    path = ROOT / "data" / "monitoring_settings.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8")).get("target", "data")
+    return "data"
+
+
 def first_competitor(rows: list[sqlite3.Row], brand_aliases: list[str], competitors: list[str]) -> str | None:
     """First competitor named across these answers (claude, gpt, gemini order)."""
     for row in sorted(rows, key=lambda r: ENGINE_ORDER.index(r["engine"]) if r["engine"] in ENGINE_ORDER else 9):
@@ -175,6 +182,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default=str(ROOT / "monitoring" / "runs.sqlite"))
     ap.add_argument("--out", default=str(ROOT / "monitoring" / "monitoring_export.json"))
+    ap.add_argument("--target", help="Folder with brand/competitors/questions.json. Default: the settings' target.")
     args = ap.parse_args()
 
     db_path = Path(args.db)
@@ -182,10 +190,15 @@ def main() -> int:
         print(f"No database at {db_path}. Run monitoring/run.py first.", file=sys.stderr)
         return 1
 
-    brand = json.loads((ROOT / "data" / "brand.json").read_text(encoding="utf-8"))
+    target = ROOT / (args.target or target_from_settings())
+
+    def load(name: str):
+        return json.loads((target / name).read_text(encoding="utf-8"))
+
+    brand = load("brand.json")
     own_domain = brand.get("domain", "")
     brand_aliases = brand.get("aliases", [])
-    competitors = json.loads((ROOT / "data" / "competitors.json").read_text(encoding="utf-8"))["names"]
+    competitors = load("competitors.json")["names"]
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -211,6 +224,9 @@ def main() -> int:
         "trend_ci": trend,
         "answers": build_answers(rows),
         "competitors": competitors,
+        # Brand, topics and questions the results refer to, so the app can
+        # show them in own-brand mode (result ids only make sense with these).
+        "setup": {"brand": brand, "categories": load("categories.json"), "questions": load("questions.json")},
         "pieces": [],
         "audit_meta": {"date": datetime.date.today().isoformat(), "pages": 0, "posts": 0},
     }
