@@ -222,7 +222,10 @@ every user brings their own API key for anything that costs money, never yours.*
   since its CSP blocks all network calls). 11 unit tests. This was explicitly
   requested as "autofill topics from my website" — the honest version of that,
   given the app has no network access by design.
-- [x] **F3b (monitoring + page scores done; crawl audit findings still open).**
+- [x] **F3b (done 2026-11-19: monitoring, page scores and audit findings).** `scripts/audit_findings.py` turns a crawl
+  plus the new `data/site-checks-<date>.json` into prioritized findings (crawler access, robots.txt, llms.txt,
+  Organization/FAQ schema, H1, relative dates, figures, thin pages, meta descriptions, stale articles, broken
+  URLs), counts and example URLs only. Loaded via the same Website file picker. Original note:
   "Load monitoring results" on Sources (loads `scripts/export_monitoring.py`'s
   output into `own.demo` — this is also C5, see Epic C) and "Already ran a real
   crawl?" on Website (loads `scripts/score_pages.py`'s output into `own.pages`)
