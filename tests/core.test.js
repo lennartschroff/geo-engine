@@ -522,6 +522,11 @@ describe('Write: compose, polish prompt, fact check (answer-first articles)', ()
     assert.deepEqual(r.added.map(m => m.kind + ':' + m.value), ['number:45000', 'name:NVIDIA']);
   });
 
+  test('two quotes close together are two quotes, not one', () => {
+    const q = CORE.extractFacts('“First quote has five words” – A, X\n\n> “Second quote also has words” – B').quotes;
+    assert.deepEqual(q, ['First quote has five words', 'Second quote also has words']);
+  });
+
   test('a dropped block is caught by coverage even without numbers', () => {
     const rw = 'Contoso AI is an engineering firm in Austin building RAG systems.';
     const cov = CORE.blockCoverage(items, rw);

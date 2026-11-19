@@ -358,7 +358,7 @@
     });
     const names = new Set((t.match(/(?<![\p{L}\p{N}])[A-ZÄÖÜ]{2,}[a-z]?(?![\p{L}\p{N}])/gu) || []).map(x => x.replace(/s$/, '')));
     (knownNames || []).forEach(n => { if (findMentions(t, [n], []).length) names.add(n); });
-    const quotes = (t.match(/[„“"»«][^„“"»«]{12,}[“”"»«]/g) || []).map(q => q.slice(1, -1).trim()).filter(q => q.split(/\s+/).length >= 4);
+    const quotes = (t.match(/[„“"»«][^„“”"»«]{12,}[“”"»«]/g) || []).map(q => q.slice(1, -1).trim()).filter(q => q.split(/\s+/).length >= 4);
     return { numbers: [...numbers], names: [...names], quotes };
   }
 
@@ -476,7 +476,7 @@
   }
 
   const SENTENCE_SPLIT = /(?<=[.!?])\s+(?=[A-ZÄÖÜ„"“0-9])/;
-  const QUOTE_RE = /[„“"»«][^„“"»«]{25,}[“”"»«]/;
+  const QUOTE_RE = /[„“"»«][^„“”"»«]{25,}[“”"»«]/;
   const DEF_RE = /^[A-ZÄÖÜ][\w\-–()\/ ]{1,60}?\s(?:is|are|means|refers to|ist|sind|bezeichnet|bedeutet)\s/;
   const CASE_RE = /\b(client|customer|project|case study|kunde|kundin|kunden|projekt|fallstudie)\w*/i;
   const RESULT_RE = /\b(reduc|increas|sav|cut|improv|grew|doubl|halv|senk|steiger|spar|verkürz|reduzier|verdoppel|halbier|verbesser)\w*/i;
