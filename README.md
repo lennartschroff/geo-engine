@@ -97,8 +97,8 @@ CI step plus `gitleaks` if you have it installed.
 ## Use it for your own brand
 
 Any company can self-serve this with zero cost to anyone but themselves — no API key is
-needed for steps 1-4, and in step 5 (once built, see `TASKS.md` Epic C4) each user supplies
-their own key in their own local `.env`, never shared with anyone else.
+needed for steps 1-4, and for real monitoring (step 6) each user supplies
+their own key in their own local `.env` (or their own repo secrets), never shared with anyone else.
 
 1. Edit `data/brand.json` (name, domain, aliases used for mention detection).
 2. Write `data/categories.json` for your market (topic id, EN/DE label, matching keywords) —
@@ -114,8 +114,42 @@ their own key in their own local `.env`, never shared with anyone else.
    studies. Run `python3 scripts/audit_crawl.py --base <your site>` then
    `python3 scripts/score_pages.py` for a real website audit instead of the demo one.
 5. Run `python3 scripts/build_web_data.py` to rebuild `app/data.js`.
-6. For real (non-demo) monitoring: see `TASKS.md` Epic C — `monitoring/run.py --dry-run`
-   works today against recorded fixtures; real provider calls aren't wired in yet.
+6. Real monitoring: see [Run real monitoring](#run-real-monitoring) below.
+
+## Run real monitoring
+
+All settings live in `data/monitoring_settings.json`: cadence (default weekly, Monday),
+question scope (the 15 key questions), runs per question (1), randomized rephrasings per
+question (1, on), engines and models, and a hard budget cap per run.
+
+**Keys.** Copy `.env.example` to `.env` and fill in only the engines you use:
+
+| Engine | Variable | Free option |
+|---|---|---|
+| Claude (web search) | `ANTHROPIC_API_KEY` | no, paid per call |
+| ChatGPT (web search) | `OPENAI_API_KEY` | no, needs prepaid credit |
+| Gemini | `GEMINI_API_KEY` | yes: free tier, plain answers without citations (`grounding: false`) |
+
+An enabled engine without a key is skipped with a message, so you can start with Gemini alone.
+
+**Local run.**
+
+```bash
+python3 monitoring/run.py --dry-run      # zero cost, recorded fixtures
+python3 monitoring/run.py                # real: prints a cost estimate, stops above the budget cap
+python3 monitoring/run.py --yes          # real, skips the confirmation prompt
+python3 scripts/export_monitoring.py     # -> monitoring/monitoring_export.json
+```
+
+Then in the app: *Monitor → Sources → Load monitoring results* and pick the export file.
+
+**Scheduled run (GitHub Actions).** `.github/workflows/monitoring.yml` wakes daily and runs
+only when the settings say a run is due. Add your keys under *Settings → Secrets and variables
+→ Actions* with the same names as above. Each run keeps the database as a workflow artifact
+("monitoring-results", 90 days) and continues it next time; nothing is committed to the repo.
+On a public repository, anyone signed in to GitHub can download those artifacts, so they are
+effectively public. GitHub also pauses scheduled workflows after 60 days without repository
+activity.
 
 ## Deploy the demo (GitHub Pages)
 
