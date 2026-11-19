@@ -428,3 +428,44 @@ describe('intervalsOverlap (D3)', () => {
     assert.equal(CORE.intervalsOverlap(null, { lo: 1, hi: 2 }), false);
   });
 });
+
+describe('extractBlockCandidates (Library import)', () => {
+  const cats = [{ id: 'rag', keywords: ['rag', 'retrieval-augmented generation'] }, { id: 'agents', keywords: ['ki-agent', 'ai agent'] }];
+  const types = text => CORE.extractBlockCandidates(text, cats).map(c => c.type);
+
+  test('finds each block type in English text, verbatim', () => {
+    const text = [
+      'Retrieval-augmented generation is a method that grounds a language model in your own documents.',
+      'We have delivered 140 AI projects, and 92% of clients extend their contract.',
+      'For a logistics client we reduced support handling time by 38 percent within six months.',
+      '"The pilot paid for itself before the second quarter was over", says the CFO of the company.',
+      'What does a RAG pilot cost?',
+      'A typical pilot takes six to eight weeks and depends on the data sources.',
+    ].join('\n\n');
+    const c = CORE.extractBlockCandidates(text, cats);
+    assert.deepEqual(c.map(x => x.type), ['definition', 'figure', 'case', 'quote', 'faq']);
+    assert.ok(c.every(x => text.replace(/\n\n/g, ' ').includes(x.text.split(' – ')[0])));
+    assert.deepEqual(c[0].categories, ['rag']);
+    assert.equal(c[4].text, 'What does a RAG pilot cost? – A typical pilot takes six to eight weeks and depends on the data sources.');
+  });
+
+  test('German text', () => {
+    assert.deepEqual(types('Ein KI-Agent ist ein System, das ein Sprachmodell mit Werkzeugen verbindet.\n\n' +
+      'Für eine Kundin senkte das Projekt die Bearbeitungszeit um 40 Prozent im ersten Quartal.'), ['definition', 'case']);
+  });
+
+  test('a year alone is not a figure; short fragments are ignored', () => {
+    assert.deepEqual(types('Founded in 2011 in Berlin.\n\nWe have worked with banks and insurers since 2011 across Europe.'), ['statement']);
+  });
+
+  test('deduplicates and respects the limit', () => {
+    const para = 'We have delivered 140 AI projects for clients in twelve countries so far.';
+    assert.equal(CORE.extractBlockCandidates([para, para, para].join('\n\n'), cats).length, 1);
+    const many = Array.from({ length: 60 }, (_, i) => 'Our team ran ' + (100 + i) + ' workshops with clients in many different industries.').join('\n\n');
+    assert.equal(CORE.extractBlockCandidates(many, cats, 25).length, 25);
+  });
+
+  test('textFromMarkdown strips syntax but keeps text', () => {
+    assert.equal(CORE.textFromMarkdown('# Title\n\n- **Bold** [link](https://x.y) `code`').trim(), 'Title\n\nBold link code');
+  });
+});

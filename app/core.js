@@ -281,6 +281,80 @@
       .sort((a, b) => b.relevance - a.relevance);
   }
 
+  // ---------- Block suggestions from your own content (Library import) ----------
+  // Heuristics, not an LLM: they propose candidates, a person decides. Nothing
+  // is invented -- every candidate is a sentence (or Q+A pair) taken verbatim
+  // from the text the user supplied.
+
+  /** Markdown -> plain text with paragraph breaks kept. */
+  function textFromMarkdown(md) {
+    return String(md || '')
+      .replace(/```[\s\S]*?```/g, '\n')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+      .replace(/^[ \t]*[-*+][ \t]+/gm, '')
+      .replace(/^[ \t]*\d+\.[ \t]+/gm, '')
+      .replace(/^[ \t]*>[ \t]?/gm, '')
+      .replace(/(\*\*|__|\*|_|`)/g, '');
+  }
+
+  const SENTENCE_SPLIT = /(?<=[.!?])\s+(?=[A-ZÄÖÜ„"“0-9])/;
+  const QUOTE_RE = /[„“"»«][^„“"»«]{25,}[“”"»«]/;
+  const DEF_RE = /^[A-ZÄÖÜ][\w\-–()\/ ]{1,60}?\s(?:is|are|means|refers to|ist|sind|bezeichnet|bedeutet)\s/;
+  const CASE_RE = /\b(client|customer|project|case study|kunde|kundin|kunden|projekt|fallstudie)\w*/i;
+  const RESULT_RE = /\b(reduc|increas|sav|cut|improv|grew|doubl|halv|senk|steiger|spar|verkürz|reduzier|verdoppel|halbier|verbesser)\w*/i;
+  const words = t => t.split(/\s+/).filter(Boolean).length;
+
+  /** A sentence counts as a figure if it has a number that isn't just a year. */
+  function hasFigure(t) {
+    const nums = t.match(/\d+(?:[.,]\d+)?\s?(?:%|percent|Prozent)?/g) || [];
+    return nums.some(n => /%|percent|Prozent/.test(n) || (!/^(19|20)\d{2}\s?$/.test(n) && /\d{2,}/.test(n)));
+  }
+
+  function classifySentence(t, leadsParagraph) {
+    if (QUOTE_RE.test(t)) return 'quote';
+    if (DEF_RE.test(t)) return 'definition';
+    if (CASE_RE.test(t) && RESULT_RE.test(t)) return 'case';
+    if (hasFigure(t)) return 'figure';
+    if (leadsParagraph && words(t) >= 10) return 'statement';
+    return null;
+  }
+
+  /**
+   * Suggests content blocks from plain text.
+   * categories: [{ id, keywords }] -- topics are pre-selected by keyword match.
+   * Returns [{ type, text, categories }], at most `max`, in document order.
+   */
+  function extractBlockCandidates(text, categories, max) {
+    const limit = max || 40;
+    const paras = String(text || '').replace(/\r/g, '').split(/\n\s*\n|\n(?=[A-ZÄÖÜ][^\n]{0,200}\?\s*\n)/).map(p => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const out = [];
+    const seen = new Set();
+    const topics = t => { const lc = ' ' + t.toLowerCase() + ' '; return (categories || []).filter(c => (c.keywords || []).some(k => kwHit(lc, String(k).toLowerCase()))).map(c => c.id); };
+    const push = (type, t) => {
+      const key = t.toLowerCase().replace(/\W+/g, ' ').trim();
+      if (seen.has(key) || out.length >= limit) return;
+      seen.add(key); out.push({ type, text: t, categories: topics(t) });
+    };
+    for (let i = 0; i < paras.length; i++) {
+      const p = paras[i];
+      // A short line ending in "?" followed by a paragraph = FAQ pair, stored
+      // as "Question – Answer" (the format splitFaqText/toFaqJsonLd expect).
+      if (p.endsWith('?') && p.length <= 200 && i + 1 < paras.length && !paras[i + 1].endsWith('?')) {
+        const answer = paras[i + 1].split(SENTENCE_SPLIT).slice(0, 2).join(' ');
+        if (words(answer) >= 5) { push('faq', p + ' – ' + answer.slice(0, 500)); i++; continue; }
+      }
+      p.split(SENTENCE_SPLIT).forEach((sent, j) => {
+        const t = sent.trim();
+        if (t.length < 40 || t.length > 400) return;
+        const type = classifySentence(t, j === 0);
+        if (type) push(type, t);
+      });
+    }
+    return out;
+  }
+
   // ---------- Answer viewer + share of voice (TASKS.md D1/D2) ----------
   // Name matching mirrors monitoring/mention_detection.py: case-insensitive,
   // hyphen and whitespace treated alike, whole words only.
@@ -340,7 +414,7 @@
   const intervalsOverlap = (a, b) => !!a && !!b && a.lo <= b.hi && b.lo <= a.hi;
 
   return {
-    findMentions, highlightMentions, shareOfVoice, intervalsOverlap,
+    findMentions, highlightMentions, shareOfVoice, intervalsOverlap, textFromMarkdown, extractBlockCandidates,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,
     QUESTION_TEMPLATES, generateForCategory, generateQuestions, slugify,
     tokenize, buildCorpusStats, idf, bm25Score, rankByRelevance,
