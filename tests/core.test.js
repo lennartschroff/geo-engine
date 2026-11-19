@@ -522,6 +522,12 @@ describe('Write: compose, polish prompt, fact check (answer-first articles)', ()
     assert.deepEqual(r.added.map(m => m.kind + ':' + m.value), ['number:45000', 'name:NVIDIA']);
   });
 
+  test('an allowed number (the current year) is not flagged as new', () => {
+    const src = 'Contoso has 3 offices.';
+    assert.equal(CORE.checkFacts(src, 'As of 2026, Contoso has 3 offices.', [], ['2026']).ok, true);
+    assert.equal(CORE.checkFacts(src, 'Since 2019, Contoso has 3 offices.', [], ['2026']).ok, false);
+  });
+
   test('two quotes close together are two quotes, not one', () => {
     const q = CORE.extractFacts('“First quote has five words” – A, X\n\n> “Second quote also has words” – B').quotes;
     assert.deepEqual(q, ['First quote has five words', 'Second quote also has words']);

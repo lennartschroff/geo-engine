@@ -365,9 +365,11 @@
   /**
    * Compares a rewrite with its source. missing = facts from the source not
    * found in the rewrite; added = numbers/names in the rewrite that the
-   * source doesn't have (the usual sign of an invented fact).
+   * source doesn't have (the usual sign of an invented fact). `allowed`
+   * numbers never count as new -- the app passes the current year, so an
+   * "as of <year>" line (which the dated check asks for) isn't flagged.
    */
-  function checkFacts(sourceText, rewrittenText, knownNames) {
+  function checkFacts(sourceText, rewrittenText, knownNames, allowed) {
     const a = extractFacts(sourceText, knownNames);
     const b = extractFacts(rewrittenText, knownNames);
     const flat = x => String(x).replace(/[„“"»«”]/g, '"').replace(/\s+/g, ' ').toLowerCase();
@@ -378,7 +380,7 @@
       ...a.quotes.filter(q => rew.indexOf(flat(q)) === -1).map(v => ({ kind: 'quote', value: v })),
     ];
     const added = [
-      ...b.numbers.filter(n => a.numbers.indexOf(n) === -1).map(v => ({ kind: 'number', value: v })),
+      ...b.numbers.filter(n => a.numbers.indexOf(n) === -1 && (allowed || []).indexOf(n) === -1).map(v => ({ kind: 'number', value: v })),
       ...b.names.filter(n => a.names.indexOf(n) === -1).map(v => ({ kind: 'name', value: v })),
     ];
     return { missing, added, ok: !missing.length && !added.length };
