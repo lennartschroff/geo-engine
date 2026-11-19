@@ -255,7 +255,11 @@ every user brings their own API key for anything that costs money, never yours.*
   `400c030` (Write tab -> copy Markdown / copy HTML); this box was just never ticked.
 - [x] **D5.** `audit_crawl.py` output feeds `page_scores.json` automatically instead of
   the hand-maintained static file. — *M*
-- [ ] **D6.** Block extraction suggestions from PDFs/transcripts/blog posts. — *L*
+- [x] **D6.** Library import (2026-11-19): paste text or load .txt/.md/.html in the app,
+  get verbatim block suggestions (`CORE.extractBlockCandidates`), review each one (type,
+  topic, edit, accept/reject); accepted blocks keep their source file name. Word/PDF via
+  `scripts/extract_text.py` (.docx stdlib; .pdf needs optional `pypdf`, not installed
+  here -- PDF path is tested against a mocked pypdf only).
 
 ---
 
