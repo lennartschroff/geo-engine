@@ -7,38 +7,45 @@
 /* 1. Design tokens (also referenced inline from app.js) */
 :root {
   /* text */
-  --fg: #16181D;
-  --fg2: #3A3D45;
-  --muted: #6B6F78;
-  --faint: #6B6F78;      /* same as muted: AA contrast for de-emphasised text */
-  --graphic: #8A877F;    /* non-text marks, 3:1 */
+  --fg: #132420;
+  --fg2: #3A4B46;
+  --muted: #56655F;
+  --faint: #56655F;      /* same as muted: AA contrast for de-emphasised text */
+  --graphic: #7F8F89;    /* non-text marks, 3:1 */
   /* surfaces and borders */
-  --bg: #FFFFFF;
-  --soft: #F7F6F2;
-  --line: #E6E4DE;
-  --line2: #EFEDE8;
-  --input: #D6D3CB;
+  --page: #F3F5F4;       /* app background behind the content sheet */
+  --bg: #FFFFFF;         /* content sheet, inputs, cards */
+  --soft: #EAF0ED;
+  --soft-2: #E3EAE7;
+  --line: #DCE4E0;
+  --line2: #E8EEEB;
+  --input: #C8D3CF;
+  --border-strong: #B9C6C1;
   /* signal colours */
-  --accent: #1F4FD1;
-  --accent-soft: #C9D6F7;
-  --warn: #C2410C;
-  --amber: #B45309;
-  --accent-strong: #1A3A9C;
-  --warn-strong: #9A3412;
-  --warn-soft: #FBEBDD;
-  --soft-2: #F1EFEA;
-  --border-strong: #CFCCC4;
+  --accent: #0A7558;
+  --accent-strong: #075C45;
+  --accent-soft: #CDEBDF;
+  --warn: #B42318;
+  --warn-strong: #8F1D14;
+  --warn-soft: #FDE7E4;
+  --amber: #9A5A06;
+  /* sidebar */
+  --side: #0F1F1B;
+  --side-text: #E7EFEC;
+  --side-muted: #9DB3AC;
+  --side-accent: #5FD3AE;
   /* block type labels */
-  --type-statement: #1A3A9C;
-  --type-definition: #3A3D45;
-  --type-figure: #16181D;
-  --type-case: #9A3412;
-  --type-quote: #5B2A86;
-  --type-faq: #1F5C55;
-  /* type */
-  --sans: 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --radius: 6px;
+  --type-statement: #075C45;
+  --type-definition: #3A4B46;
+  --type-figure: #132420;
+  --type-case: #8F1D14;
+  --type-quote: #6B2FA0;
+  --type-faq: #1D5A7A;
+  /* type and shape */
+  --sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius: 8px;
+  --radius-lg: 14px;
 }
 
 /* 2. Base */
