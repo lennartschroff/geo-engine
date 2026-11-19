@@ -330,10 +330,9 @@
 
     // ---------- Domain logic ----------
     const L = () => STR[state.lang];
-    // Labels come from categories.json (label_en/label_de). The i18n cats map
-    // only covered an older demo dataset, so most topics fell back to their raw id.
+    // Topic labels come from categories.json (label_en/label_de).
     const CAT_BY_ID = Object.fromEntries(D.categories.map(c => [c.id, c]));
-    const catLabel = id => { const c = CAT_BY_ID[id]; return (c && (state.lang === 'de' ? c.label_de : c.label_en)) || L().cats[id] || id; };
+    const catLabel = id => { const c = CAT_BY_ID[id]; return (c && (state.lang === 'de' ? c.label_de : c.label_en)) || id; };
     const catLabels = tags => tags.map(catLabel).join(' · ');
     const blockText = b => state.lang === 'de' ? b.de : b.en;
     const allQ = () => QUESTIONS.concat(state.custom);
