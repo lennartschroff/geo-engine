@@ -9,9 +9,11 @@ current status — a documented simplification, not an average across runs.
 Engines with no real data yet for a question get "n" (not run), distinct
 from "a" (checked, confirmed absent) — see app/core.js parseResult().
 
-"competitor" is always null: no maintained real competitor list exists yet
-(TASKS.md C5a) — monitoring/run.py's COMPETITOR_NAMES is still the demo's
-fictional placeholder, so it isn't meaningful to report here.
+"competitor" is always null: run.py's mention_detection.detect_mention() ranks
+the brand against data/competitors.json (TASKS.md C5a) but doesn't persist
+*which* competitor was mentioned per row (only its rank), so there's nothing
+to surface here yet. Populating this field means adding a column to
+runs.sqlite for the matched competitor name, not just a config change.
 
 Usage:
     python monitoring/run.py --questions q1,q2,q3 --engines claude --runs 1 --yes

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "competitors",
+  "type": "object",
+  "required": ["names"],
+  "additionalProperties": false,
+  "properties": {
+    "_comment": { "type": "string" },
+    "names": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

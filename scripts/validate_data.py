@@ -21,6 +21,7 @@ SCHEMAS = ROOT / "schemas"
 
 FILES = {
     "brand": "brand.json",
+    "competitors": "competitors.json",
     "categories": "categories.json",
     "questions": "questions.json",
     "blocks": "blocks.json",
@@ -56,7 +57,17 @@ def reference_errors() -> list[str]:
     questions = load("questions")
     blocks = load("blocks")
     demo = load("demo_monitoring")
+    brand = load("brand")
+    competitors = load("competitors")
     question_ids = {q["id"] for q in questions}
+
+    brand_aliases_lower = {a.lower() for a in brand["aliases"]}
+    overlap = {n for n in competitors["names"] if n.lower() in brand_aliases_lower}
+    if overlap:
+        errors.append(
+            f"competitors.json/names: {sorted(overlap)} also appear in brand.json's aliases — "
+            "mention_detection would double-count the brand as its own competitor"
+        )
 
     for q in questions:
         unknown = set(q["categories"]) - categories

@@ -7,7 +7,9 @@ verify without touching the network.
 """
 from __future__ import annotations
 
+import json
 import os
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -93,6 +95,56 @@ class TestLoadDotenv:
         (isolated_root / ".env").write_text(f"{ENV_TEST_KEY}=part1=part2\n")
         run_module._load_dotenv()
         assert os.environ[ENV_TEST_KEY] == "part1=part2"
+
+
+class TestLoadCompetitorNames:
+    def test_reads_names_from_competitors_json(self, isolated_root):
+        (isolated_root / "data").mkdir()
+        (isolated_root / "data" / "competitors.json").write_text(
+            json.dumps({"_comment": "placeholder", "names": ["Tailspin", "Fabrikam"]})
+        )
+        assert run_module.load_competitor_names() == ["Tailspin", "Fabrikam"]
+
+
+class TestMainPersistsPartialResultsOnCrash:
+    """A real run pays per API call made. If a later call in the loop raises
+    (rate limit, network error, an unimplemented engine slipping through),
+    rows already written for earlier calls must still be on disk -- not lost
+    because main() only committed once at the very end.
+    """
+
+    def test_rows_written_before_a_crash_are_not_lost(self, isolated_root, monkeypatch, tmp_path):
+        questions = [{"id": "q1", "text": "Q1", "key": True}, {"id": "q2", "text": "Q2", "key": True}]
+        monkeypatch.setattr(run_module, "load_questions", lambda ids: questions)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda: ["Competitor A"])
+
+        call_count = {"n": 0}
+
+        def fake_run_one(question, engine, run_index, brand_aliases, competitor_names, dry_run):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("simulated API failure on the second call")
+            return {
+                "question_id": question["id"], "engine": engine, "model": "m", "run_index": run_index,
+                "timestamp": "t", "language": "en", "mentioned": 0, "position": None,
+                "cited_urls": "[]", "answer_text": "x",
+            }
+
+        monkeypatch.setattr(run_module, "run_one", fake_run_one)
+
+        db_path = tmp_path / "runs.sqlite"
+        monkeypatch.setattr(
+            sys, "argv", ["run.py", "--dry-run", "--engines", "claude", "--runs", "1", "--db", str(db_path)]
+        )
+
+        with pytest.raises(RuntimeError):
+            run_module.main()
+
+        conn = sqlite3.connect(db_path)
+        written = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        conn.close()
+        assert written == 1  # the row from the first (successful) call must survive the second call's crash
 
 
 class TestCallGemini:

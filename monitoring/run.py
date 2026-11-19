@@ -181,12 +181,6 @@ def detect_language(text: str) -> str:
     return "de" if GERMAN_MARKERS.search(text) else "en"
 
 
-# [placeholder] no maintained competitor list exists yet (see ROADMAP.md).
-# These match the fictional names already used in data/demo_monitoring.json,
-# just so dry-run mentions/rank logic has something real to rank against.
-COMPETITOR_NAMES = ["Competitor A", "Competitor B", "Competitor C", "Competitor D"]
-
-
 def load_questions(question_ids: list[str] | None) -> list[dict]:
     questions = json.loads((ROOT / "data" / "questions.json").read_text(encoding="utf-8"))
     if question_ids:
@@ -200,6 +194,16 @@ def load_questions(question_ids: list[str] | None) -> list[dict]:
 def load_brand_aliases() -> list[str]:
     brand = json.loads((ROOT / "data" / "brand.json").read_text(encoding="utf-8"))
     return brand["aliases"]
+
+
+def load_competitor_names() -> list[str]:
+    """Named providers to rank the brand against (TASKS.md C5a).
+
+    Reads data/competitors.json so a real deployment can maintain its own
+    real competitor list without editing code -- see that file's _comment.
+    """
+    competitors = json.loads((ROOT / "data" / "competitors.json").read_text(encoding="utf-8"))
+    return competitors["names"]
 
 
 def load_fixture_answer(question_id: str, engine: str) -> dict | None:
@@ -225,7 +229,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def run_one(question: dict, engine: str, run_index: int, brand_aliases: list[str], dry_run: bool) -> dict:
+def run_one(
+    question: dict, engine: str, run_index: int, brand_aliases: list[str], competitor_names: list[str], dry_run: bool
+) -> dict:
     if dry_run:
         answer = load_fixture_answer(question["id"], engine)
         if answer is None:
@@ -243,7 +249,7 @@ def run_one(question: dict, engine: str, run_index: int, brand_aliases: list[str
             "'claude' and 'gemini' are wired in so far. Use --dry-run, or --engines claude,gemini."
         )
 
-    result = detect_mention(answer["answer_text"], brand_aliases, COMPETITOR_NAMES)
+    result = detect_mention(answer["answer_text"], brand_aliases, competitor_names)
     return {
         "question_id": question["id"],
         "engine": engine,
@@ -278,14 +284,20 @@ def main() -> int:
         print("No matching questions found.", file=sys.stderr)
         return 1
 
+    if not args.dry_run:
+        not_implemented = set(engines) - {"claude", "gemini"}
+        if not_implemented:
+            print(f"[{sorted(not_implemented)} not implemented yet — skipping, not running those calls]")
+            engines = [e for e in engines if e not in not_implemented]
+            if not engines:
+                print("No implemented engines left to run.", file=sys.stderr)
+                return 1
+
     estimate = estimate_cost(len(questions), engines, args.runs, searches_per_call=CLAUDE_MAX_SEARCHES)
     print(f"Questions: {len(questions)}  Engines: {engines}  Runs/question: {args.runs}")
     print(f"Estimated calls: {estimate.num_calls}  Estimated cost: ${estimate.total_usd:.4f} "
           f"({', '.join(f'{e}=${c:.4f}' for e, c in estimate.per_engine_usd.items())})")
     if not args.dry_run:
-        not_implemented = set(engines) - {"claude", "gemini"}
-        if not_implemented:
-            print(f"[{sorted(not_implemented)} not implemented yet — would raise below]")
         if "gemini" in engines:
             print("[gemini pricing is still placeholder, and the real cost is likely $0 while you're on the "
                   "free tier anyway — but see call_gemini()'s docstring: Google Search grounding returned a "
@@ -306,21 +318,25 @@ def main() -> int:
             return 1
 
     brand_aliases = load_brand_aliases()
+    competitor_names = load_competitor_names()
     conn = sqlite3.connect(args.db)
     ensure_schema(conn)
     written = 0
     for q in questions:
         for engine in engines:
             for run_index in range(args.runs):
-                row = run_one(q, engine, run_index, brand_aliases, args.dry_run)
+                row = run_one(q, engine, run_index, brand_aliases, competitor_names, args.dry_run)
                 conn.execute(
                     "INSERT INTO runs (question_id, engine, model, run_index, timestamp, language, mentioned, "
                     "position, cited_urls, answer_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (row["question_id"], row["engine"], row["model"], row["run_index"], row["timestamp"],
                      row["language"], row["mentioned"], row["position"], row["cited_urls"], row["answer_text"]),
                 )
+                # Commit per row, not once at the end: a real run pays per API call made, so a
+                # later call crashing (e.g. an engine running out past a rate limit) must not lose
+                # the real money already spent on the rows written so far.
+                conn.commit()
                 written += 1
-    conn.commit()
     conn.close()
     print(f"Wrote {written} row(s) to {args.db}")
     return 0

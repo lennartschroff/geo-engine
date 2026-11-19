@@ -1,0 +1,4 @@
+{
+  "_comment": "[placeholder] Named providers to rank the brand against in monitoring/run.py's mention detection (TASKS.md C5a). These are the same fictional names already used in data/demo_monitoring.json, so dry-run output stays consistent. Replace with your own brand's real competitor names before running real monitoring -- mention detection matches these as literal strings against engine answers.",
+  "names": ["Competitor A", "Competitor B", "Competitor C", "Competitor D"]
+}
