@@ -255,6 +255,12 @@ every user brings their own API key for anything that costs money, never yours.*
   `400c030` (Write tab -> copy Markdown / copy HTML); this box was just never ticked.
 - [x] **D5.** `audit_crawl.py` output feeds `page_scores.json` automatically instead of
   the hand-maintained static file. — *M*
+- [x] **D7.** Blocks -> readable article (2026-11-19): compose (no AI), polish in the user's
+  own AI chat via a copied prompt, then a client-side fact check (numbers, names, quotes,
+  dropped blocks) and readability checks gate the export. Tested with an honest rewrite (no
+  false alarms) and a manipulated one (changed number, invented name both flagged). Possible
+  next step: optional `scripts/polish_draft.py` with a Gemini free-tier key (note: free-tier
+  inputs may be used by Google, so not for unpublished client material).
 - [x] **D6.** Library import (2026-11-19): paste text or load .txt/.md/.html in the app,
   get verbatim block suggestions (`CORE.extractBlockCandidates`), review each one (type,
   topic, edit, accept/reject); accepted blocks keep their source file name. Word/PDF via

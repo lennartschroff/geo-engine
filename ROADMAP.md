@@ -27,7 +27,7 @@ The prototype covers the full user journey with demo data. These are the steps t
 - [x] **Competitor tracking**: share of voice per competitor and topic.
 - [x] **Trend view from real runs** with confidence intervals (answers vary between runs).
 - [x] **Draft export** to Markdown / HTML including FAQPage JSON-LD.
-- [ ] **AI-assisted drafting**: turn a block sequence into a readable text (local script, keys stay server-side).
+- [x] **AI-assisted drafting**: turn a block sequence into a readable text (local script, keys stay server-side).
 - [x] **Audit → app**: load `crawl-*.json` and compute page scores automatically instead of shipping them as static data.
 - [ ] **Block extraction**: suggest new content blocks from PDFs, transcripts and blog posts.
 
