@@ -262,8 +262,15 @@ every user brings their own API key for anything that costs money, never yours.*
   `--faint` (#9A9DA5) is 2.71:1 — fails AA even for large text. It's used for
   de-emphasized text (empty-state dashes, "weak match" labels) — fixing it means
   picking a new color and reviewing the visual hierarchy it's part of, which is a
-  design call, not a mechanical one. Left as a flagged follow-up rather than
-  changed without your eyes on it.
+  design call, not a mechanical one. **Fixed 2026-11-19 (you asked for "make
+  everything accessible"):** `--faint` text now uses the muted tone (5.0:1);
+  a separate `--graphic` (#8A877F, 3.6:1) for non-text marks. Same pass: focus
+  no longer jumps to the page top after every button press (whole-app
+  re-render dropped it), skip link, `aria-current` on tabs, `aria-pressed` on
+  the mode switch, labels on setup topic inputs, one `h1` per view, "Close
+  now" badge contrast (4.45 -> AA). Verified with a headless-Chrome audit of
+  every tab in EN+DE plus Welcome/Setup: 0 contrast failures, 0 unnamed
+  controls, 0 console errors.
   — *M*
 - [ ] **E2.** Short screen recording/GIF of the draft studio for the README. — *S*
 - [x] **E3.** Case-study write-up: `docs/CASE_STUDY.md`, linked from README.md.
