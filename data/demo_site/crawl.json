@@ -1,0 +1,242 @@
+{
+ "_comment": "Invented crawl of the fictional contoso-ai.example site. scripts/build_demo_audit.py turns it into data/page_scores.json and data/audit_actions.json with the same code that scores a real crawl, so the demo audit has a known, fictional origin.",
+ "base": "https://contoso-ai.example",
+ "date": "2026-11-10",
+ "crawler_access": {
+  "GPTBot": 200,
+  "OAI-SearchBot": 200,
+  "ChatGPT-User": 200,
+  "ClaudeBot": 200,
+  "Claude-SearchBot": 200,
+  "Claude-User": 200,
+  "PerplexityBot": 403,
+  "Googlebot": 200
+ },
+ "llms_txt_status": 404,
+ "robots_txt": "User-agent: *\nAllow: /\n",
+ "pages": [
+  {
+   "url": "https://contoso-ai.example/en/",
+   "status": 200,
+   "title": "Home page | Contoso AI",
+   "title_de": "Startseite",
+   "meta_description": "Home page: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebSite"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "Building AI that works in production"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 0,
+   "words": 380,
+   "figures": 0,
+   "relative_time": [
+    "more than 5 years"
+   ],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/llm-consulting/",
+   "status": 200,
+   "title": "LLM consulting | Contoso AI",
+   "title_de": "LLM-Beratung",
+   "meta_description": "LLM consulting: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "LLM consulting at Contoso"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 1,
+   "words": 820,
+   "figures": 3,
+   "relative_time": [],
+   "text": "case study"
+  },
+  {
+   "url": "https://contoso-ai.example/en/retrieval-augmented-generation/",
+   "status": 200,
+   "title": "Retrieval-augmented generation | Contoso AI",
+   "title_de": "Retrieval-Augmented Generation",
+   "meta_description": "Retrieval-augmented generation: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage",
+    "FAQPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "Retrieval-augmented generation with Contoso"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 4,
+   "words": 1400,
+   "figures": 5,
+   "relative_time": [],
+   "text": "case study"
+  },
+  {
+   "url": "https://contoso-ai.example/en/ai-agents/",
+   "status": 200,
+   "title": "AI agents | Contoso AI",
+   "title_de": "KI-Agenten",
+   "meta_description": "AI agents: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "AI agents"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 2,
+   "words": 950,
+   "figures": 1,
+   "relative_time": [],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/prompt-evaluation/",
+   "status": 200,
+   "title": "Prompt evaluation | Contoso AI",
+   "title_de": "Prompt-Evaluierung",
+   "meta_description": "",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "Prompt evaluation"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 0,
+   "words": 520,
+   "figures": 0,
+   "relative_time": [],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/ai-governance-readiness/",
+   "status": 200,
+   "title": "AI governance readiness | Contoso AI",
+   "title_de": "KI-Governance-Reife",
+   "meta_description": "AI governance readiness: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 0,
+   "words": 610,
+   "figures": 0,
+   "relative_time": [
+    "over 3 years"
+   ],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/llm-observability/",
+   "status": 200,
+   "title": "LLM observability | Contoso AI",
+   "title_de": "LLM-Observability",
+   "meta_description": "",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "LLM observability"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 1,
+   "words": 260,
+   "figures": 1,
+   "relative_time": [],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/ai-agent-benchmarks/",
+   "status": 200,
+   "title": "AI agent benchmarks | Contoso AI",
+   "title_de": "KI-Agenten-Benchmarks",
+   "meta_description": "AI agent benchmarks: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "Contoso agent benchmarks"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 3,
+   "words": 1100,
+   "figures": 8,
+   "relative_time": [],
+   "text": "case study"
+  },
+  {
+   "url": "https://contoso-ai.example/en/enterprise-ai-adoption/",
+   "status": 200,
+   "title": "Enterprise AI adoption | Contoso AI",
+   "title_de": "KI-Einführung im Unternehmen",
+   "meta_description": "Enterprise AI adoption: how Contoso AI approaches it, with examples and typical timelines for engineering teams.",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "2021-04-12",
+   "modified": "",
+   "h1": [
+    "Enterprise AI adoption"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 0,
+   "words": 730,
+   "figures": 0,
+   "relative_time": [],
+   "text": ""
+  },
+  {
+   "url": "https://contoso-ai.example/en/rag-cost-calculator/",
+   "status": 200,
+   "title": "RAG cost calculator | Contoso AI",
+   "title_de": "RAG-Kostenrechner",
+   "meta_description": "",
+   "schema_types": [
+    "WebPage"
+   ],
+   "published": "",
+   "modified": "",
+   "h1": [
+    "RAG cost calculator"
+   ],
+   "h2": [],
+   "h2_count": 4,
+   "question_headings": 0,
+   "words": 210,
+   "figures": 6,
+   "relative_time": [],
+   "text": ""
+  }
+ ]
+}
