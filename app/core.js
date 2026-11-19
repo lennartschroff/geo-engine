@@ -331,7 +331,9 @@
     const paras = String(text || '').replace(/\r/g, '').split(/\n\s*\n|\n(?=[A-ZÄÖÜ][^\n]{0,200}\?\s*\n)/).map(p => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
     const out = [];
     const seen = new Set();
-    const topics = t => { const lc = ' ' + t.toLowerCase() + ' '; return (categories || []).filter(c => (c.keywords || []).some(k => kwHit(lc, String(k).toLowerCase()))).map(c => c.id); };
+    // Hyphens count as spaces on both sides ("Retrieval-augmented" matches "retrieval augmented").
+    const norm = x => String(x).toLowerCase().replace(/[-‐–]/g, ' ');
+    const topics = t => { const lc = ' ' + norm(t) + ' '; return (categories || []).filter(c => (c.keywords || []).some(k => kwHit(lc, norm(k)))).map(c => c.id); };
     const push = (type, t) => {
       const key = t.toLowerCase().replace(/\W+/g, ' ').trim();
       if (seen.has(key) || out.length >= limit) return;

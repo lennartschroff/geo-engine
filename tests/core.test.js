@@ -449,6 +449,14 @@ describe('extractBlockCandidates (Library import)', () => {
     assert.equal(c[4].text, 'What does a RAG pilot cost? – A typical pilot takes six to eight weeks and depends on the data sources.');
   });
 
+  test('topic keywords match across hyphens', () => {
+    const c = CORE.extractBlockCandidates('Retrieval-augmented generation is a method that grounds a model in your own documents.',
+      [{ id: 'rag', keywords: ['retrieval augmented generation'] }, { id: 'agents', keywords: ['ki-agent'] }]);
+    assert.deepEqual(c[0].categories, ['rag']);
+    assert.deepEqual(CORE.extractBlockCandidates('Ein KI Agent ist ein System, das ein Sprachmodell mit Werkzeugen verbindet.',
+      [{ id: 'agents', keywords: ['ki-agent'] }])[0].categories, ['agents']);
+  });
+
   test('German text', () => {
     assert.deepEqual(types('Ein KI-Agent ist ein System, das ein Sprachmodell mit Werkzeugen verbindet.\n\n' +
       'Für eine Kundin senkte das Projekt die Bearbeitungszeit um 40 Prozent im ersten Quartal.'), ['definition', 'case']);
