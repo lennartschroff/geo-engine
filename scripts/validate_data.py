@@ -28,6 +28,7 @@ FILES = {
     "audit_actions": "audit_actions.json",
     "page_scores": "page_scores.json",
     "demo_monitoring": "demo_monitoring.json",
+    "monitoring_settings": "monitoring_settings.json",
 }
 
 

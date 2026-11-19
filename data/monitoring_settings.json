@@ -1,0 +1,31 @@
+{
+  "_comment": "Settings for monitoring/run.py and the scheduled GitHub Action (.github/workflows/monitoring.yml). Edit this file to change cadence, runs, variants, engines or budget; CLI flags on run.py still override it for a single manual run.",
+  "schedule": {
+    "_comment": "frequency: daily | weekly | biweekly | monthly. weekday is used by weekly/biweekly/monthly (monthly = first <weekday> of the month). The Action wakes daily ~06:00 Berlin time and exits immediately (no API calls) unless a run is due.",
+    "frequency": "weekly",
+    "weekday": "monday"
+  },
+  "questions": "key",
+  "runs_per_question": 1,
+  "variants": {
+    "_comment": "Per question, also ask N randomized rephrasings (zero-cost templates in monitoring/variants.py, different each run). Each variant is one extra call per engine.",
+    "enabled": true,
+    "per_question": 1
+  },
+  "engines": {
+    "claude": { "enabled": true, "model": "claude-sonnet-5", "max_searches": 2 },
+    "gpt": { "enabled": false, "model": "gpt-5-mini", "reasoning_effort": "low" },
+    "gemini": {
+      "_comment": "grounding=false: plain generation, works on the free tier (no citations). grounding=true needs a billed Google account (429 on free tier, tested 2026-11-19).",
+      "enabled": true,
+      "model": "gemini-3.5-flash-lite",
+      "grounding": false,
+      "free_tier": true
+    }
+  },
+  "budget": {
+    "_comment": "Hard caps per run. A run whose estimate exceeds either cap is aborted before any API call.",
+    "max_usd_per_run": 3.0,
+    "max_calls_per_run": 120
+  }
+}
