@@ -119,6 +119,23 @@ their own key in their own local `.env` (or their own repo secrets), never share
 5. Run `python3 scripts/build_web_data.py` to rebuild `app/data.js`.
 6. Real monitoring: see [Run real monitoring](#run-real-monitoring) below.
 
+## From blocks to a readable article
+
+Blocks hold verified facts, but stacked blocks don't read well. In *Improve → Write*, once a
+draft has blocks, three steps turn it into an article:
+
+1. **Compose (no AI):** question as title, a direct answer first, then background, figures,
+   an example, the quote and an FAQ. Block wording is unchanged.
+2. **Polish (your own AI chat):** copy the prompt into ChatGPT, Claude or Gemini and paste the
+   result back. The prompt asks for fluent, self-contained sentences and forbids adding or
+   dropping facts. The app itself never sends anything (`connect-src 'none'`).
+3. **Check:** every number (also written as a word, any format), acronym, brand/competitor name
+   and quote from the blocks must still be there; new numbers or names are flagged as possibly
+   invented; blocks the rewrite dropped are flagged; plus readability checks (answer first,
+   sentence length, paragraphs that stand on their own, subheadings, a year). Export stays
+   locked until the flags are fixed or you confirm you checked them. HTML export includes
+   FAQPage JSON-LD built from the visible FAQ.
+
 ## Run real monitoring
 
 All settings live in `data/monitoring_settings.json`: cadence (default weekly, Monday),
