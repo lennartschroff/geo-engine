@@ -53,9 +53,9 @@
 
 body {
   margin: 0;
-  font: 15px/1.5 var(--sans);
+  font: 15px/1.55 var(--sans);
   color: var(--fg);
-  background: var(--bg);
+  background: var(--page);
 }
 
 a { color: var(--accent); }
@@ -201,14 +201,14 @@ section {
 
 h1 {
   margin: 0;
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -.01em;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -.02em;
 }
 h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .head {
@@ -229,21 +229,24 @@ h2 {
 /* Big numbers */
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 40px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
 }
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--soft);
 }
 .stat .n {
-  font-size: 44px;
-  font-weight: 500;
+  font-size: 40px;
+  font-weight: 700;
   line-height: 1.05;
   letter-spacing: -.02em;
 }
-.stat .n.big { font-size: 56px; }
+.stat .n.big { font-size: 52px; }
 .stat .l {
   color: var(--muted);
   font-size: 13px;
@@ -277,14 +280,15 @@ h2 {
 /* Buttons */
 .btn {
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 20px;
   border: 0;
-  border-radius: var(--radius);
-  background: var(--fg);
+  border-radius: 999px;
+  background: var(--accent);
   color: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
+.btn:hover:not([disabled]) { background: var(--accent-strong); }
 .btn.sm {
   min-height: 36px;
   padding: 0 12px;
@@ -292,9 +296,12 @@ h2 {
   font-weight: 400;
   white-space: nowrap;
 }
-.btn.outline { border: 1px solid var(--fg); background: var(--bg); color: var(--fg); }
+.btn.outline { border: 1px solid var(--accent); background: var(--bg); color: var(--accent-strong); }
 .btn.plain   { border: 1px solid var(--input); background: var(--bg); color: var(--fg); }
 .btn.ghost   { background: none; color: var(--muted); }
+.btn.outline:hover:not([disabled]),
+.btn.plain:hover:not([disabled]) { background: var(--soft); }
+.btn.ghost:hover:not([disabled]) { background: var(--soft); }
 
 .link {
   min-height: 32px;
@@ -326,8 +333,8 @@ h2 {
   font-size: 13px;
 }
 .pill.on {
-  border-color: var(--fg);
-  background: var(--fg);
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -352,7 +359,8 @@ input[type=checkbox] {
 /* Panels */
 .card,
 .callout {
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   background: var(--soft);
 }
 .card {
@@ -679,7 +687,7 @@ input[type=checkbox] {
 
 .score {
   font-size: 56px;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -.02em;
 }
