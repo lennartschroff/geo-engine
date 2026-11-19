@@ -819,8 +819,10 @@
     }
     function restoreFocus(k) {
       if (!k) return;
+      // Disabled controls can't take focus, so they're never a target.
       let el = k.id ? document.getElementById(k.id) : null;
-      const all = Array.from(root.querySelectorAll(FOCUSABLE));
+      if (el && el.disabled) el = null;
+      const all = Array.from(root.querySelectorAll(FOCUSABLE)).filter(x => !x.disabled);
       if (!el && k.label) {
         const same = all.filter(x => focusLabel(x) === k.label);
         el = same.length === 1 ? same[0] : same.find(x => all.indexOf(x) === k.index) || same[0];
