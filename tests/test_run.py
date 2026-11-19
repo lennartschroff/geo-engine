@@ -43,7 +43,8 @@ class TestDetectLanguage:
         # Spot-checks against data/questions.json rather than re-deriving the
         # whole file's expected answer -- a handful of known cases in each
         # language, not a brittle full-file assertion.
-        assert run_module.detect_language("RAG-Anbieter in den USA") == "en"  # named entities only, no DE marker word
+        assert run_module.detect_language("RAG-Anbieter in den USA") == "de"
+        assert run_module.detect_language("Gute KI-Beratung in Austin") == "de"
         assert run_module.detect_language("Wie baue ich eine Retrieval-Augmented-Generation-Pipeline auf?") == "de"
 
 
@@ -115,27 +116,28 @@ class TestMainPersistsPartialResultsOnCrash:
 
     def test_rows_written_before_a_crash_are_not_lost(self, isolated_root, monkeypatch, tmp_path):
         questions = [{"id": "q1", "text": "Q1", "key": True}, {"id": "q2", "text": "Q2", "key": True}]
-        monkeypatch.setattr(run_module, "load_questions", lambda ids: questions)
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": questions)
         monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
         monkeypatch.setattr(run_module, "load_competitor_names", lambda: ["Competitor A"])
 
         call_count = {"n": 0}
 
-        def fake_run_one(question, engine, run_index, brand_aliases, competitor_names, dry_run):
+        def fake_run_one(question, engine, run_index, brand_aliases, competitor_names, dry_run, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 2:
                 raise RuntimeError("simulated API failure on the second call")
             return {
                 "question_id": question["id"], "engine": engine, "model": "m", "run_index": run_index,
                 "timestamp": "t", "language": "en", "mentioned": 0, "position": None,
-                "cited_urls": "[]", "answer_text": "x",
+                "cited_urls": "[]", "answer_text": "x", "variant": 0, "question_text": "Q",
             }
 
         monkeypatch.setattr(run_module, "run_one", fake_run_one)
 
         db_path = tmp_path / "runs.sqlite"
         monkeypatch.setattr(
-            sys, "argv", ["run.py", "--dry-run", "--engines", "claude", "--runs", "1", "--db", str(db_path)]
+            sys, "argv",
+            ["run.py", "--dry-run", "--engines", "claude", "--runs", "1", "--variants", "0", "--db", str(db_path)],
         )
 
         with pytest.raises(RuntimeError):
@@ -145,6 +147,9 @@ class TestMainPersistsPartialResultsOnCrash:
         written = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
         conn.close()
         assert written == 1  # the row from the first (successful) call must survive the second call's crash
+
+
+GROUNDED = {"model": "gemini-test", "grounding": True, "free_tier": False}
 
 
 class TestCallGemini:
@@ -187,7 +192,7 @@ class TestCallGemini:
         fake_client = Mock()
         fake_client.interactions.create.return_value = interaction
         with patch("google.genai.Client", return_value=fake_client):
-            result = run_module.call_gemini("Any question")
+            result = run_module.call_gemini("Any question", GROUNDED)
         assert result == {"answer_text": "The answer.", "cited_urls": ["https://example.com/a"]}
 
     def test_no_annotations_yields_empty_cited_urls(self, monkeypatch):
@@ -209,3 +214,141 @@ class TestCallGemini:
         with patch("google.genai.Client", return_value=fake_client):
             result = run_module.call_gemini("Any question")
         assert result == {"answer_text": "No steps at all.", "cited_urls": []}
+
+    def test_grounding_off_sends_no_tools(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        fake_client = Mock()
+        fake_client.interactions.create.return_value = types.SimpleNamespace(output_text="Plain.")
+        with patch("google.genai.Client", return_value=fake_client):
+            run_module.call_gemini("Q", {"model": "m", "grounding": False, "free_tier": True})
+        assert "tools" not in fake_client.interactions.create.call_args.kwargs
+
+    def test_grounding_on_sends_google_search_tool(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        fake_client = Mock()
+        fake_client.interactions.create.return_value = types.SimpleNamespace(output_text="x")
+        with patch("google.genai.Client", return_value=fake_client):
+            run_module.call_gemini("Q", GROUNDED)
+        assert fake_client.interactions.create.call_args.kwargs["tools"] == [{"type": "google_search"}]
+
+
+class TestCallGpt:
+    """Mocked: covers request shape and citation extraction. Not yet verified
+    against the real API (first real run is gated on cost approval)."""
+
+    def _response(self, text, urls):
+        anns = [types.SimpleNamespace(type="url_citation", url=u) for u in urls]
+        block = types.SimpleNamespace(type="output_text", annotations=anns)
+        msg = types.SimpleNamespace(type="message", content=[block])
+        call = types.SimpleNamespace(type="web_search_call")
+        return types.SimpleNamespace(output_text=text, output=[call, msg])
+
+    def test_missing_api_key_raises_clear_error(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+            run_module.call_gpt("Q")
+
+    def test_extracts_answer_and_citations(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        fake = Mock()
+        fake.responses.create.return_value = self._response("Answer.", ["https://a.com/x", "https://b.org"])
+        with patch("openai.OpenAI", return_value=fake):
+            result = run_module.call_gpt("Q", {"model": "gpt-test", "reasoning_effort": "low"})
+        assert result == {"answer_text": "Answer.", "cited_urls": ["https://a.com/x", "https://b.org"]}
+        kwargs = fake.responses.create.call_args.kwargs
+        assert kwargs["model"] == "gpt-test"
+        assert kwargs["tools"] == [{"type": "web_search"}]
+        assert kwargs["reasoning"] == {"effort": "low"}
+
+    def test_response_without_output_items_does_not_crash(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        fake = Mock()
+        fake.responses.create.return_value = types.SimpleNamespace(output_text="Just text.")
+        with patch("openai.OpenAI", return_value=fake):
+            assert run_module.call_gpt("Q")["cited_urls"] == []
+
+
+def _settings(**over):
+    s = json.loads(run_module.SETTINGS_PATH.read_text(encoding="utf-8"))
+    s.update(over)
+    return s
+
+
+class TestMainWithSettings:
+    @pytest.fixture
+    def env(self, tmp_path, monkeypatch):
+        questions = [{"id": "q1", "text": "Best AI consultancies", "key": True}]
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": questions)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda: [])
+        monkeypatch.setattr(run_module, "_load_dotenv", lambda: None)
+        for key in run_module.API_KEY_ENV.values():
+            monkeypatch.delenv(key, raising=False)
+        return tmp_path
+
+    def _run(self, monkeypatch, env, settings, *extra):
+        path = env / "settings.json"
+        path.write_text(json.dumps(settings))
+        db = env / "runs.sqlite"
+        monkeypatch.setattr(sys, "argv", ["run.py", "--settings", str(path), "--db", str(db), *extra])
+        code = run_module.main()
+        rows = []
+        if db.exists():
+            conn = sqlite3.connect(db)
+            conn.row_factory = sqlite3.Row
+            rows = [dict(r) for r in conn.execute("SELECT * FROM runs")]
+            conn.close()
+        return code, rows
+
+    def test_variants_add_one_prompt_per_question_shared_across_engines(self, monkeypatch, env):
+        code, rows = self._run(monkeypatch, env, _settings(), "--dry-run", "--engines", "claude,gemini", "--seed", "3")
+        assert code == 0
+        assert sorted((r["engine"], r["variant"]) for r in rows) == [
+            ("claude", 0), ("claude", 1), ("gemini", 0), ("gemini", 1)]
+        texts = {r["engine"]: r["question_text"] for r in rows if r["variant"] == 1}
+        assert texts["claude"] == texts["gemini"] != "Best AI consultancies"
+
+    def test_variants_disabled_in_settings(self, monkeypatch, env):
+        s = _settings(variants={"enabled": False, "per_question": 1})
+        code, rows = self._run(monkeypatch, env, s, "--dry-run", "--engines", "claude")
+        assert [r["variant"] for r in rows] == [0]
+
+    def test_engines_default_to_enabled_ones(self, monkeypatch, env):
+        code, rows = self._run(monkeypatch, env, _settings(), "--dry-run", "--variants", "0")
+        enabled = sorted(e for e, c in _settings()["engines"].items() if c["enabled"])
+        assert sorted(r["engine"] for r in rows) == enabled
+
+    def test_real_run_skips_engines_without_key(self, monkeypatch, env):
+        code, rows = self._run(monkeypatch, env, _settings(), "--engines", "claude,gemini", "--yes")
+        assert code == 1 and rows == []  # no keys at all -> nothing to run, no calls made
+
+    def test_budget_cap_aborts_before_any_call(self, monkeypatch, env):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+        called = Mock()
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude", called)
+        s = _settings(budget={"max_usd_per_run": 0.001, "max_calls_per_run": 100})
+        code, rows = self._run(monkeypatch, env, s, "--engines", "claude", "--yes")
+        assert code == 1 and not called.called
+
+    def test_one_failing_engine_does_not_stop_the_others(self, monkeypatch, env):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+        monkeypatch.setenv("GEMINI_API_KEY", "k")
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude", Mock(side_effect=Exception("529 overloaded")))
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "gemini",
+                            Mock(return_value={"answer_text": "Brand is good.", "cited_urls": []}))
+        code, rows = self._run(monkeypatch, env, _settings(), "--engines", "claude,gemini", "--yes")
+        assert code == 2  # partial success
+        assert {r["engine"] for r in rows} == {"gemini"} and len(rows) == 2
+        assert all(r["mentioned"] == 1 for r in rows)
+
+
+class TestSchemaMigration:
+    def test_old_database_gets_new_columns_and_keeps_rows(self, tmp_path):
+        conn = sqlite3.connect(tmp_path / "old.sqlite")
+        conn.execute("""CREATE TABLE runs (question_id TEXT NOT NULL, engine TEXT NOT NULL, model TEXT NOT NULL,
+            run_index INTEGER NOT NULL, timestamp TEXT NOT NULL, language TEXT, mentioned INTEGER NOT NULL,
+            position INTEGER, cited_urls TEXT NOT NULL, answer_text TEXT NOT NULL)""")
+        conn.execute("INSERT INTO runs VALUES ('q1','claude','m',0,'t','en',1,1,'[]','a')")
+        run_module.ensure_schema(conn)
+        row = conn.execute("SELECT question_id, variant, question_text FROM runs").fetchone()
+        assert row == ("q1", 0, None)

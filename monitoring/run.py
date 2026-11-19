@@ -1,26 +1,30 @@
 """Monitoring CLI (ROADMAP.md Milestone 1).
 
-Sends the tracked questions to each engine, detects brand mentions, and
-writes one row per (question, engine, run) to SQLite.
+Sends the tracked questions (plus optional randomized variants, see
+monitoring/variants.py) to each engine, detects brand mentions, and writes
+one row per (question, variant, engine, run) to SQLite.
 
-Real API calls: "claude" and "gemini" are implemented (TASKS.md C4),
-reading ANTHROPIC_API_KEY / GEMINI_API_KEY from a local .env — never
-shared, never sent anywhere but each provider's own API. "gpt" still
-raises NotImplementedError outside --dry-run. Use --dry-run to exercise
-the whole pipeline against recorded fixtures at zero cost; real runs
-always print a cost estimate first and require --yes above the
-configured threshold (see cost_estimate.py).
+Defaults come from data/monitoring_settings.json (engines, models, runs per
+question, variants, budget caps); CLI flags override them for one run.
+All three engines are implemented: "claude" (Anthropic web search), "gpt"
+(OpenAI Responses API web_search tool) and "gemini" (plain generation by
+default; Google Search grounding is opt-in because it needs a billed
+account). Keys are read from a local .env or the environment -- never
+shared, never sent anywhere but each provider's own API. An enabled engine
+whose key is missing is skipped with a message, not a crash.
+
+Use --dry-run to exercise the whole pipeline against recorded fixtures at
+zero cost; real runs always print a cost estimate first, abort if it
+exceeds the settings' budget caps, and require --yes above
+--yes-threshold-usd.
 
 Gemini caveat, found by testing (2026-11-19), not documentation: on the
 free tier (no billing account linked), Google Search grounding returned
-HTTP 429 immediately, while plain (non-grounded) calls worked fine --
-grounding appears to need billing enabled, or has a near-zero free quota.
-call_gemini() surfaces this as a clear error rather than a confusing
-stack trace; see its docstring.
+HTTP 429 immediately, while plain (non-grounded) calls worked fine.
 
 Usage:
     python monitoring/run.py --dry-run
-    python monitoring/run.py --dry-run --questions q1,q2 --engines claude,gpt
+    python monitoring/run.py --dry-run --questions q1,q2 --engines claude,gpt --variants 0
     python monitoring/run.py --questions q1,q2,q3 --engines claude --runs 1 --yes
 """
 from __future__ import annotations
@@ -28,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import sqlite3
 import sys
@@ -39,12 +44,24 @@ sys.path.insert(0, str(ROOT))
 
 from monitoring.cost_estimate import check_call_budget, estimate_cost, needs_confirmation  # noqa: E402
 from monitoring.mention_detection import detect_mention, normalize_domains  # noqa: E402
+from monitoring.variants import make_variants  # noqa: E402
 
 ALL_ENGINES = ["claude", "gpt", "gemini"]
 FIXTURES_PATH = ROOT / "monitoring" / "fixtures" / "sample_answers.json"
-CLAUDE_MODEL = "claude-sonnet-5"
-CLAUDE_MAX_SEARCHES = 2
-GEMINI_MODEL = "gemini-3.5-flash-lite"
+SETTINGS_PATH = ROOT / "data" / "monitoring_settings.json"
+API_KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "gpt": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
+
+# Fallbacks when a call_* function is used without a settings dict (tests,
+# ad-hoc use). Kept identical to data/monitoring_settings.json's defaults.
+DEFAULT_ENGINE_CONFIG = {
+    "claude": {"enabled": True, "model": "claude-sonnet-5", "max_searches": 2},
+    "gpt": {"enabled": False, "model": "gpt-5-mini", "reasoning_effort": "low"},
+    "gemini": {"enabled": True, "model": "gemini-3.5-flash-lite", "grounding": False, "free_tier": True},
+}
+
+
+def load_settings(path: Path | None = None) -> dict:
+    return json.loads((path or SETTINGS_PATH).read_text(encoding="utf-8"))
 
 
 def _load_dotenv() -> None:
@@ -67,8 +84,8 @@ def _load_dotenv() -> None:
         os.environ.setdefault(key.strip(), value)
 
 
-def call_claude(question_text: str) -> dict:
-    """One real call to claude-sonnet-5 with web search enabled.
+def call_claude(question_text: str, cfg: dict | None = None) -> dict:
+    """One real call to Claude (default claude-sonnet-5) with web search enabled.
 
     Returns {"answer_text": str, "cited_urls": list[str]}. Raises RuntimeError
     with a clear message if the API key is missing or the call fails — never
@@ -83,9 +100,13 @@ def call_claude(question_text: str) -> dict:
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set — add it to .env (see .env.example).")
 
+    cfg = cfg or DEFAULT_ENGINE_CONFIG["claude"]
+    tools = []
+    if cfg["max_searches"] > 0:
+        tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": cfg["max_searches"]}]
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
-        model=CLAUDE_MODEL,
+        model=cfg["model"],
         max_tokens=1024,
         # Thinking defaults to on (adaptive) on claude-sonnet-5 when omitted, and
         # thinking tokens are billed as output tokens even though never shown --
@@ -94,7 +115,7 @@ def call_claude(question_text: str) -> dict:
         # the first test run. Disabled explicitly (accepted on Sonnet 5).
         thinking={"type": "disabled"},
         messages=[{"role": "user", "content": question_text}],
-        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": CLAUDE_MAX_SEARCHES}],
+        tools=tools,
     )
 
     answer_text = "".join(block.text for block in response.content if block.type == "text")
@@ -108,25 +129,23 @@ def call_claude(question_text: str) -> dict:
     return {"answer_text": answer_text, "cited_urls": cited_urls}
 
 
-def call_gemini(question_text: str) -> dict:
-    """One real call to Gemini (gemini-3.5-flash-lite) with Google Search
-    grounding, via the google-genai SDK's interactions API.
+def call_gemini(question_text: str, cfg: dict | None = None) -> dict:
+    """One real call to Gemini (default gemini-3.5-flash-lite) via the
+    google-genai SDK's interactions API.
 
     Returns {"answer_text": str, "cited_urls": list[str]}.
 
-    Caveat found by testing against a real free-tier key (2026-11-19), not
-    from documentation: a grounded call returned HTTP 429
-    ("too_many_requests") immediately, while a plain (non-grounded) call to
-    the same model with the same key succeeded right before it. This reads
-    as Google Search grounding needing a linked billing account, or having
-    an extremely small free quota — not a bug in this code. That 429 is
-    caught below and re-raised as a clear RuntimeError instead of a
-    confusing stack trace. The citation-extraction code path (annotations
-    on a successful grounded response) is written from the documented
-    response shape but could not be verified against a real successful
-    grounded response for that reason — it's defensive (falls back to an
-    empty cited_urls list rather than crashing) in case the real shape
-    differs once grounding actually succeeds for you.
+    cfg["grounding"] toggles Google Search grounding. It defaults to off:
+    tested against a real free-tier key (2026-11-19), a grounded call
+    returned HTTP 429 immediately while a plain call to the same model with
+    the same key succeeded -- grounding needs a linked billing account.
+    Without grounding there are no citations (cited_urls stays empty), but
+    brand mentions are still detected, at $0 on the free tier.
+
+    The citation-extraction path (annotations on a successful grounded
+    response) is written from the documented response shape and couldn't be
+    verified for real for the reason above; it's defensive (falls back to
+    an empty list rather than crashing).
     """
     try:
         from google import genai
@@ -137,22 +156,24 @@ def call_gemini(question_text: str) -> dict:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set — add it to .env (see .env.example).")
 
+    cfg = cfg or DEFAULT_ENGINE_CONFIG["gemini"]
+    kwargs = {"model": cfg["model"], "input": question_text}
+    if cfg["grounding"]:
+        kwargs["tools"] = [{"type": "google_search"}]
     client = genai.Client(api_key=api_key)
     try:
-        interaction = client.interactions.create(
-            model=GEMINI_MODEL,
-            input=question_text,
-            tools=[{"type": "google_search"}],
-        )
+        interaction = client.interactions.create(**kwargs)
     except Exception as e:
         if "429" in str(e) or "too_many_requests" in str(e).lower():
-            raise RuntimeError(
-                "Gemini's Google Search grounding returned a rate-limit error (429). In testing "
-                "(2026-11-19) this happened immediately on a free-tier key with no billing account "
-                "linked, even though a plain non-grounded call to the same model worked fine right "
-                "before it — grounding may require billing to be enabled. See "
-                "https://aistudio.google.com/docs/rate-limits."
-            ) from e
+            hint = (
+                "With grounding on, this happened immediately on a free-tier key in testing (2026-11-19) -- "
+                "Google Search grounding appears to need billing. Set engines.gemini.grounding to false in "
+                "data/monitoring_settings.json."
+                if cfg["grounding"]
+                else "This is the free-tier rate limit; retry later or lower the number of calls."
+            )
+            raise RuntimeError(f"Gemini returned a rate-limit error (429). {hint} "
+                               "See https://aistudio.google.com/docs/rate-limits.") from e
         raise
 
     answer_text = interaction.output_text
@@ -169,24 +190,72 @@ def call_gemini(question_text: str) -> dict:
     return {"answer_text": answer_text, "cited_urls": cited_urls}
 
 
+def call_gpt(question_text: str, cfg: dict | None = None) -> dict:
+    """One real call to OpenAI (default gpt-5-mini) via the Responses API
+    with the web_search tool.
+
+    Returns {"answer_text": str, "cited_urls": list[str]}. Citations are the
+    message's url_citation annotations (documented response shape, OpenAI
+    web search guide, checked 2026-11-19). Written and unit-tested against
+    a mocked client; NOT yet verified with a real call -- the first real
+    run is gated on your approval of its cost (see TASKS.md C4c).
+    """
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        raise RuntimeError("The 'openai' package isn't installed — run: pip install -r requirements.txt") from e
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set — add it to .env (see .env.example).")
+
+    cfg = cfg or DEFAULT_ENGINE_CONFIG["gpt"]
+    client = OpenAI(api_key=api_key)
+    response = client.responses.create(
+        model=cfg["model"],
+        input=question_text,
+        tools=[{"type": "web_search"}],
+        # Reasoning tokens are billed as output. "low" keeps cost down while
+        # staying above "minimal", which the web_search tool doesn't support.
+        reasoning={"effort": cfg["reasoning_effort"]},
+    )
+
+    cited_urls = []
+    for item in getattr(response, "output", None) or []:
+        if getattr(item, "type", None) != "message":
+            continue
+        for block in getattr(item, "content", None) or []:
+            for ann in getattr(block, "annotations", None) or []:
+                if getattr(ann, "type", None) == "url_citation" and getattr(ann, "url", None):
+                    cited_urls.append(ann.url)
+    return {"answer_text": response.output_text, "cited_urls": cited_urls}
+
+
+ENGINE_CALLS = {"claude": call_claude, "gpt": call_gpt, "gemini": call_gemini}
+
+
 # Heuristic EN/DE detection for the question text (README's own design is a
 # deliberately mixed-language question set) — looks for German umlauts or a
 # few common German function words. Not a real language detector; good
 # enough since individual questions are almost always unambiguously one or
 # the other, just not reliably tagged as such anywhere in questions.json.
-GERMAN_MARKERS = re.compile(r"[äöüßÄÖÜ]|(?<![\wäöü])(wie|was|welche|welcher|welches|für|ist|sind)(?![\wäöü])", re.I)
+GERMAN_WORDS = (
+    "wie|was|welche|welcher|welches|für|ist|sind|und|mit|den|der|die|das|ein|eine|ich|"
+    "gute|guter|anbieter|beratung|im"
+)
+GERMAN_MARKERS = re.compile(rf"[äöüßÄÖÜ]|(?<![\wäöü])({GERMAN_WORDS})(?![\wäöü])", re.I)
 
 
 def detect_language(text: str) -> str:
     return "de" if GERMAN_MARKERS.search(text) else "en"
 
 
-def load_questions(question_ids: list[str] | None) -> list[dict]:
+def load_questions(question_ids: list[str] | None, scope: str = "key") -> list[dict]:
     questions = json.loads((ROOT / "data" / "questions.json").read_text(encoding="utf-8"))
     if question_ids:
         wanted = set(question_ids)
         questions = [q for q in questions if q["id"] in wanted]
-    else:
+    elif scope == "key":
         questions = [q for q in questions if q.get("key")]  # default: the 15 key questions
     return questions
 
@@ -226,28 +295,39 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             answer_text TEXT NOT NULL
         )
     """)
+    # Added with question variants (2026-11-19). ALTER for databases created
+    # before that, so existing real results are kept, not recreated.
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    if "variant" not in existing:
+        conn.execute("ALTER TABLE runs ADD COLUMN variant INTEGER NOT NULL DEFAULT 0")
+    if "question_text" not in existing:
+        conn.execute("ALTER TABLE runs ADD COLUMN question_text TEXT")
     conn.commit()
 
 
 def run_one(
-    question: dict, engine: str, run_index: int, brand_aliases: list[str], competitor_names: list[str], dry_run: bool
+    question: dict,
+    engine: str,
+    run_index: int,
+    brand_aliases: list[str],
+    competitor_names: list[str],
+    dry_run: bool,
+    engine_cfg: dict | None = None,
+    prompt_text: str | None = None,
+    variant: int = 0,
 ) -> dict:
+    """prompt_text is the text actually sent (a variant, or the original
+    question when None); variant is 0 for the original, 1..n for variants."""
+    prompt = prompt_text or question["text"]
+    engine_cfg = engine_cfg or DEFAULT_ENGINE_CONFIG[engine]
     if dry_run:
         answer = load_fixture_answer(question["id"], engine)
         if answer is None:
             raise ValueError(f"No fixture answer for {question['id']!r}/{engine!r} in {FIXTURES_PATH.name}")
         model = "fixture"
-    elif engine == "claude":
-        answer = call_claude(question["text"])
-        model = CLAUDE_MODEL
-    elif engine == "gemini":
-        answer = call_gemini(question["text"])
-        model = GEMINI_MODEL
     else:
-        raise NotImplementedError(
-            f"Real API calls for engine={engine!r} are not implemented yet (TASKS.md C4). "
-            "'claude' and 'gemini' are wired in so far. Use --dry-run, or --engines claude,gemini."
-        )
+        answer = ENGINE_CALLS[engine](prompt, engine_cfg)
+        model = engine_cfg["model"]
 
     result = detect_mention(answer["answer_text"], brand_aliases, competitor_names)
     return {
@@ -261,57 +341,126 @@ def run_one(
         "position": result.position,
         "cited_urls": json.dumps(normalize_domains(answer["cited_urls"])),
         "answer_text": answer["answer_text"],
+        "variant": variant,
+        "question_text": prompt,
     }
+
+
+def estimate_run_cost(num_prompts: int, engines: list[str], runs: int, engine_cfgs: dict):
+    """Per-engine estimate, since engines differ in search use and pricing.
+    Returns (CostEstimate-like totals, notes)."""
+    from monitoring.cost_estimate import CostEstimate
+
+    per_engine: dict[str, float] = {}
+    notes: list[str] = []
+    calls = 0
+    tokens_in = tokens_out = 0
+    for engine in engines:
+        cfg = engine_cfgs[engine]
+        if engine == "claude":
+            searches = cfg["max_searches"]
+            input_tokens = 15000 if searches else 300
+            output_tokens = 1000
+        elif engine == "gpt":
+            searches = 2  # the model decides; 2 is a conservative planning number
+            input_tokens, output_tokens = 15000, 2000  # search content + reasoning tokens
+        else:  # gemini
+            searches = 0
+            input_tokens, output_tokens = (2000 if cfg["grounding"] else 100), 800
+        if engine == "gemini" and cfg.get("free_tier"):
+            est = estimate_cost(num_prompts, [engine], runs, input_tokens, output_tokens, 0,
+                                pricing={"gemini": {"input": 0.0, "output": 0.0}})
+            notes.append("gemini: free tier, $0 (rate-limited, not billed)")
+        else:
+            est = estimate_cost(num_prompts, [engine], runs, input_tokens, output_tokens, searches)
+        if engine in DEFAULT_ENGINE_CONFIG and cfg["model"] != DEFAULT_ENGINE_CONFIG[engine]["model"]:
+            notes.append(f"{engine}: model {cfg['model']!r} differs from the priced default "
+                         f"{DEFAULT_ENGINE_CONFIG[engine]['model']!r} -- the dollar figure may be off")
+        per_engine[engine] = est.total_usd
+        calls += est.num_calls
+        tokens_in += est.total_input_tokens
+        tokens_out += est.total_output_tokens
+    total = CostEstimate(calls, tokens_in, tokens_out, round(sum(per_engine.values()), 4), per_engine)
+    return total, notes
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="Use recorded fixtures instead of real API calls.")
     ap.add_argument("--db", default=str(ROOT / "monitoring" / "runs.sqlite"), help="SQLite output path.")
-    ap.add_argument("--questions", help="Comma-separated question ids. Default: the 15 key questions.")
-    ap.add_argument("--engines", default=",".join(ALL_ENGINES), help="Comma-separated engines.")
-    ap.add_argument("--runs", type=int, default=3, help="Runs per question per engine.")
+    ap.add_argument("--settings", help="Settings file. Default: data/monitoring_settings.json.")
+    ap.add_argument("--questions", help="Comma-separated question ids. Default: settings' question scope.")
+    ap.add_argument("--engines", help="Comma-separated engines. Default: engines enabled in settings.")
+    ap.add_argument("--runs", type=int, help="Runs per prompt per engine. Default: settings.")
+    ap.add_argument("--variants", type=int, help="Randomized variants per question (0 = off). Default: settings.")
+    ap.add_argument("--seed", type=int, help="Seed for variant randomization (reproducible runs).")
     ap.add_argument("--yes", action="store_true", help="Skip the cost confirmation prompt.")
-    ap.add_argument("--max-calls", type=int, default=None, help="Hard cap on total API calls; aborts if exceeded.")
+    ap.add_argument("--max-calls", type=int, help="Hard cap on total API calls. Default: settings' budget.")
     ap.add_argument("--yes-threshold-usd", type=float, default=1.0, help="Est. cost above which --yes is required.")
     args = ap.parse_args()
 
     _load_dotenv()
+    settings = load_settings(Path(args.settings) if args.settings else None)
+    engine_cfgs = {e: {**DEFAULT_ENGINE_CONFIG[e], **settings["engines"].get(e, {})} for e in ALL_ENGINES}
     question_ids = args.questions.split(",") if args.questions else None
-    engines = args.engines.split(",")
-    questions = load_questions(question_ids)
+    engines = args.engines.split(",") if args.engines else [e for e in ALL_ENGINES if engine_cfgs[e]["enabled"]]
+    unknown = set(engines) - set(ALL_ENGINES)
+    if unknown:
+        print(f"Unknown engine(s): {sorted(unknown)}. Known: {ALL_ENGINES}", file=sys.stderr)
+        return 1
+    runs = args.runs if args.runs is not None else settings["runs_per_question"]
+    if args.variants is not None:
+        n_variants = args.variants
+    else:
+        n_variants = settings["variants"]["per_question"] if settings["variants"]["enabled"] else 0
+    max_calls = args.max_calls if args.max_calls is not None else settings["budget"]["max_calls_per_run"]
+
+    questions = load_questions(question_ids, settings["questions"])
     if not questions:
         print("No matching questions found.", file=sys.stderr)
         return 1
 
     if not args.dry_run:
-        not_implemented = set(engines) - {"claude", "gemini"}
-        if not_implemented:
-            print(f"[{sorted(not_implemented)} not implemented yet — skipping, not running those calls]")
-            engines = [e for e in engines if e not in not_implemented]
-            if not engines:
-                print("No implemented engines left to run.", file=sys.stderr)
-                return 1
+        missing = [e for e in engines if not os.environ.get(API_KEY_ENV[e])]
+        if missing:
+            print(f"[skipping {missing}: no API key set ({', '.join(API_KEY_ENV[e] for e in missing)})]")
+            engines = [e for e in engines if e not in missing]
+        if not engines:
+            print("No engines left to run (none enabled with an API key).", file=sys.stderr)
+            return 1
 
-    estimate = estimate_cost(len(questions), engines, args.runs, searches_per_call=CLAUDE_MAX_SEARCHES)
-    print(f"Questions: {len(questions)}  Engines: {engines}  Runs/question: {args.runs}")
+    # Variants are drawn once per question and shared by all engines, so
+    # engines answer the exact same prompts and stay comparable.
+    rng = random.Random(args.seed)
+    prompts: list[tuple[dict, int, str]] = []
+    for q in questions:
+        prompts.append((q, 0, q["text"]))
+        lang = detect_language(q["text"])
+        for i, text in enumerate(make_variants(q["text"], lang, n_variants, rng), start=1):
+            prompts.append((q, i, text))
+
+    estimate, notes = estimate_run_cost(len(prompts), engines, runs, engine_cfgs)
+    print(f"Questions: {len(questions)}  Variants/question: {n_variants}  Engines: {engines}  Runs/prompt: {runs}")
     print(f"Estimated calls: {estimate.num_calls}  Estimated cost: ${estimate.total_usd:.4f} "
           f"({', '.join(f'{e}=${c:.4f}' for e, c in estimate.per_engine_usd.items())})")
     if not args.dry_run:
-        if "gemini" in engines:
-            print("[gemini pricing is still placeholder, and the real cost is likely $0 while you're on the "
-                  "free tier anyway — but see call_gemini()'s docstring: Google Search grounding returned a "
-                  "429 in testing on a free-tier key, so a real gemini run may just fail with a clear error.]")
-        print("Token-count assumptions are still rough; the per-token and per-search unit prices for "
-              "claude-sonnet-5 are verified (2026-11-18). Real cost depends on actual answer length.")
+        for note in notes:
+            print(f"[{note}]")
+        print("Token counts are planning estimates (claude measured 2026-11-18); real cost depends on "
+              "answer length and how many searches each engine decides to run.")
 
     try:
-        check_call_budget(estimate.num_calls, args.max_calls)
+        check_call_budget(estimate.num_calls, max_calls)
     except Exception as e:  # CallBudgetExceeded
         print(f"Aborting: {e}", file=sys.stderr)
         return 1
 
     if not args.dry_run:
+        max_usd = settings["budget"]["max_usd_per_run"]
+        if estimate.total_usd > max_usd:
+            print(f"Aborting: estimated ${estimate.total_usd:.4f} exceeds budget.max_usd_per_run=${max_usd:.2f} "
+                  "in the settings file.", file=sys.stderr)
+            return 1
         if needs_confirmation(estimate, args.yes_threshold_usd) and not args.yes:
             print(f"Estimated cost ${estimate.total_usd:.4f} exceeds threshold ${args.yes_threshold_usd:.2f}. "
                   f"Re-run with --yes to proceed.", file=sys.stderr)
@@ -322,23 +471,40 @@ def main() -> int:
     conn = sqlite3.connect(args.db)
     ensure_schema(conn)
     written = 0
-    for q in questions:
+    failed: list[str] = []
+    for q, variant, text in prompts:
         for engine in engines:
-            for run_index in range(args.runs):
-                row = run_one(q, engine, run_index, brand_aliases, competitor_names, args.dry_run)
+            if engine in failed:
+                continue
+            for run_index in range(runs):
+                try:
+                    row = run_one(q, engine, run_index, brand_aliases, competitor_names, args.dry_run,
+                                  engine_cfg=engine_cfgs[engine], prompt_text=text, variant=variant)
+                except Exception as e:  # any provider/SDK error, not just our RuntimeErrors
+                    if args.dry_run:
+                        raise
+                    # One engine failing (rate limit, outage) must not stop the others:
+                    # stop calling that engine for the rest of this run, keep going.
+                    print(f"[{engine} failed, skipping it for the rest of this run: {e}]", file=sys.stderr)
+                    failed.append(engine)
+                    break
                 conn.execute(
                     "INSERT INTO runs (question_id, engine, model, run_index, timestamp, language, mentioned, "
-                    "position, cited_urls, answer_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "position, cited_urls, answer_text, variant, question_text) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (row["question_id"], row["engine"], row["model"], row["run_index"], row["timestamp"],
-                     row["language"], row["mentioned"], row["position"], row["cited_urls"], row["answer_text"]),
+                     row["language"], row["mentioned"], row["position"], row["cited_urls"], row["answer_text"],
+                     row["variant"], row["question_text"]),
                 )
                 # Commit per row, not once at the end: a real run pays per API call made, so a
-                # later call crashing (e.g. an engine running out past a rate limit) must not lose
-                # the real money already spent on the rows written so far.
+                # later call crashing must not lose the real money already spent on earlier rows.
                 conn.commit()
                 written += 1
     conn.close()
     print(f"Wrote {written} row(s) to {args.db}")
+    if failed:
+        print(f"Engines that failed during this run: {failed}", file=sys.stderr)
+        return 2 if written else 1
     return 0
 
 
