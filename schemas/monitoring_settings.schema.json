@@ -2,85 +2,206 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "monitoring_settings",
   "type": "object",
-  "required": ["schedule", "questions", "runs_per_question", "variants", "engines", "budget"],
+  "required": [
+    "schedule",
+    "questions",
+    "runs_per_question",
+    "variants",
+    "engines",
+    "budget"
+  ],
   "additionalProperties": false,
   "definitions": {
-    "weekday": { "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] }
+    "weekday": {
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
+    }
   },
   "properties": {
-    "_comment": { "type": "string" },
+    "_comment": {
+      "type": "string"
+    },
     "schedule": {
       "type": "object",
-      "required": ["frequency", "weekday"],
+      "required": [
+        "frequency",
+        "weekday"
+      ],
       "additionalProperties": false,
       "properties": {
-        "_comment": { "type": "string" },
-        "frequency": { "enum": ["daily", "weekly", "biweekly", "monthly"] },
-        "weekday": { "$ref": "#/definitions/weekday" }
+        "_comment": {
+          "type": "string"
+        },
+        "frequency": {
+          "enum": [
+            "daily",
+            "weekly",
+            "biweekly",
+            "monthly"
+          ]
+        },
+        "weekday": {
+          "$ref": "#/definitions/weekday"
+        }
       }
     },
-    "questions": { "enum": ["key", "all"] },
-    "runs_per_question": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "questions": {
+      "enum": [
+        "key",
+        "all"
+      ]
+    },
+    "runs_per_question": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
     "variants": {
       "type": "object",
-      "required": ["enabled", "per_question"],
+      "required": [
+        "enabled",
+        "per_question"
+      ],
       "additionalProperties": false,
       "properties": {
-        "_comment": { "type": "string" },
-        "enabled": { "type": "boolean" },
-        "per_question": { "type": "integer", "minimum": 0, "maximum": 5 }
+        "_comment": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "per_question": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        }
       }
     },
     "engines": {
       "type": "object",
-      "required": ["claude", "gpt", "gemini"],
+      "required": [
+        "claude",
+        "gpt",
+        "gemini"
+      ],
       "additionalProperties": false,
       "properties": {
         "claude": {
           "type": "object",
-          "required": ["enabled", "model", "max_searches"],
+          "required": [
+            "enabled",
+            "model",
+            "max_searches"
+          ],
           "additionalProperties": false,
           "properties": {
-            "_comment": { "type": "string" },
-            "enabled": { "type": "boolean" },
-            "model": { "type": "string", "minLength": 1 },
-            "max_searches": { "type": "integer", "minimum": 0, "maximum": 5 }
+            "_comment": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "max_searches": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            }
           }
         },
         "gpt": {
           "type": "object",
-          "required": ["enabled", "model", "reasoning_effort"],
+          "required": [
+            "enabled",
+            "model",
+            "reasoning_effort"
+          ],
           "additionalProperties": false,
           "properties": {
-            "_comment": { "type": "string" },
-            "enabled": { "type": "boolean" },
-            "model": { "type": "string", "minLength": 1 },
-            "reasoning_effort": { "enum": ["low", "medium", "high"] }
+            "_comment": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reasoning_effort": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            }
           }
         },
         "gemini": {
           "type": "object",
-          "required": ["enabled", "model", "grounding", "free_tier"],
+          "required": [
+            "enabled",
+            "model",
+            "grounding",
+            "free_tier"
+          ],
           "additionalProperties": false,
           "properties": {
-            "_comment": { "type": "string" },
-            "enabled": { "type": "boolean" },
-            "model": { "type": "string", "minLength": 1 },
-            "grounding": { "type": "boolean" },
-            "free_tier": { "type": "boolean" }
+            "_comment": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "grounding": {
+              "type": "boolean"
+            },
+            "free_tier": {
+              "type": "boolean"
+            }
           }
         }
       }
     },
     "budget": {
       "type": "object",
-      "required": ["max_usd_per_run", "max_calls_per_run"],
+      "required": [
+        "max_usd_per_run",
+        "max_calls_per_run"
+      ],
       "additionalProperties": false,
       "properties": {
-        "_comment": { "type": "string" },
-        "max_usd_per_run": { "type": "number", "exclusiveMinimum": 0 },
-        "max_calls_per_run": { "type": "integer", "minimum": 1 }
+        "_comment": {
+          "type": "string"
+        },
+        "max_usd_per_run": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_calls_per_run": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
+    },
+    "target": {
+      "type": "string",
+      "pattern": "^(data|targets/[A-Za-z0-9_-]+)$",
+      "description": "Folder with brand/competitors/questions.json: 'data' (the bundled demo) or a real target under targets/."
     }
   }
 }

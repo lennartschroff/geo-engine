@@ -5,6 +5,7 @@
     "frequency": "weekly",
     "weekday": "monday"
   },
+  "target": "targets/geo-engine",
   "questions": "key",
   "runs_per_question": 1,
   "variants": {
