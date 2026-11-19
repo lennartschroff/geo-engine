@@ -1,0 +1,6 @@
+[
+  {"id": "geo-basics", "label_en": "GEO basics", "label_de": "GEO-Grundlagen", "keywords": ["generative engine optimization", "geo", "ai search", "ki-suche", "answer engine"]},
+  {"id": "monitoring", "label_en": "AI visibility monitoring", "label_de": "KI-Sichtbarkeit messen", "keywords": ["monitor", "track", "visibility", "sichtbarkeit", "mentions", "erwähnt", "share of voice"]},
+  {"id": "content", "label_en": "Citable content", "label_de": "Zitierfähige Inhalte", "keywords": ["citable", "cited", "zitiert", "content", "inhalte", "faq"]},
+  {"id": "tools", "label_en": "Tools & open source", "label_de": "Tools & Open Source", "keywords": ["tool", "tools", "open source", "open-source", "free", "kostenlos", "self-hosted"]}
+]

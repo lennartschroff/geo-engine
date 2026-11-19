@@ -1,0 +1,10 @@
+{
+  "_comment": "Real monitoring target: this project itself. The public demo in data/ stays on the fictional Contoso AI. domain is the GitHub Pages host, used to tell 'cited' (an answer links the project) from 'mentioned'. 'GEO Engine' is a generic phrase, so the repo path is an alias too; check flagged mentions in the answer viewer.",
+  "name": "GEO Engine",
+  "short": "GEO Engine",
+  "domain": "lennartschroff.github.io",
+  "aliases": [
+    "GEO Engine",
+    "lennartschroff/geo-engine"
+  ]
+}

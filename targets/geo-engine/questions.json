@@ -1,0 +1,159 @@
+[
+ {
+  "id": "q1",
+  "nr": 1,
+  "text": "How can I check if ChatGPT mentions my brand?",
+  "categories": [
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q2",
+  "nr": 2,
+  "text": "Open-source tools for generative engine optimization",
+  "categories": [
+   "tools",
+   "geo-basics"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q3",
+  "nr": 3,
+  "text": "Free tools to track brand visibility in AI search",
+  "categories": [
+   "tools",
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q4",
+  "nr": 4,
+  "text": "How do I make my website content citable by AI assistants?",
+  "categories": [
+   "content"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q5",
+  "nr": 5,
+  "text": "What is generative engine optimization?",
+  "categories": [
+   "geo-basics"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q6",
+  "nr": 6,
+  "text": "Best tools to monitor brand mentions in ChatGPT, Claude and Gemini",
+  "categories": [
+   "tools",
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q7",
+  "nr": 7,
+  "text": "How do I measure share of voice in AI answers?",
+  "categories": [
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q8",
+  "nr": 8,
+  "text": "Self-hosted alternative to AI visibility tracking software",
+  "categories": [
+   "tools",
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q9",
+  "nr": 9,
+  "text": "Wie prüfe ich, ob ChatGPT meine Marke erwähnt?",
+  "categories": [
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q10",
+  "nr": 10,
+  "text": "Kostenlose Tools für Generative Engine Optimization",
+  "categories": [
+   "tools",
+   "geo-basics"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q11",
+  "nr": 11,
+  "text": "Wie schreibe ich Inhalte, die von KI-Assistenten zitiert werden?",
+  "categories": [
+   "content"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q12",
+  "nr": 12,
+  "text": "Was ist Generative Engine Optimization?",
+  "categories": [
+   "geo-basics"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q13",
+  "nr": 13,
+  "text": "Open-Source-Tool, um die Sichtbarkeit einer Marke in KI-Antworten zu messen",
+  "categories": [
+   "tools",
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q14",
+  "nr": 14,
+  "text": "Wie messe ich die Sichtbarkeit meiner Marke in KI-Antworten?",
+  "categories": [
+   "monitoring"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ },
+ {
+  "id": "q15",
+  "nr": 15,
+  "text": "Wie mache ich ein GEO-Audit für die eigene Website?",
+  "categories": [
+   "content",
+   "geo-basics"
+  ],
+  "key": true,
+  "schedule": "weekly"
+ }
+]
