@@ -116,9 +116,9 @@ class TestMainPersistsPartialResultsOnCrash:
 
     def test_rows_written_before_a_crash_are_not_lost(self, isolated_root, monkeypatch, tmp_path):
         questions = [{"id": "q1", "text": "Q1", "key": True}, {"id": "q2", "text": "Q2", "key": True}]
-        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": questions)
-        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
-        monkeypatch.setattr(run_module, "load_competitor_names", lambda: ["Competitor A"])
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key", data_dir="data": questions)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda data_dir="data": ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda data_dir="data": ["Competitor A"])
 
         call_count = {"n": 0}
 
@@ -278,9 +278,9 @@ class TestMainWithSettings:
     @pytest.fixture
     def env(self, tmp_path, monkeypatch):
         questions = [{"id": "q1", "text": "Best AI consultancies", "key": True}]
-        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": questions)
-        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
-        monkeypatch.setattr(run_module, "load_competitor_names", lambda: [])
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key", data_dir="data": questions)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda data_dir="data": ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda data_dir="data": [])
         monkeypatch.setattr(run_module, "_load_dotenv", lambda: None)
         for key in run_module.API_KEY_ENV.values():
             monkeypatch.delenv(key, raising=False)
@@ -362,9 +362,10 @@ class TestKeysFlowFromDotenv:
         for key in run_module.API_KEY_ENV.values():
             monkeypatch.delenv(key, raising=False)
         (isolated_root / ".env").write_text("GEMINI_API_KEY=from-dotenv\n")
-        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": [{"id": "q1", "text": "Q one"}])
-        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
-        monkeypatch.setattr(run_module, "load_competitor_names", lambda: [])
+        one_q = [{"id": "q1", "text": "Q one"}]
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key", data_dir="data": one_q)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda data_dir="data": ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda data_dir="data": [])
         seen = {}
 
         def fake_gemini(text, cfg):
@@ -379,3 +380,34 @@ class TestKeysFlowFromDotenv:
         finally:
             os.environ.pop("GEMINI_API_KEY", None)
         assert seen["key"] == "from-dotenv"  # claude had no key and was skipped, gemini ran
+
+
+class TestTarget:
+    def test_loaders_read_the_target_folder(self, isolated_root):
+        tdir = isolated_root / "targets" / "x"
+        tdir.mkdir(parents=True)
+        (tdir / "brand.json").write_text(json.dumps({"aliases": ["Real Brand"]}))
+        (tdir / "competitors.json").write_text(json.dumps({"names": ["Rival"]}))
+        qs = [{"id": "q1", "text": "T", "key": True}, {"id": "q2", "text": "U"}]
+        (tdir / "questions.json").write_text(json.dumps(qs))
+        assert run_module.load_brand_aliases(data_dir="targets/x") == ["Real Brand"]
+        assert run_module.load_competitor_names(data_dir="targets/x") == ["Rival"]
+        assert [q["id"] for q in run_module.load_questions(None, "key", data_dir="targets/x")] == ["q1"]
+
+    def test_settings_target_is_used_and_cli_overrides_it(self, monkeypatch, tmp_path):
+        seen = []
+        one_q = [{"id": "q1", "text": "Q"}]
+        monkeypatch.setattr(run_module, "load_questions",
+                            lambda ids, scope="key", data_dir="data": seen.append(data_dir) or one_q)
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda data_dir="data": ["B"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda data_dir="data": [])
+        settings = _settings(target="targets/geo-engine")
+        path = tmp_path / "s.json"
+        path.write_text(json.dumps(settings))
+        base = ["run.py", "--dry-run", "--settings", str(path), "--engines", "claude", "--variants", "0",
+                "--db", str(tmp_path / "r.sqlite")]
+        monkeypatch.setattr(sys, "argv", base)
+        run_module.main()
+        monkeypatch.setattr(sys, "argv", base + ["--target", "data"])
+        run_module.main()
+        assert seen == ["targets/geo-engine", "data"]

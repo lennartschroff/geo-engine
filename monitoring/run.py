@@ -250,8 +250,8 @@ def detect_language(text: str) -> str:
     return "de" if GERMAN_MARKERS.search(text) else "en"
 
 
-def load_questions(question_ids: list[str] | None, scope: str = "key") -> list[dict]:
-    questions = json.loads((ROOT / "data" / "questions.json").read_text(encoding="utf-8"))
+def load_questions(question_ids: list[str] | None, scope: str = "key", data_dir: str = "data") -> list[dict]:
+    questions = json.loads((ROOT / data_dir / "questions.json").read_text(encoding="utf-8"))
     if question_ids:
         wanted = set(question_ids)
         questions = [q for q in questions if q["id"] in wanted]
@@ -260,18 +260,18 @@ def load_questions(question_ids: list[str] | None, scope: str = "key") -> list[d
     return questions
 
 
-def load_brand_aliases() -> list[str]:
-    brand = json.loads((ROOT / "data" / "brand.json").read_text(encoding="utf-8"))
+def load_brand_aliases(data_dir: str = "data") -> list[str]:
+    brand = json.loads((ROOT / data_dir / "brand.json").read_text(encoding="utf-8"))
     return brand["aliases"]
 
 
-def load_competitor_names() -> list[str]:
+def load_competitor_names(data_dir: str = "data") -> list[str]:
     """Named providers to rank the brand against (TASKS.md C5a).
 
     Reads data/competitors.json so a real deployment can maintain its own
     real competitor list without editing code -- see that file's _comment.
     """
-    competitors = json.loads((ROOT / "data" / "competitors.json").read_text(encoding="utf-8"))
+    competitors = json.loads((ROOT / data_dir / "competitors.json").read_text(encoding="utf-8"))
     return competitors["names"]
 
 
@@ -389,6 +389,7 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="Use recorded fixtures instead of real API calls.")
     ap.add_argument("--db", default=str(ROOT / "monitoring" / "runs.sqlite"), help="SQLite output path.")
     ap.add_argument("--settings", help="Settings file. Default: data/monitoring_settings.json.")
+    ap.add_argument("--target", help="Folder with brand/competitors/questions.json. Default: settings' target.")
     ap.add_argument("--questions", help="Comma-separated question ids. Default: settings' question scope.")
     ap.add_argument("--engines", help="Comma-separated engines. Default: engines enabled in settings.")
     ap.add_argument("--runs", type=int, help="Runs per prompt per engine. Default: settings.")
@@ -415,7 +416,10 @@ def main() -> int:
         n_variants = settings["variants"]["per_question"] if settings["variants"]["enabled"] else 0
     max_calls = args.max_calls if args.max_calls is not None else settings["budget"]["max_calls_per_run"]
 
-    questions = load_questions(question_ids, settings["questions"])
+    # The real target (e.g. targets/geo-engine) or the bundled demo data in data/.
+    data_dir = args.target or settings.get("target") or "data"
+    print(f"Target: {data_dir}")
+    questions = load_questions(question_ids, settings["questions"], data_dir=data_dir)
     if not questions:
         print("No matching questions found.", file=sys.stderr)
         return 1
@@ -466,8 +470,8 @@ def main() -> int:
                   f"Re-run with --yes to proceed.", file=sys.stderr)
             return 1
 
-    brand_aliases = load_brand_aliases()
-    competitor_names = load_competitor_names()
+    brand_aliases = load_brand_aliases(data_dir=data_dir)
+    competitor_names = load_competitor_names(data_dir=data_dir)
     conn = sqlite3.connect(args.db)
     ensure_schema(conn)
     written = 0
