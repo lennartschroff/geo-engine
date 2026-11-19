@@ -13,7 +13,7 @@
     "per_question": 1
   },
   "engines": {
-    "claude": { "enabled": true, "model": "claude-sonnet-5", "max_searches": 2 },
+    "claude": { "enabled": true, "model": "claude-sonnet-5", "max_searches": 1 },
     "gpt": { "enabled": false, "model": "gpt-5-mini", "reasoning_effort": "low" },
     "gemini": {
       "_comment": "grounding=false: plain generation, works on the free tier (no citations). grounding=true needs a billed Google account (429 on free tier, tested 2026-11-19).",
