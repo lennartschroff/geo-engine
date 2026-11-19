@@ -111,7 +111,10 @@ their own key in their own local `.env` (or their own repo secrets), never share
    those categories via templates (zero cost, no API key, instant) — then edit the generated
    phrasing to match how your actual customers ask.
 4. Replace `data/blocks.json` with real content blocks from your own site, papers and case
-   studies. Run `python3 scripts/audit_crawl.py --base <your site>` then
+   studies, or build them in the app: *Improve → Library → Import from your own content* takes
+   pasted text or a .txt/.md/.html file, suggests blocks (verbatim sentences: definitions,
+   figures, cases, quotes, Q&A pairs) and saves only what you accept. For Word or PDF files, run
+   `python3 scripts/extract_text.py file.docx` first (PDF needs `pip install pypdf==6.21.4`). Run `python3 scripts/audit_crawl.py --base <your site>` then
    `python3 scripts/score_pages.py` for a real website audit instead of the demo one.
 5. Run `python3 scripts/build_web_data.py` to rebuild `app/data.js`.
 6. Real monitoring: see [Run real monitoring](#run-real-monitoring) below.
