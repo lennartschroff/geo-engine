@@ -230,9 +230,10 @@ every user brings their own API key for anything that costs money, never yours.*
   generates audit findings (`own.audit`, the a1-a10-style list) yet, so Website's
   action-items section stays empty in own-brand mode even after loading page
   scores — nothing to load there until such a script exists.
-- [ ] **F4.** Revisit once C4 exists: document exactly how a new user's own `.env` keys
-  flow into `monitoring/run.py`, so "connect your own API, you're ready to go" is a
-  literal, tested instruction, not just an architectural claim.
+- [x] **F4.** README "Run real monitoring": which key per engine, what's free (Gemini
+  without grounding), local run, scheduled run with repo secrets. Tested end to end:
+  `tests/test_run.py::TestKeysFlowFromDotenv` (a key in `.env` enables that engine,
+  engines without a key are skipped).
 
 ---
 

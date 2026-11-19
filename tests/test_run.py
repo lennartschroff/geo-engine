@@ -352,3 +352,30 @@ class TestSchemaMigration:
         run_module.ensure_schema(conn)
         row = conn.execute("SELECT question_id, variant, question_text FROM runs").fetchone()
         assert row == ("q1", 0, None)
+
+
+class TestKeysFlowFromDotenv:
+    """F4: a key written to .env is what makes an engine run -- end to end
+    through main(), with the provider call mocked."""
+
+    def test_key_in_dotenv_enables_engine(self, isolated_root, monkeypatch, tmp_path):
+        for key in run_module.API_KEY_ENV.values():
+            monkeypatch.delenv(key, raising=False)
+        (isolated_root / ".env").write_text("GEMINI_API_KEY=from-dotenv\n")
+        monkeypatch.setattr(run_module, "load_questions", lambda ids, scope="key": [{"id": "q1", "text": "Q one"}])
+        monkeypatch.setattr(run_module, "load_brand_aliases", lambda: ["Brand"])
+        monkeypatch.setattr(run_module, "load_competitor_names", lambda: [])
+        seen = {}
+
+        def fake_gemini(text, cfg):
+            seen["key"] = os.environ.get("GEMINI_API_KEY")
+            return {"answer_text": "x", "cited_urls": []}
+
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "gemini", fake_gemini)
+        db = tmp_path / "r.sqlite"
+        monkeypatch.setattr(sys, "argv", ["run.py", "--engines", "claude,gemini", "--variants", "0", "--db", str(db)])
+        try:
+            assert run_module.main() == 0
+        finally:
+            os.environ.pop("GEMINI_API_KEY", None)
+        assert seen["key"] == "from-dotenv"  # claude had no key and was skipped, gemini ran
