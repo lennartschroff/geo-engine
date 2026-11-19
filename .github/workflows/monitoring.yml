@@ -1,0 +1,106 @@
+# Scheduled monitoring (TASKS.md C6).
+#
+# Cadence, runs, variants, engines and budget all live in
+# data/monitoring_settings.json -- edit that file, not this one. GitHub's
+# cron can't read a file, so this wakes up daily and monitoring/schedule.py
+# decides whether a run is due; on other days the job ends after a few
+# seconds without installing anything or calling any API.
+#
+# API keys come from encrypted repository secrets (Settings -> Secrets and
+# variables -> Actions): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY.
+# An engine whose secret is missing is skipped, not an error.
+#
+# Results are NOT committed to the repo (keeps you the sole commit author and
+# keeps the database out of git, per CLAUDE.md). Each run restores the
+# previous run's database artifact, appends to it, and uploads it again as
+# "monitoring-results" (runs.sqlite + monitoring_export.json). Download it
+# from the run page and load monitoring_export.json in the app
+# (Monitor -> Sources -> "Load monitoring results").
+name: Scheduled monitoring
+on:
+  schedule:
+    - cron: "0 5 * * *" # daily 05:00 UTC = 06:00 Berlin (07:00 in summer)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run now even if the schedule says it isn't due"
+        type: boolean
+        default: true
+permissions:
+  contents: read
+  actions: read # to download the previous run's database artifact
+concurrency:
+  group: monitoring
+  cancel-in-progress: false
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Is a run due?
+        id: due
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            python monitoring/schedule.py | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.due.outputs.due == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Restore previous results database
+        if: steps.due.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Non-due days also finish as "success" but upload nothing, so look
+          # back far enough to cover a monthly cadence.
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow monitoring.yml --status success \
+                        --limit 60 --json databaseId -q '.[].databaseId'); do
+            if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name monitoring-results --dir prev 2>/dev/null; then
+              cp prev/runs.sqlite monitoring/runs.sqlite
+              echo "Restored database from run $id"
+              exit 0
+            fi
+          done
+          echo "No previous database found -- starting a new one."
+
+      - name: Run monitoring
+        if: steps.due.outputs.due == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Budget caps from the settings file still apply; --yes only skips
+          # the interactive confirmation, which a scheduled job can't answer.
+          set +e
+          python monitoring/run.py --yes
+          code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning::Some engines failed this run; results from the others were saved."
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Export for the app
+        if: always() && steps.due.outputs.due == 'true' && hashFiles('monitoring/runs.sqlite') != ''
+        run: python scripts/export_monitoring.py
+
+      - name: Upload results
+        if: always() && steps.due.outputs.due == 'true' && hashFiles('monitoring/runs.sqlite') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-results
+          path: |
+            monitoring/runs.sqlite
+            monitoring/monitoring_export.json
+          retention-days: 90
+          if-no-files-found: warn
