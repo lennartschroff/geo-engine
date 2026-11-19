@@ -19,8 +19,6 @@ When people ask ChatGPT, Claude or Gemini *"Which agencies are good at X?"*, the
 | **Library** | Reusable, citable content blocks (statements, definitions, figures, cases, quotes, FAQs) tagged by topic |
 | **Write** | Pick a gap, drag blocks into a draft and get a live **GEO score** (0–100) with concrete tips |
 
-*(Screenshots: `docs/overview.png` / `docs/studio.png` are from an earlier build and no longer match the current demo brand or layout — open the live demo above, or regenerate them locally and drop the new files in `docs/`.)*
-
 ### The GEO score
 
 Each draft is checked against seven criteria that make content more likely to be picked up and cited by LLMs:
