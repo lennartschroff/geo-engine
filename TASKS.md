@@ -11,25 +11,26 @@ how reversible / how much it touches running behavior.
 
 ## Next session — pick up here
 
-Left off 2026-11-19 after wiring the real Gemini engine (C4b, committed and pushed —
-`a51bef7`). In priority order:
+Left off 2026-11-19. C5a done (`45ca45e`): `COMPETITOR_NAMES` moved to
+`data/competitors.json`, schema-validated, cross-checked against brand aliases.
+Same pass also fixed a real bug found by audit: `run.py` only committed to
+SQLite once at the end of a run and only warned (didn't exclude) engines that
+still raise `NotImplementedError` — so a real run could pay for `claude` calls
+and then lose them all when `gpt` crashed the process. Now commits per row and
+drops unimplemented engines before the cost estimate. In priority order:
 
-1. **C5a — real competitor list.** `COMPETITOR_NAMES` in `monitoring/run.py` is still
-   the fictional demo placeholder (`"Competitor A".."D"`). Mention detection's
-   "mentioned/not mentioned" is correct for a real brand, but "position among
-   competitors" is meaningless until this is a real list. Cheap, no API cost.
-2. **C6 — weekly schedule.** GitHub Action on a cron, API keys as encrypted repo
+1. **C6 — weekly schedule.** GitHub Action on a cron, API keys as encrypted repo
    secrets, so monitoring runs on its own instead of only when triggered by hand.
    **Needs your explicit go-ahead on cadence/cost before I add it** — recurring
    real spend.
-3. **C4b follow-up decision needed from you:** Gemini's Google Search grounding
+2. **C4b follow-up decision needed from you:** Gemini's Google Search grounding
    returned a billing-gated 429 on your free-tier key (confirmed twice, see C4b
    notes below) — plain generation works, grounded citations don't. Decide: attach
    billing to unlock grounding, or leave Gemini on plain-generation-only / skip it
    in real runs for now. Nothing to build either way until you decide.
-4. **`gpt` engine** — not started. Same pattern as `call_claude()`/`call_gemini()`,
+3. **`gpt` engine** — not started. Same pattern as `call_claude()`/`call_gemini()`,
    same cost-estimate gate before first real spend.
-5. Explicitly declined for now: connecting Gemini to the webcrawler/topic-suggestion
+4. Explicitly declined for now: connecting Gemini to the webcrawler/topic-suggestion
    feature — not worth building since it wouldn't add anything the free (BM25 /
    heading-heuristic) path doesn't already cover.
 
@@ -149,11 +150,15 @@ each task below gets its own PR and its own review before running against real k
   SQLite → `data/monitoring.json`, point the app at it instead of
   `demo_monitoring.json`. **Gate: you review the generated data before it
   replaces the demo file.** — *S, medium — changes what the live demo shows*
-- [ ] **C5a.** `COMPETITOR_NAMES` in `run.py` is still the fictional placeholder
-  list (`"Competitor A".."D"`) from the demo data. For a real brand, "mentioned/
-  not mentioned" is correct, but "position" (rank among named providers) will
-  be meaningless since none of the real competitor names in a real answer will
-  match these placeholders. No maintained real competitor list exists yet.
+- [x] **C5a.** `COMPETITOR_NAMES` moved out of `run.py` into `data/competitors.json`
+  (schema-validated, `validate_data.py` rejects a name that collides with a brand
+  alias). Still ships with the fictional demo placeholder names — replace them with
+  your real brand's real competitors before a real run; nothing fabricated here,
+  just made configurable instead of hardcoded. Found and fixed along the way: a real
+  run only committed to SQLite once at the very end and didn't exclude engines that
+  still raise `NotImplementedError`, so a real run could pay for `claude` calls and
+  then lose all of them when `gpt` crashed the process. Now commits per row and
+  drops unimplemented engines before the cost estimate.
 - [ ] **C6.** Weekly schedule: GitHub Action with API keys as encrypted repo secrets.
   **Gate: you add the secrets yourself in Settings; I never see the keys.** — *M,
   medium — recurring spend, needs your explicit go-ahead on the cadence/cost*
