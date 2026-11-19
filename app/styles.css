@@ -23,6 +23,18 @@
   --accent-soft: #C9D6F7;
   --warn: #C2410C;
   --amber: #B45309;
+  --accent-strong: #1A3A9C;
+  --warn-strong: #9A3412;
+  --warn-soft: #FBEBDD;
+  --soft-2: #F1EFEA;
+  --border-strong: #CFCCC4;
+  /* block type labels */
+  --type-statement: #1A3A9C;
+  --type-definition: #3A3D45;
+  --type-figure: #16181D;
+  --type-case: #9A3412;
+  --type-quote: #5B2A86;
+  --type-faq: #1F5C55;
   /* type */
   --sans: 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;

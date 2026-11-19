@@ -52,11 +52,12 @@
 
   // ---------- Shared helpers & event wiring (used by every screen) ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // faint was #9A9DA5 (2.71:1 on white, failed WCAG AA). It's used for text
-  // (dashes, "too early" labels), so it now equals muted (5.0:1 on white,
-  // 4.7:1 on the --soft card background). graphic (#8A877F, 3.6:1) is for
-  // non-text marks like the "not run" dot outline, which need 3:1 (WCAG 1.4.11).
-  const C = { fg: '#16181D', muted: '#6B6F78', faint: '#6B6F78', graphic: '#8A877F', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
+  // Colours are CSS custom properties defined in styles.css, so the whole
+  // look (including these inline styles) is set in one place.
+  const C = {
+    fg: 'var(--fg)', muted: 'var(--muted)', faint: 'var(--faint)', graphic: 'var(--graphic)',
+    accent: 'var(--accent)', warn: 'var(--warn)', amber: 'var(--amber)', border: 'var(--border-strong)',
+  };
   // Small line icons (stroke="currentColor", inherits color from surrounding
   // text) -- used instead of emoji throughout, matching the rest of the app's
   // monochrome, minimal visual language.
@@ -273,7 +274,7 @@
     const GROUPS = { monitor: ['questions', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
-    const TYPE_FG = { statement: '#1A3A9C', definition: '#3A3D45', figure: '#16181D', case: '#9A3412', quote: '#5B2A86', faq: '#1F5C55' };
+    const TYPE_FG = { statement: 'var(--type-statement)', definition: 'var(--type-definition)', figure: 'var(--type-figure)', case: 'var(--type-case)', quote: 'var(--type-quote)', faq: 'var(--type-faq)' };
     // Namespaced per mode so switching demo <-> own brand never mixes up
     // activations/custom questions/drafts/audit checkmarks between the two.
     const STORE_KEY = 'geo-engine:v1:' + mode;
@@ -400,9 +401,9 @@
       const l = L();
       const p = st.p ? '#' + st.p : '';
       const m = {
-        cited: [C.accent, C.accent, l.dot.cited, p], mentioned: ['#fff', C.accent, l.dot.mentioned, p],
-        absent: [C.warn, C.warn, l.dot.absent, ''], notrun: ['#fff', C.graphic, l.dot.notrun, ''],
-        inactive: ['#fff', '#E6E4DE', l.dot.inactive, '']
+        cited: [C.accent, C.accent, l.dot.cited, p], mentioned: ['var(--bg)', C.accent, l.dot.mentioned, p],
+        absent: [C.warn, C.warn, l.dot.absent, ''], notrun: ['var(--bg)', C.graphic, l.dot.notrun, ''],
+        inactive: ['var(--bg)', 'var(--line)', l.dot.inactive, '']
       }[st.k];
       return '<span class="cell"><span class="dot" title="' + esc(m[2]) + '" style="background:' + m[0] + ';border-color:' + m[1] + '"></span>' +
         '<span class="mono small muted">' + esc(m[3]) + '</span><span class="sr">' + esc(m[2]) + '</span></span>';
@@ -436,7 +437,7 @@
 
     function viewOverview(ctx) {
       const l = L();
-      const kpis = ctx.kpis.map(k => '<div class="kpi"><span style="color:#3A3D45">' + k.name + '</span>' + track(k.pct) + '<span class="mono" style="text-align:right">' + k.pct + '%</span></div>').join('');
+      const kpis = ctx.kpis.map(k => '<div class="kpi"><span style="color:var(--fg2)">' + k.name + '</span>' + track(k.pct) + '<span class="mono" style="text-align:right">' + k.pct + '%</span></div>').join('');
       const gaps = ctx.gapQs.slice().sort((a, b) => (b.key - a.key) || (absentCount(b) - absentCount(a))).slice(0, 5).map(q =>
         '<div class="gap"><div><span>' + esc(q.text) + '</span><span class="small muted">' + esc((q.key ? l.keyQ + ' · ' : '') + catLabels(q.tags)) + '</span></div>' +
         '<span class="s13 warn" style="white-space:nowrap">' + esc(l.missingOf(absentCount(q))) + '</span>' +
@@ -486,16 +487,16 @@
         '<label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(l.newQPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(); }) + '>' +
         '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + opts + '</select>' +
         '<button class="btn" ' + click(addQuestion) + '>' + esc(l.save) + '</button></div>' +
-        '<span class="small" style="color:' + (state.formMsg ? '#1A3A9C' : C.muted) + '">' + esc(state.formMsg ? l.msg[state.formMsg] : l.formHint) + '</span></div>' +
+        '<span class="small" style="color:' + (state.formMsg ? 'var(--accent-strong)' : C.muted) + '">' + esc(state.formMsg ? l.msg[state.formMsg] : l.formHint) + '</span></div>' +
         '<div class="subtabs"><div style="display:flex;flex-wrap:wrap;gap:4px">' + scopes + '</div>' +
-        '<label class="s14" style="display:flex;align-items:center;gap:8px;color:#3A3D45;min-height:44px;cursor:pointer"><input type="checkbox"' + (state.onlyGaps ? ' checked' : '') + ' ' + attr('change', () => set({ onlyGaps: !state.onlyGaps })) + '><span>' + esc(l.onlyGaps) + '</span></label></div>' +
+        '<label class="s14" style="display:flex;align-items:center;gap:8px;color:var(--fg2);min-height:44px;cursor:pointer"><input type="checkbox"' + (state.onlyGaps ? ' checked' : '') + ' ' + attr('change', () => set({ onlyGaps: !state.onlyGaps })) + '><span>' + esc(l.onlyGaps) + '</span></label></div>' +
         '<div class="scroll"><div style="min-width:760px"><div class="qgrid h"><span></span><span></span><span>Claude</span><span>ChatGPT</span><span>Gemini</span><span></span></div>' +
         (rows.length ? body : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
         '<div class="legend">' +
         '<span><span class="dot" style="background:' + C.accent + ';border-color:' + C.accent + '"></span>' + esc(l.dot.cited) + '</span>' +
-        '<span><span class="dot" style="background:#fff;border-color:' + C.accent + '"></span>' + esc(l.dot.mentioned) + '</span>' +
+        '<span><span class="dot" style="background:var(--bg);border-color:' + C.accent + '"></span>' + esc(l.dot.mentioned) + '</span>' +
         '<span><span class="dot" style="background:' + C.warn + ';border-color:' + C.warn + '"></span>' + esc(l.dot.absent) + '</span>' +
-        '<span><span class="dot" style="background:#fff;border-color:' + C.graphic + '"></span>' + esc(l.noData) + '</span>' +
+        '<span><span class="dot" style="background:var(--bg);border-color:' + C.graphic + '"></span>' + esc(l.noData) + '</span>' +
         '<span>' + esc(l.legendNote) + '</span></div></section>';
     }
 
@@ -567,14 +568,14 @@
       const rows = S.filter(c => state.srcFilter === 'all' || c.present === false).map(c => {
         const col = c.present === true ? C.accent : c.present === false ? C.warn : null;
         return '<div class="row"><div class="sgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>' + esc(c.name) + '</span><span class="small muted">' + esc(l.srcMeta(c.qs)) + '</span></div>' +
-          '<span class="s13" style="color:#3A3D45">' + esc(l.kinds[c.kind]) + '</span>' +
+          '<span class="s13" style="color:var(--fg2)">' + esc(l.kinds[c.kind]) + '</span>' +
           '<div style="display:flex;align-items:center;gap:10px">' + track(pct(c.cites, max), C.fg) + '<span class="mono s13" style="width:24px;text-align:right">' + c.cites + '</span></div>' +
-          '<span class="s13" style="display:flex;align-items:center;gap:8px;color:' + (c.present === false ? C.warn : '#3A3D45') + '"><span class="dot" style="background:' + (col || '#fff') + ';border-color:' + (col || C.border) + '"></span>' + esc(c.present === true ? l.yes : c.present === false ? l.no : l.na) + '</span>' +
+          '<span class="s13" style="display:flex;align-items:center;gap:8px;color:' + (c.present === false ? C.warn : 'var(--fg2)') + '"><span class="dot" style="background:' + (col || 'var(--bg)') + ';border-color:' + (col || C.border) + '"></span>' + esc(c.present === true ? l.yes : c.present === false ? l.no : l.na) + '</span>' +
           '<span class="s14" style="color:' + (c.present === false ? C.fg : C.muted) + ';font-weight:' + (c.present === false ? 500 : 400) + '">' + esc(l.acts[c.act]) + '</span></div></div>';
       }).join('');
       return '<section><div class="head"><h1>' + esc(l.tabs.sources) + '</h1><p>' + esc(l.srcSub) + '</p></div>' +
         '<div class="stats">' + stat(S.length, l.srcStatTotal) + stat(S.filter(c => c.present === true).length, l.srcStatYes, C.accent) + stat(S.filter(c => c.present === false).length, l.srcStatTargets, C.warn) + '</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + tabBtn(l.srcAll, state.srcFilter === 'all', () => set({ srcFilter: 'all' })) + tabBtn(l.srcOnlyTargets, state.srcFilter === 'targets', () => set({ srcFilter: 'targets' })) + '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)">' + tabBtn(l.srcAll, state.srcFilter === 'all', () => set({ srcFilter: 'all' })) + tabBtn(l.srcOnlyTargets, state.srcFilter === 'targets', () => set({ srcFilter: 'targets' })) + '</div>' +
         '<div class="scroll"><div style="min-width:820px"><div class="sgrid small muted" style="padding:0 0 8px"><span>' + esc(l.colSource) + '</span><span>' + esc(l.colType) + '</span><span>' + esc(l.colCites) + '</span><span>' + esc(l.colPresent) + '</span><span>' + esc(l.colNext) + '</span></div>' +
         (S.length ? rows : mode === 'own' ? loadMonitoringCard() : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
         sovSection() +
@@ -619,19 +620,19 @@
 
     function viewWebsite() {
       const l = L(); const A = D.audit; const P = D.pages; const meta = D.demo.audit_meta;
-      const prioCol = { high: ['#FBEBDD', '#9A3412'], mid: ['#F1EFEA', '#3A3D45'], low: ['#FFFFFF', C.muted] };
+      const prioCol = { high: ['var(--warn-soft)', 'var(--warn-strong)'], mid: ['var(--soft-2)', 'var(--fg2)'], low: ['var(--bg)', C.muted] };
       const rows = A.map(a => {
         const done = !!state.auditDone[a.id]; const t = a[state.lang];
         return '<div class="row agrid" style="opacity:' + (done ? .5 : 1) + '">' +
           '<input type="checkbox"' + (done ? ' checked' : '') + ' aria-label="' + esc(l.doneAria + t[0]) + '" style="margin-top:3px" ' + attr('change', () => { const m = Object.assign({}, state.auditDone); m[a.id] = !done; set({ auditDone: m }); }) + '>' +
-          '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-weight:500;text-decoration:' + (done ? 'line-through' : 'none') + '">' + esc(t[0]) + '</span><span class="s14" style="color:#3A3D45">' + esc(t[1]) + '</span><span class="s14"><b style="font-weight:600">' + esc(l.todo) + ' </b>' + esc(t[2]) + '</span></div>' +
+          '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-weight:500;text-decoration:' + (done ? 'line-through' : 'none') + '">' + esc(t[0]) + '</span><span class="s14" style="color:var(--fg2)">' + esc(t[1]) + '</span><span class="s14"><b style="font-weight:600">' + esc(l.todo) + ' </b>' + esc(t[2]) + '</span></div>' +
           '<div class="small" style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="badge" style="background:' + prioCol[a.priority][0] + ';color:' + prioCol[a.priority][1] + '">' + esc(l.prio[a.priority]) + '</span><span class="muted">' + esc(l.effort[a.effort]) + '</span></div></div>';
       }).join('');
       const pages = P.map(g => {
         const col = g.score < 50 ? C.warn : C.accent;
         return '<div class="row pgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>' + esc(g[state.lang]) + '</span><span class="small muted" style="overflow-wrap:anywhere">' + esc(BRAND.domain + g.path) + '</span></div>' +
           '<div style="display:flex;align-items:center;gap:10px;padding-top:4px">' + track(g.score, col) + '<span class="mono s13" style="width:26px;text-align:right;color:' + col + '">' + g.score + '</span></div>' +
-          '<span class="s13" style="color:#3A3D45">' + esc(g.missing.map(m => l.miss[m]).join(' · ')) + '</span></div>';
+          '<span class="s13" style="color:var(--fg2)">' + esc(g.missing.map(m => l.miss[m]).join(' · ')) + '</span></div>';
       }).join('');
       const avg = P.length ? Math.round(P.reduce((x, g) => x + g.score, 0) / P.length) : 0;
       return '<section style="gap:40px"><div class="head"><h1>' + esc(l.webTitle) + '</h1><p>' + esc(l.webSub(meta.date, meta.pages, meta.posts)) + '</p></div>' +
@@ -665,14 +666,14 @@
       const noise = CI && CI.length > 1 && CORE.intervalsOverlap(CI[CI.length - 2], CI[CI.length - 1]);
       const bars = trend.map((v, i) => {
         const piece = pieces.find(p => p.week === i + 1);
-        return '<div>' + (piece ? '<span class="mark">' + piece.mark + '</span>' : '') + '<span class="mono muted" style="font-size:11px">' + v + '%</span><div class="col" style="position:relative;height:' + Math.round(v / yMax * 160) + 'px;background:' + (i === trend.length - 1 ? C.accent : '#C9D6F7') + '">' +
+        return '<div>' + (piece ? '<span class="mark">' + piece.mark + '</span>' : '') + '<span class="mono muted" style="font-size:11px">' + v + '%</span><div class="col" style="position:relative;height:' + Math.round(v / yMax * 160) + 'px;background:' + (i === trend.length - 1 ? C.accent : 'var(--accent-soft)') + '">' +
           (CI ? '<span class="ci" style="bottom:' + Math.round((CI[i].lo - v) / yMax * 160) + 'px;height:' + Math.max(1, Math.round((CI[i].hi - CI[i].lo) / yMax * 160)) + 'px"></span>' : '') + '</div></div>';
       }).join('');
       const rows = pieces.map(p => {
         const ago = trend.length - p.week; const early = ago < 4;
         const qs = p.qs.map(id => { const q = QUESTIONS.find(x => x.id === id); return q ? q.text : id; }).join(' · ');
         return '<div class="row igrid"><span class="mark">' + p.mark + '</span><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>' + esc(p[state.lang]) + '</span><span class="small muted">' + esc(l.pieceMeta(l.ptypes[p.type], ago)) + '</span></div>' +
-          '<span class="s13" style="color:#3A3D45">' + esc(qs) + '</span><span class="mono s14">' + p.before + '% → ' + p.after + '%</span>' +
+          '<span class="s13" style="color:var(--fg2)">' + esc(qs) + '</span><span class="mono s14">' + p.before + '% → ' + p.after + '%</span>' +
           '<span class="s14" style="font-weight:600;color:' + (early ? C.faint : C.accent) + '">' + esc(early ? l.tooEarly : l.pp(p.after - p.before)) + '</span></div>';
       }).join('');
       return '<section style="gap:40px"><div class="head"><h1>' + esc(l.tabs.impact) + '</h1><p>' + esc(l.impSub) + '</p></div>' +
@@ -684,7 +685,7 @@
     }
 
     function placeholderBadge() {
-      return '<span class="badge" style="background:#FBEBDD;color:#9A3412">' + esc(L().closeNow) + '</span>';
+      return '<span class="badge" style="background:var(--warn-soft);color:var(--warn-strong)">' + esc(L().closeNow) + '</span>';
     }
 
     function libraryRow(o) {
@@ -722,9 +723,9 @@
         '<label for="newblocktext" class="sr">' + esc(l.blockTextLabel) + '</label><textarea id="newblocktext" rows="2" style="min-height:44px;padding:10px 14px;border:1px solid var(--input);border-radius:6px;font:inherit;resize:vertical" placeholder="' + esc(l.blockTextPh) + '" ' + attr('input', e => { state.newBlockText = e.target.value; }) + '>' + esc(state.newBlockText) + '</textarea>' +
         '<div style="display:flex;flex-direction:column;gap:6px"><span class="s13 muted">' + esc(l.blockCatLabel) + '</span><div style="display:flex;flex-wrap:wrap;gap:6px">' + catPills + '</div></div>' +
         '<button class="btn" style="align-self:flex-start" ' + click(addBlock) + '>' + esc(l.saveBlock) + '</button>' +
-        '<span class="small" style="color:' + (state.blockMsg ? '#1A3A9C' : C.muted) + '">' + esc(state.blockMsg ? l.msg[state.blockMsg] : l.blockFormHint) + '</span></div>' +
+        '<span class="small" style="color:' + (state.blockMsg ? 'var(--accent-strong)' : C.muted) + '">' + esc(state.blockMsg ? l.msg[state.blockMsg] : l.blockFormHint) + '</span></div>' +
         importCard() +
-        '<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
+        '<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
         (needsContent.length ? '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px;color:' + C.warn + '">' + esc(l.libNeedsContent) + ' (' + needsContent.length + ')</h2>' + needsContent.map(libraryRow).join('') + '</div>' : '') +
         '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(state.libCat === 'all' ? l.libReady : l.libRec(catLabel(state.libCat))) + '</h2>' +
         (ready.length ? ready.map(libraryRow).join('') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></section>';
@@ -797,7 +798,7 @@
         '<button class="btn" ' + click(suggestBlocks) + '>' + esc(l.importSuggest) + '</button>' +
         '<label for="import-file" class="btn plain" style="cursor:pointer">' + esc(l.importFile) + '</label>' +
         '<input id="import-file" type="file" accept=".txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html" class="sr" ' + attr('change', loadImportFile) + '></div>' +
-        '<span class="small" role="status" style="color:' + (state.importMsg && state.importMsg !== 'noCat' && state.importMsg !== 'none' && state.importMsg !== 'short' ? '#1A3A9C' : C.muted) + '">' + esc(msg) + '</span>' +
+        '<span class="small" role="status" style="color:' + (state.importMsg && state.importMsg !== 'noCat' && state.importMsg !== 'none' && state.importMsg !== 'short' ? 'var(--accent-strong)' : C.muted) + '">' + esc(msg) + '</span>' +
         (rows ? '<div class="cands"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="s13 muted" style="flex:1 1 200px">' + esc(l.importReview(state.importSource)) + '</span>' +
           '<button class="btn sm" ' + (ready.length ? '' : 'disabled ') + click(() => acceptCands(ready)) + '>' + esc(l.importAcceptAll(ready.length)) + '</button>' +
           '<button class="btn sm plain" ' + click(() => set({ importCands: [], importMsg: '' })) + '>' + esc(l.importDiscardAll) + '</button></div>' + rows + '</div>' : '') +
@@ -832,7 +833,7 @@
         '<div class="card"><div style="display:flex;flex-direction:column;gap:4px"><span class="s13" style="color:' + (mode_ === 'nomatch' ? C.warn : C.muted) + '">' + esc(mode_ === 'match' ? l.kMatch : mode_ === 'nomatch' ? l.kNo : l.kDefault) + '</span><span style="font-size:24px;font-weight:500">' + esc(catLabel(pick.c.id)) + '</span></div>' +
         '<div style="display:flex;flex-direction:column;gap:4px"><span class="s13" style="font-weight:600">' + esc(l.why) + '</span><span>' + esc(reason) + '</span></div>' +
         (qs ? '<div style="display:flex;flex-direction:column"><span class="s13" style="font-weight:600;margin-bottom:6px">' + esc(l.closesGaps) + '</span>' + qs + '</div>' : '') +
-        '<span class="s14" style="color:#3A3D45">' + esc(l.inventory(st.blocks.length, st.missing.map(m => l.types[m]))) + '</span>' +
+        '<span class="s14" style="color:var(--fg2)">' + esc(l.inventory(st.blocks.length, st.missing.map(m => l.types[m]))) + '</span>' +
         '<button class="btn" style="align-self:flex-start" ' + click(() => openDraft(firstQ ? firstQ.id : state.selectedQ)) + '>' + esc(l.startDraft) + '</button></div></section>';
     }
 
@@ -906,7 +907,7 @@
           '<button class="btn sm plain" ' + click(() => copyHtml(draftBlocks, sel.text)) + '>' + esc(state.copied === 'html' ? l.copied : l.copyHtml) + '</button>' +
           '</div>' : '') +
         '</div></div>' +
-        '<div class="col-score"><div style="padding-bottom:10px;border-bottom:1px solid #E6E4DE"><h2 style="font-size:15px">' + esc(l.scoreTitle) + '</h2></div>' +
+        '<div class="col-score"><div style="padding-bottom:10px;border-bottom:1px solid var(--line)"><h2 style="font-size:15px">' + esc(l.scoreTitle) + '</h2></div>' +
         '<div style="display:flex;align-items:baseline;gap:8px"><span class="score" style="color:' + scoreColor + '">' + sc.score + '</span><span class="muted">/ 100</span></div>' +
         '<span style="font-weight:500;color:' + scoreColor + '">' + esc(verdict) + '</span><div style="display:flex;flex-direction:column;gap:10px">' + crit + '</div>' +
         (ph ? '<span class="s13 warn">' + esc(l.ph(ph)) + '</span>' : '') + '</div></div>' +
