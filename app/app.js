@@ -214,6 +214,9 @@
   function boot() {
     const D = mode === 'own' ? own : window.GEO_DATA;
     const BRAND = D.brand;
+    const ANSWERS = (D.demo && D.demo.answers) || {};
+    const COMPETITORS = (D.demo && D.demo.competitors) || [];
+    const BRAND_NAMES = (BRAND.aliases && BRAND.aliases.length ? BRAND.aliases : [BRAND.name || BRAND.short]).filter(Boolean);
     const STR = window.makeStrings(BRAND.short);
     const ENGINES = [{ id: 'claude', name: 'Claude' }, { id: 'gpt', name: 'ChatGPT' }, { id: 'gemini', name: 'Gemini' }];
     const TYPES = ['statement', 'definition', 'figure', 'case', 'quote', 'faq'];
@@ -253,7 +256,7 @@
     // ---------- State ----------
     const saved = load();
     const state = Object.assign({
-      lang: 'en', tab: 'overview', scope: 'key', onlyGaps: false, srcFilter: 'all',
+      lang: 'en', tab: 'overview', scope: 'key', onlyGaps: false, srcFilter: 'all', openAnswers: null,
       libCat: 'all', libType: 'all', writeStep: 1, allBlocks: false, selectedQ: DEFAULT_Q,
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
       newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '', pagesMsg: '',
@@ -280,7 +283,10 @@
 
     // ---------- Domain logic ----------
     const L = () => STR[state.lang];
-    const catLabel = id => L().cats[id] || id;
+    // Labels come from categories.json (label_en/label_de). The i18n cats map
+    // only covered an older demo dataset, so most topics fell back to their raw id.
+    const CAT_BY_ID = Object.fromEntries(D.categories.map(c => [c.id, c]));
+    const catLabel = id => { const c = CAT_BY_ID[id]; return (c && (state.lang === 'de' ? c.label_de : c.label_en)) || L().cats[id] || id; };
     const catLabels = tags => tags.map(catLabel).join(' · ');
     const blockText = b => state.lang === 'de' ? b.de : b.en;
     const allQ = () => QUESTIONS.concat(state.custom);
@@ -418,12 +424,16 @@
         else if (!hasData) { label = l.actWait; fn = null; cls = 'ghost'; }
         else { label = l.actExpand; fn = () => openDraft(q.id); cls = 'plain'; }
         const meta = (q.key ? l.metaKey : q.custom ? l.metaCustom : l.metaManual) + ' · ' + catLabels(q.tags) + (q.r && q.comp ? ' · ' + l.comp + q.comp : '');
+        const ans = ANSWERS[q.id] || [];
+        const open = state.openAnswers === q.id && ans.length > 0;
+        const ansBtn = ans.length ? '<button id="ansbtn-' + esc(q.id) + '" class="link small" style="align-self:flex-start" aria-expanded="' + open + '" aria-controls="ans-' + esc(q.id) + '" ' +
+          click(() => set({ openAnswers: open ? null : q.id })) + '>' + esc(open ? l.hideAnswers : l.showAnswers(ans.length)) + '</button>' : '';
         return '<div class="row"><div class="qgrid">' +
           '<input type="checkbox"' + (act ? ' checked' : '') + ' aria-label="' + esc((act ? l.ariaOff : l.ariaOn) + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
-          '<div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="color:' + (act ? C.fg : '#8A8E98') + '">' + esc(q.text) + '</span><span class="small muted">' + esc(meta) + '</span></div>' +
+          '<div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="color:' + (act ? C.fg : C.muted) + '">' + esc(q.text) + '</span><span class="small muted">' + esc(meta) + '</span>' + ansBtn + '</div>' +
           ENGINES.map(e => dot(status(q, e.id))).join('') +
           '<div style="display:flex;justify-content:flex-end"><button class="btn sm ' + cls + '"' + (fn ? ' ' + click(fn) : ' disabled') + '>' + esc(label) + '</button></div>' +
-          '</div></div>';
+          '</div>' + (open ? answerPanel(q, ans) : '') + '</div>';
       }).join('');
       return '<section><div class="head"><h1>' + esc(l.tabs.questions) + '</h1><p>' + esc(l.questionsSub) + '</p></div>' +
         '<div style="display:flex;flex-direction:column;gap:8px"><div class="form">' +
@@ -439,8 +449,32 @@
         '<span><span class="dot" style="background:' + C.accent + ';border-color:' + C.accent + '"></span>' + esc(l.dot.cited) + '</span>' +
         '<span><span class="dot" style="background:#fff;border-color:' + C.accent + '"></span>' + esc(l.dot.mentioned) + '</span>' +
         '<span><span class="dot" style="background:' + C.warn + ';border-color:' + C.warn + '"></span>' + esc(l.dot.absent) + '</span>' +
-        '<span><span class="dot" style="background:#fff;border-color:' + C.border + '"></span>' + esc(l.noData) + '</span>' +
+        '<span><span class="dot" style="background:#fff;border-color:' + C.graphic + '"></span>' + esc(l.noData) + '</span>' +
         '<span>' + esc(l.legendNote) + '</span></div></section>';
+    }
+
+    // ---------- Answer viewer (TASKS.md D1) ----------
+    function answerPanel(q, ans) {
+      const l = L();
+      const engineName = id => (ENGINES.find(e => e.id === id) || { name: id }).name;
+      const items = ans.map(a =>
+        '<div class="answer"><div class="small muted">' + esc(engineName(a.engine)) + ' · ' + esc(a.model === 'demo' ? l.answerDemo : a.model + ' · ' + a.date) + '</div>' +
+        (a.variant > 0 && a.prompt ? '<div class="small" style="color:var(--fg2)">' + esc(l.answerVariant) + ': ' + esc(a.prompt) + '</div>' : '') +
+        '<p>' + CORE.highlightMentions(a.text, BRAND_NAMES, COMPETITORS) + '</p></div>').join('');
+      return '<div class="answers" id="ans-' + esc(q.id) + '">' +
+        '<div class="small muted"><mark class="m-brand">' + esc(l.answerKeyBrand) + '</mark> <mark class="m-comp">' + esc(l.answerKeyComp) + '</mark></div>' + items + '</div>';
+    }
+
+    // ---------- Share of voice (TASKS.md D2) ----------
+    function sovSection() {
+      if (!Object.keys(ANSWERS).length || !COMPETITORS.length) return '';
+      const l = L();
+      const rows = CORE.shareOfVoice(ANSWERS, QUESTIONS, CATS.map(c => c.id), BRAND_NAMES, COMPETITORS)
+        .filter(r => r.answers > 0)
+        .map(r => '<div class="catbar"><span>' + esc(catLabel(r.cat)) + '<span class="small muted" style="display:block">' + esc(l.sovAnswers(r.answers)) +
+          (r.top.length ? ' · ' + esc(l.sovTop + r.top[0].name) : '') + '</span></span>' +
+          track(r.share || 0, C.accent) + '<span class="mono s13" style="text-align:right">' + (r.share === null ? '–' : r.share + '%') + '</span></div>').join('');
+      return '<div style="display:flex;flex-direction:column;gap:12px"><h2>' + esc(l.sovTitle) + '</h2><span class="s13 muted">' + esc(l.sovSub) + '</span>' + rows + '</div>';
     }
 
     function toggleActive(q) { const a = Object.assign({}, state.active); a[q.id] = !isActive(q); set({ active: a }); }
@@ -469,7 +503,10 @@
           own.demo = {
             results: parsed.results,
             cited_sources: Array.isArray(parsed.cited_sources) ? parsed.cited_sources : [],
-            trend: own.demo.trend,
+            trend: Array.isArray(parsed.trend) && parsed.trend.length ? parsed.trend : own.demo.trend,
+            trend_ci: Array.isArray(parsed.trend_ci) ? parsed.trend_ci : [],
+            answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
+            competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
             pieces: own.demo.pieces,
             audit_meta: parsed.audit_meta || own.demo.audit_meta,
           };
@@ -498,6 +535,7 @@
         '<div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + tabBtn(l.srcAll, state.srcFilter === 'all', () => set({ srcFilter: 'all' })) + tabBtn(l.srcOnlyTargets, state.srcFilter === 'targets', () => set({ srcFilter: 'targets' })) + '</div>' +
         '<div class="scroll"><div style="min-width:820px"><div class="sgrid small muted" style="padding:0 0 8px"><span>' + esc(l.colSource) + '</span><span>' + esc(l.colType) + '</span><span>' + esc(l.colCites) + '</span><span>' + esc(l.colPresent) + '</span><span>' + esc(l.colNext) + '</span></div>' +
         (S.length ? rows : mode === 'own' ? loadMonitoringCard() : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
+        sovSection() +
         '<span class="small muted">' + esc(l.srcNote) + '</span></section>';
     }
 
@@ -576,10 +614,17 @@
 
     function viewImpact(ctx) {
       const l = L(); const pieces = D.demo.pieces;
-      const trend = D.demo.trend.length ? D.demo.trend.slice(0, -1).concat([ctx.nowPct]) : [ctx.nowPct];
+      // With real weekly data (trend_ci from export_monitoring.py) the chart
+      // shows each week's measured rate with its 95% range instead of
+      // overwriting the last bar with today's key-question figure (TASKS.md D3).
+      const CI = Array.isArray(D.demo.trend_ci) && D.demo.trend_ci.length ? D.demo.trend_ci : null;
+      const trend = CI ? CI.map(w => w.rate) : D.demo.trend.length ? D.demo.trend.slice(0, -1).concat([ctx.nowPct]) : [ctx.nowPct];
+      const yMax = CI ? Math.max(60, ...CI.map(w => w.hi)) : 60;
+      const noise = CI && CI.length > 1 && CORE.intervalsOverlap(CI[CI.length - 2], CI[CI.length - 1]);
       const bars = trend.map((v, i) => {
         const piece = pieces.find(p => p.week === i + 1);
-        return '<div>' + (piece ? '<span class="mark">' + piece.mark + '</span>' : '') + '<span class="mono muted" style="font-size:11px">' + v + '%</span><div class="col" style="height:' + Math.round(v / 60 * 160) + 'px;background:' + (i === trend.length - 1 ? C.accent : '#C9D6F7') + '"></div></div>';
+        return '<div>' + (piece ? '<span class="mark">' + piece.mark + '</span>' : '') + '<span class="mono muted" style="font-size:11px">' + v + '%</span><div class="col" style="position:relative;height:' + Math.round(v / yMax * 160) + 'px;background:' + (i === trend.length - 1 ? C.accent : '#C9D6F7') + '">' +
+          (CI ? '<span class="ci" style="bottom:' + Math.round((CI[i].lo - v) / yMax * 160) + 'px;height:' + Math.max(1, Math.round((CI[i].hi - CI[i].lo) / yMax * 160)) + 'px"></span>' : '') + '</div></div>';
       }).join('');
       const rows = pieces.map(p => {
         const ago = trend.length - p.week; const early = ago < 4;
@@ -590,8 +635,8 @@
       }).join('');
       return '<section style="gap:40px"><div class="head"><h1>' + esc(l.tabs.impact) + '</h1><p>' + esc(l.impSub) + '</p></div>' +
         '<div class="stats">' + stat(ctx.nowPct + '%', l.impStatNow) + stat(l.pp(ctx.nowPct - trend[0]), l.impStatDelta, C.accent) + stat(pieces.length, l.impStatCount) + '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:16px"><h2>' + esc(l.impChart) + '</h2><span class="sr">' + esc(l.impAlt(trend[0], ctx.nowPct)) + '</span>' +
-        '<div class="chart" aria-hidden="true">' + bars + '</div><div class="xlabels" aria-hidden="true">' + trend.map((_, i) => '<span>' + l.week(i + 1) + '</span>').join('') + '</div></div>' +
+        '<div style="display:flex;flex-direction:column;gap:16px"><h2>' + esc(l.impChart) + '</h2><span class="sr">' + esc(CI ? l.impCiAlt(CI) : l.impAlt(trend[0], ctx.nowPct)) + '</span>' + (noise ? '<span class="s13 muted">' + esc(l.impNoise) + '</span>' : '') +
+        '<div class="chart" aria-hidden="true">' + bars + '</div><div class="xlabels" aria-hidden="true">' + trend.map((_, i) => '<span>' + (CI ? esc(CI[i].week.slice(5)) : l.week(i + 1)) + '</span>').join('') + '</div></div>' +
         '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(l.impPieces) + '</h2><div class="scroll"><div style="min-width:760px">' + (rows || (mode === 'own' ? ownHint('python monitoring/run.py --dry-run', l.impHint) : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
         '<span class="small muted">' + esc(l.impNote) + '</span></section>';
     }

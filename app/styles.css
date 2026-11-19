@@ -143,3 +143,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--fg); curso
   main { padding-top: 32px; }
   .brief label { font-size: 26px; }
 }
+
+/* Answer viewer (D1) */
+.answers { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 12px 36px; padding: 16px 18px; background: var(--soft); border-radius: 8px; }
+.answer p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+mark.m-brand { background: #C9D6F7; color: var(--fg); padding: 0 2px; border-radius: 2px; }
+mark.m-comp { background: #FBEBDD; color: var(--fg); padding: 0 2px; border-radius: 2px; }
+/* 95% range whisker on trend bars (D3) */
+.ci { position: absolute; left: 50%; width: 2px; margin-left: -1px; background: var(--fg); }
