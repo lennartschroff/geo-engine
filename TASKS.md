@@ -143,7 +143,8 @@ each task below gets its own PR and its own review before running against real k
   `NotImplementedError` outside `--dry-run` — not started.
   **Gate: review cost estimate with you before the first real run.** —
   *L, medium — real API spend, real external calls*
-- [ ] **C5. THE biggest real gap right now.** C4a proved real API calls work and
+- [x] **C5. Export + load done (`efe4fd8`); see F3b for the loader.** Remaining gate below is a decision, not code.
+  Original note: C4a proved real API calls work and
   write real results to `monitoring/runs.sqlite` — but nothing reads that file
   into the app yet. Right now a real monitoring run is a dead end: the data
   exists, correctly, and is completely invisible in the UI. Export:
