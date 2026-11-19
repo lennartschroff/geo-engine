@@ -151,10 +151,11 @@ def build_findings(pages: list[dict], checks: dict | None, today: datetime.date)
     if no_h1:
         out.append(finding("f-h1", "mid", "low",
             ["Pages without a main heading",
-             f"{len(no_h1)} of {len(ok)} pages have no H1, e.g. {examples(no_h1)}.",
+             f"{len(no_h1)} of {len(ok)} pages {'has' if len(no_h1) == 1 else 'have'} no H1, e.g. {examples(no_h1)}.",
              "Give every page one H1 that states its topic plainly."],
             ["Seiten ohne Hauptüberschrift",
-             f"{len(no_h1)} von {len(ok)} Seiten haben keine H1, z. B. {examples(no_h1)}.",
+             f"{len(no_h1)} von {len(ok)} Seiten {'hat' if len(no_h1) == 1 else 'haben'} keine H1, "
+             f"z. B. {examples(no_h1)}.",
              "Jeder Seite genau eine H1 geben, die das Thema klar benennt."]))
 
     relative = [p for p in ok if p.get("relative_time")]
@@ -213,10 +214,12 @@ def build_findings(pages: list[dict], checks: dict | None, today: datetime.date)
     if stale:
         out.append(finding("f-stale", "low", "high",
             ["Outdated articles",
-             f"{len(stale)} articles were last published or updated before {cutoff.year}, e.g. {examples(stale)}.",
+             f"{len(stale)} {'article was' if len(stale) == 1 else 'articles were'} last published or updated "
+             f"before {cutoff.year}, e.g. {examples(stale)}.",
              "Update the ones about current topics (with a visible date), redirect or retire the rest."],
             ["Veraltete Beiträge",
-             f"{len(stale)} Beiträge wurden zuletzt vor {cutoff.year} veröffentlicht oder aktualisiert, "
+             f"{len(stale)} {'Beitrag wurde' if len(stale) == 1 else 'Beiträge wurden'} zuletzt vor {cutoff.year} "
+             "veröffentlicht oder aktualisiert, "
              f"z. B. {examples(stale)}.",
              "Beiträge zu aktuellen Themen überarbeiten (mit sichtbarem Datum), den Rest umleiten oder entfernen."]))
 

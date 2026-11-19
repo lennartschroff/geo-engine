@@ -54,7 +54,7 @@ class TestBuildFindings:
         f = {x["id"]: x for x in build_findings(pages, None, TODAY)}
         assert set(f) == {"f-org-schema", "f-faq", "f-h1", "f-relative-time", "f-figures", "f-thin", "f-meta",
                           "f-stale", "f-broken"}
-        assert "1 of 2 pages have no H1" in f["f-h1"]["en"][1]
+        assert "1 of 2 pages has no H1" in f["f-h1"]["en"][1]
         assert "over 15 years" in f["f-relative-time"]["de"][1]
         assert "before 2023" in f["f-stale"]["en"][1]
 
