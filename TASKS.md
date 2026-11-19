@@ -199,7 +199,7 @@ every user brings their own API key for anything that costs money, never yours.*
   starter questions generated instantly client-side (`CORE.generateQuestions`, the
   same logic as `generate_questions.py`, zero cost, no API key). Stored in
   localStorage only; a Demo / [your brand] toggle in the header switches between
-  the Tailspin^Hcontoso demo and your own setup without mixing their state
+  the Contoso demo and your own setup without mixing their state
   (`geo-engine:v1:<mode>` namespacing). Smoke-tested across 4 scenarios (first
   visit, demo, setup-pending, own-brand-populated).
 - [x] **F2b.** In-browser content-block authoring (Library tab): add a block
