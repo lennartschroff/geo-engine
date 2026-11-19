@@ -552,11 +552,10 @@
         '</div></div>';
     }
 
-    // Reads the JSON scripts/score_pages.py produces (built from a real
-    // scripts/audit_crawl.py crawl) -- same pure client-side FileReader
-    // pattern as loadMonitoringFile/loadTopicsFile. Replaces own.pages only;
-    // there's no script that generates audit findings (own.audit) yet, so
-    // that stays empty until one exists.
+    // Reads either JSON built from a real scripts/audit_crawl.py crawl --
+    // page scores (scripts/score_pages.py -> own.pages) or audit findings
+    // (scripts/audit_findings.py -> own.audit), told apart by shape. Same
+    // pure client-side FileReader pattern as loadMonitoringFile.
     function loadPageScoresFile(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -565,7 +564,8 @@
         try {
           const parsed = JSON.parse(reader.result);
           if (!Array.isArray(parsed)) throw new Error('not an array');
-          own.pages = parsed;
+          const isFindings = parsed.length > 0 && parsed.every(x => x && x.priority && x.en && x.de);
+          if (isFindings) own.audit = parsed; else own.pages = parsed;
           saveOwn(own);
           boot();
         } catch (err) {
@@ -594,20 +594,20 @@
       const avg = P.length ? Math.round(P.reduce((x, g) => x + g.score, 0) / P.length) : 0;
       return '<section style="gap:40px"><div class="head"><h1>' + esc(l.webTitle) + '</h1><p>' + esc(l.webSub(meta.date, meta.pages, meta.posts)) + '</p></div>' +
         '<div class="stats">' + stat(meta.pages + meta.posts, l.webStatPages) + stat(A.filter(a => a.priority === 'high' && !state.auditDone[a.id]).length, l.webStatHigh, C.warn) + stat(avg, l.webStatAvg) + stat(A.filter(a => state.auditDone[a.id]).length + '/' + A.length, l.webStatDone, C.accent) + '</div>' +
-        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(l.webActions) + '</h2>' + (rows || (mode === 'own' ? ownHint('python scripts/audit_crawl.py --base https://yoursite.com', l.webHint) : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div>' +
+        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(l.webActions) + '</h2>' + (rows || (mode === 'own' ? ownHint('python scripts/audit_crawl.py --base https://yoursite.com\npython scripts/audit_findings.py', l.webHint) + loadPageScoresCard('web-audit-file') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div>' +
         '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:4px">' + esc(l.webPages) + '</h2><p class="s13 muted" style="margin:0 0 12px">' + esc(l.webPagesSub) + '</p><div class="scroll"><div style="min-width:760px">' +
-        (pages || (mode === 'own' ? ownHint('python scripts/score_pages.py', l.webHint2) + loadPageScoresCard() : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
+        (pages || (mode === 'own' ? ownHint('python scripts/score_pages.py', l.webHint2) + loadPageScoresCard('web-pages-file') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
         '<span class="small muted">' + esc(l.webNote) + '</span></section>';
     }
 
-    function loadPageScoresCard() {
+    function loadPageScoresCard(inputId) {
       const l = L();
       return '<div class="card" style="gap:10px;margin-top:12px">' +
         '<span class="s14" style="font-weight:500">' + esc(l.loadPagesTitle) + '</span>' +
         '<span class="s13 muted">' + esc(l.loadPagesHint) + '</span>' +
         '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-        '<label for="web-pages-file" class="btn sm plain" style="cursor:pointer">' + esc(l.chooseFile) + '</label>' +
-        '<input id="web-pages-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadPageScoresFile) + '>' +
+        '<label for="' + inputId + '" class="btn sm plain" style="cursor:pointer">' + esc(l.chooseFile) + '</label>' +
+        '<input id="' + inputId + '" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadPageScoresFile) + '>' +
         (state.pagesMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadPagesError) + '</span>' : '') +
         '</div></div>';
     }
