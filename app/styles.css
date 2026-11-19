@@ -77,7 +77,7 @@ button,
   color: #fff;
   text-decoration: none;
 }
-.skip:focus { top: 8px; }
+.skip:focus-visible { top: 8px; }   /* keyboard only; mouse users never see it */
 
 /* 4. Text utilities */
 .mono   { font-family: var(--mono); }

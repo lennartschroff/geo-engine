@@ -973,7 +973,7 @@
     const focusLabel = el => (el.getAttribute('aria-label') || el.textContent || '').trim();
     function captureFocus() {
       const el = document.activeElement;
-      if (!el || el === document.body || !root.contains(el)) return null;
+      if (!el || el === document.body || !root.contains(el) || el.classList.contains('skip')) return null;
       const all = Array.from(root.querySelectorAll(FOCUSABLE));
       return { id: el.id, caret: el.id ? el.selectionStart : null, label: focusLabel(el), index: all.indexOf(el) };
     }
@@ -982,7 +982,8 @@
       // Disabled controls can't take focus, so they're never a target.
       let el = k.id ? document.getElementById(k.id) : null;
       if (el && el.disabled) el = null;
-      const all = Array.from(root.querySelectorAll(FOCUSABLE)).filter(x => !x.disabled);
+      // Never the skip link: it is only meant for a deliberate first Tab press.
+      const all = Array.from(root.querySelectorAll(FOCUSABLE)).filter(x => !x.disabled && !x.classList.contains('skip'));
       if (!el && k.label) {
         const same = all.filter(x => focusLabel(x) === k.label);
         el = same.length === 1 ? same[0] : same.find(x => all.indexOf(x) === k.index) || same[0];
