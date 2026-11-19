@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GEO Engine</title>
-  <meta name="description" content="Track how often AI answer engines mention your brand, find the gaps and assemble citable content to close them.">
-  <meta property="og:title" content="GEO Engine">
-  <meta property="og:description" content="Track how often AI answer engines mention your brand, find the gaps and assemble citable content to close them. Self-hosted — your data stays in your browser and on your own machine.">
+  <meta name="description" content="See whether ChatGPT, Claude and Gemini mention your brand, which sources they cite, and build citable content for the gaps.">
   <meta property="og:type" content="website">
+  <meta property="og:title" content="GEO Engine">
+  <meta property="og:description" content="Open-source AI visibility tracker. Runs in your browser; monitoring runs on your own machine or your own GitHub Actions.">
   <meta name="twitter:card" content="summary">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316181D'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%231F4FD1' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%231F4FD1'/%3E%3C/svg%3E">
-  <!-- Strict CSP: no external scripts, no network calls from the page. -->
+  <!-- The page may not call any server: all data ships in data.js. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2316181D'/%3E%3Cpath d='M9 16a7 7 0 1 0 7-7' fill='none' stroke='%231F4FD1' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%231F4FD1'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app"><noscript>This demo needs JavaScript.</noscript></div>
+  <div id="app"><noscript>GEO Engine needs JavaScript to run.</noscript></div>
   <script src="data.js"></script>
   <script src="i18n.js"></script>
   <script src="core.js"></script>
