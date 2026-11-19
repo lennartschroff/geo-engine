@@ -1,18 +1,14 @@
-/*
- * GEO Engine – client-side dashboard.
- *
- * Pure static app: no build step, no framework, no network calls (enforced by
- * the CSP in index.html). Demo data comes from data.js (generated from the
- * JSON files in /data by scripts/build_web_data.py). A visitor can instead
- * set up their own brand entirely in the browser (see the Welcome/Setup
- * screens below) — that data lives only in this browser's localStorage and
- * never touches any server. User state (custom questions, activations,
- * drafts, audit checkmarks) also lives in localStorage, namespaced per mode
- * so switching between the demo and your own brand doesn't mix them up.
- */
+// GEO Engine web app.
+//
+// Runs entirely in the browser: plain JavaScript, no framework, no build step,
+// and the page's CSP forbids network requests. Demo data arrives via data.js
+// (built from data/*.json). "My brand" mode keeps its setup and results in
+// localStorage, as does per-mode user state (own questions, drafts, ticked
+// audit items), so demo and own data never mix.
+
 'use strict';
 
-(function () {
+(() => {
   const CORE = window.GEO_CORE;
 
   // ---------- Mode / own-brand persistence ----------
@@ -68,18 +64,22 @@
   const iconCircle = size => icon(size, '<circle cx="12" cy="12" r="9"/>');
 
   const root = document.getElementById('app');
+  // Views are rendered as HTML strings, so event listeners can't be attached
+  // to elements directly. Each render fills a table of handlers; markup refers
+  // to them by index (data-h-<type>="n"), and one listener per event type on
+  // the root element looks the handler up.
   let handlers = [];
-  const on = fn => { handlers.push(fn); return handlers.length - 1; };
-  const attr = (evt, fn) => 'data-on-' + evt + '="' + on(fn) + '"';
+  const attr = (type, fn) => `data-h-${type}="${handlers.push(fn) - 1}"`;
   const click = fn => attr('click', fn);
-  ['click', 'change', 'input', 'dragstart', 'dragend', 'dragover', 'dragleave', 'drop', 'keydown'].forEach(evt => {
-    root.addEventListener(evt, e => {
-      const el = e.target.closest('[data-on-' + evt + ']');
-      if (!el || !root.contains(el)) return;
-      const fn = handlers[+el.getAttribute('data-on-' + evt)];
-      if (fn) fn(e, el);
+  const EVENT_TYPES = ['click', 'change', 'input', 'keydown', 'dragstart', 'dragend', 'dragover', 'dragleave', 'drop'];
+  for (const type of EVENT_TYPES) {
+    root.addEventListener(type, event => {
+      const target = event.target.closest(`[data-h-${type}]`);
+      if (!target || !root.contains(target)) return;
+      const handler = handlers[Number(target.getAttribute(`data-h-${type}`))];
+      if (handler) handler(event, target);
     });
-  });
+  }
 
   // ---------- Welcome screen (first visit only, always reachable again via the header toggle) ----------
   function renderWelcome() {
