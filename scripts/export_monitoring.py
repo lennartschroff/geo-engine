@@ -117,7 +117,11 @@ def main() -> int:
         print("No rows in the database yet.", file=sys.stderr)
         return 1
 
-    latest = latest_per_question_engine(rows)
+    # Status per question comes from the original wording (variant 0) so it
+    # stays comparable week to week; randomized variants (monitoring/variants.py)
+    # still count toward cited_sources and stay in the database for analysis.
+    originals = [r for r in rows if "variant" not in r.keys() or r["variant"] == 0]
+    latest = latest_per_question_engine(originals or rows)
     export = {
         "_comment": "Exported from monitoring/runs.sqlite by scripts/export_monitoring.py — "
                     "real data, not demo data. 'r' codes: c=cited, m=mentioned, a=absent, n=not run for that engine.",
