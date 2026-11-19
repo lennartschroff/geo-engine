@@ -138,6 +138,13 @@ draft has blocks, three steps turn it into an article:
 
 ## Run real monitoring
 
+**What gets monitored.** `target` in the settings points to a folder with `brand.json`,
+`competitors.json`, `categories.json` and `questions.json`. It is `targets/geo-engine`: this project
+itself, with 15 real questions (EN/DE) about checking AI visibility and GEO tools, and existing GEO
+monitoring tools as competitors (names only). The public demo in `data/` stays on the fictional
+Contoso AI. To see results: download `monitoring_export.json` from a run, open the app, choose
+your own brand and *Load export* in the setup screen.
+
 All settings live in `data/monitoring_settings.json`: cadence (default weekly, Monday),
 question scope (the 15 key questions), runs per question (1), randomized rephrasings per
 question (1, on), engines and models, and a hard budget cap per run.
