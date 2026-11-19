@@ -547,3 +547,19 @@ describe('Write: compose, polish prompt, fact check (answer-first articles)', ()
       '<h1>T</h1>\n<h2>H</h2>\n<p>A &lt;b&gt; <strong>bold</strong></p>\n<blockquote><p>Q</p></blockquote>');
   });
 });
+
+describe('article HTML export', () => {
+  const md = '# Why RAG?\n\nAnswer first.\n\n## Frequently asked questions\n\n### What does it cost?\n\nA pilot takes six weeks.\n\n### Not a question\n\nText.';
+  test('faqFromMarkdown takes ### questions with their answer paragraph', () => {
+    assert.deepEqual(CORE.faqFromMarkdown(md), [{ question: 'What does it cost?', answer: 'A pilot takes six weeks.' }]);
+  });
+  test('articleToHtml: title, lang, JSON-LD from the visible FAQ, script-safe', () => {
+    const html = CORE.articleToHtml(md.replace('six weeks', 'six weeks </script>'), 'de');
+    assert.ok(html.includes('<html lang="de">') && html.includes('<title>Why RAG?</title>'));
+    assert.ok(html.includes('"@type":"FAQPage"') && html.includes('\\u003c/script>'));
+    assert.equal((html.match(/<\/script>/g) || []).length, 1);
+  });
+  test('no FAQ, no JSON-LD', () => {
+    assert.ok(!CORE.articleToHtml('# T\n\nText.', 'en').includes('ld+json'));
+  });
+});

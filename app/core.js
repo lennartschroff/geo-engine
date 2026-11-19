@@ -432,6 +432,31 @@
     }).join('\n');
   }
 
+  /** FAQ pairs from an article: every "### question" heading plus the paragraph after it. */
+  function faqFromMarkdown(markdown) {
+    const blocks = String(markdown || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+    const out = [];
+    blocks.forEach((b, i) => {
+      const m = b.match(/^###\s+(.*\?)\s*$/);
+      const next = blocks[i + 1];
+      if (m && next && !/^#/.test(next)) out.push({ question: m[1].trim(), answer: next.replace(/\s+/g, ' ') });
+    });
+    return out;
+  }
+
+  /** Standalone HTML page for an article, with FAQPage JSON-LD matching the visible FAQ text. */
+  function articleToHtml(markdown, lang) {
+    const faqs = faqFromMarkdown(markdown);
+    const title = (String(markdown || '').match(/^#\s+(.*)$/m) || [])[1] || '';
+    const jsonLd = faqs.length ? {
+      '@context': 'https://schema.org', '@type': 'FAQPage',
+      mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.question, acceptedAnswer: { '@type': 'Answer', text: f.answer } })),
+    } : null;
+    return '<!doctype html>\n<html lang="' + (lang === 'de' ? 'de' : 'en') + '">\n<head>\n<meta charset="utf-8">\n<title>' + htmlEscape(title) + '</title>\n' +
+      (jsonLd ? '<script type="application/ld+json">' + JSON.stringify(jsonLd).replace(/</g, '\\u003c') + '</script>\n' : '') +
+      '</head>\n<body>\n' + mdToHtml(markdown) + '\n</body>\n</html>\n';
+  }
+
   // ---------- Block suggestions from your own content (Library import) ----------
   // Heuristics, not an LLM: they propose candidates, a person decides. Nothing
   // is invented -- every candidate is a sentence (or Q+A pair) taken verbatim
@@ -568,7 +593,7 @@
 
   return {
     findMentions, highlightMentions, shareOfVoice, intervalsOverlap, textFromMarkdown, extractBlockCandidates,
-    composeArticle, buildPolishPrompt, extractFacts, checkFacts, blockCoverage, citabilityChecks, mdToHtml,
+    composeArticle, buildPolishPrompt, extractFacts, checkFacts, blockCoverage, citabilityChecks, mdToHtml, faqFromMarkdown, articleToHtml,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,
     QUESTION_TEMPLATES, generateForCategory, generateQuestions, slugify,
     tokenize, buildCorpusStats, idf, bm25Score, rankByRelevance,
