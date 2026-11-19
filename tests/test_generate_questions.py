@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from generate_questions import TEMPLATES, generate_for_category  # noqa: E402
 
 CATEGORY = {
-    "id": "oi",
+    "id": "hp",
     "label_de": "Wärmepumpen",
     "label_en": "Heat pumps",
     "keywords": ["heat pumps", "air source"],
@@ -24,7 +24,7 @@ class TestGenerateForCategory:
 
     def test_every_question_tagged_with_the_category_id(self):
         out = generate_for_category(CATEGORY, count=3, start_index=0)
-        assert all(q["categories"] == ["oi"] for q in out)
+        assert all(q["categories"] == ["hp"] for q in out)
 
     def test_alternates_language_by_position(self):
         out = generate_for_category(CATEGORY, count=4, start_index=0)

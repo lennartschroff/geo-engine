@@ -233,7 +233,7 @@ describe('toMarkdown', () => {
 
 describe('slugify', () => {
   test('lowercases and hyphenates', () => {
-    assert.equal(CORE.slugify('Wärmepumpen'), 'heat-pumps');
+    assert.equal(CORE.slugify('Heat Pumps'), 'heat-pumps');
   });
 
   test('strips accents', () => {
@@ -252,12 +252,12 @@ describe('slugify', () => {
 });
 
 describe('generateForCategory / generateQuestions (parity with scripts/generate_questions.py)', () => {
-  const CAT = { id: 'oi', label_en: 'Heat pumps', label_de: 'Wärmepumpen', keywords: ['heat pumps', 'air source'] };
+  const CAT = { id: 'hp', label_en: 'Heat pumps', label_de: 'Wärmepumpen', keywords: ['heat pumps', 'air source'] };
 
   test('generates the requested count, each tagged with the category id', () => {
     const out = CORE.generateForCategory(CAT, 4, 0);
     assert.equal(out.length, 4);
-    assert.ok(out.every(q => q.categories[0] === 'oi'));
+    assert.ok(out.every(q => q.categories[0] === 'hp'));
   });
 
   test('is deterministic', () => {
