@@ -3,6 +3,7 @@ beautifulsoup4==4.12.3
 lxml==5.3.0
 anthropic==2.10.0
 google-genai==3.5.0
+openai==3.45.0
 # Pinned explicitly: without this, pip's resolver can land on an older
 # cryptography version (a google-genai -> google-auth transitive dep) with
 # no prebuilt wheel for some platform/Python combos, and tries to build it

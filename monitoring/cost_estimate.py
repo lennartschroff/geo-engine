@@ -7,9 +7,9 @@ for actually showing the estimate and getting confirmation.
 Pricing for "claude" is verified against Anthropic's own docs as of
 2026-11-18 (platform.claude.com/docs — Haiku 4.5 token pricing, and the
 web search tool's pricing page: "$10 USD per 1,000 searches" in addition
-to token costs). "gpt" and "gemini" are still [placeholder] — verify
-against their current pricing pages before trusting a dollar figure for
-those two.
+to token costs). "gpt" (gpt-5-mini + web_search) verified against
+OpenAI's pricing page on 2026-11-19. "gemini" is still [placeholder]; on
+the free tier run.py estimates it at $0 anyway.
 """
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ PRICING_USD_PER_1K_TOKENS: dict[str, dict[str, float]] = {
     # risking a failed first real call over a cost difference this run's
     # token counts make negligible (the web search fee below dominates).
     "claude": {"input": 0.002, "output": 0.01},
-    "gpt": {"input": 0.0025, "output": 0.01},  # [placeholder]
+    # gpt-5-mini, verified 2026-11-19 on OpenAI's pricing page: $0.25 / $2.00
+    # per 1M tokens. Search content tokens are billed at these input rates.
+    "gpt": {"input": 0.00025, "output": 0.002},
     "gemini": {"input": 0.00125, "output": 0.005},  # [placeholder]
 }
 
@@ -34,6 +36,7 @@ PRICING_USD_PER_1K_TOKENS: dict[str, dict[str, float]] = {
 # other engines' search tools (if/when wired in) will need their own entry.
 WEB_SEARCH_USD_PER_SEARCH: dict[str, float] = {
     "claude": 0.01,
+    "gpt": 0.01,  # OpenAI web_search tool: $10 per 1k calls, verified 2026-11-19
 }
 
 # Defaults for a question + web-search-enabled claude-sonnet-5 answer.
