@@ -7,7 +7,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from export_monitoring import build_cited_sources, build_results, latest_per_question_engine  # noqa: E402
+from export_monitoring import (  # noqa: E402
+    build_answers,
+    build_cited_sources,
+    build_results,
+    build_trend,
+    latest_per_question_engine,
+    wilson,
+)
 
 SCHEMA = """
     CREATE TABLE runs (
@@ -82,7 +89,7 @@ class TestBuildResults:
         results = build_results(latest_per_question_engine(rows), own_domain="")
         assert results["q1"]["r"] == "m1 n n"
 
-    def test_competitor_is_always_null(self):
+    def test_competitor_is_null_without_competitor_list(self):
         rows = make_db([row("q1", "claude", "t1", mentioned=0)])
         results = build_results(latest_per_question_engine(rows), own_domain="")
         assert results["q1"]["competitor"] is None
@@ -128,3 +135,66 @@ class TestBuildCitedSources:
     def test_no_citations_returns_empty_list(self):
         rows = make_db([row("q1", "claude", "t1", mentioned=0, cited_urls=[])])
         assert build_cited_sources(rows) == []
+
+
+V2_SCHEMA = SCHEMA.replace("answer_text TEXT", "answer_text TEXT, variant INTEGER, question_text TEXT")
+
+
+def make_v2_db(rows):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(V2_SCHEMA)
+    for r in rows:
+        conn.execute(
+            "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (r["question_id"], r["engine"], "m", 0, r["timestamp"], None, r["mentioned"], None, "[]",
+             r.get("text", ""), r.get("variant", 0), r.get("prompt")),
+        )
+    return conn.execute("SELECT * FROM runs").fetchall()
+
+
+class TestCompetitorDetection:
+    def test_first_named_competitor_is_reported(self):
+        rows = make_v2_db([{"question_id": "q1", "engine": "claude", "timestamp": "2026-11-23T06:00:00",
+                            "mentioned": 0, "text": "Try Matomo or Umami; Matomo is popular."}])
+        results = build_results(latest_per_question_engine(rows), "", ["Plausible"], ["Umami", "Matomo"])
+        assert results["q1"]["competitor"] == "Matomo"
+
+
+class TestWilson:
+    def test_zero_trials(self):
+        assert wilson(0, 0) == (0.0, 0.0)
+
+    def test_known_value(self):
+        lo, hi = wilson(10, 100)  # textbook: 5.5% .. 17.4%
+        assert round(lo, 3) == 0.055 and round(hi, 3) == 0.174
+
+    def test_bounds_stay_in_unit_interval(self):
+        assert wilson(0, 5)[0] == 0.0 and wilson(5, 5)[1] == 1.0
+
+
+class TestBuildTrend:
+    def test_groups_by_iso_week_with_interval(self):
+        rows = make_v2_db(
+            [{"question_id": "q1", "engine": "claude", "timestamp": "2026-11-23T06:00:00+00:00", "mentioned": m}
+             for m in (1, 0, 0, 0)]
+            + [{"question_id": "q1", "engine": "claude", "timestamp": "2026-11-30T06:00:00+00:00", "mentioned": 1}]
+        )
+        trend = build_trend(rows)
+        assert [t["week"] for t in trend] == ["2026-W48", "2026-W49"]
+        assert trend[0]["rate"] == 25 and trend[0]["n"] == 4 and trend[0]["lo"] < 25 < trend[0]["hi"]
+
+
+class TestBuildAnswers:
+    def test_latest_per_engine_and_variant_with_prompt(self):
+        rows = make_v2_db([
+            {"question_id": "q1", "engine": "gemini", "timestamp": "2026-11-16T06", "mentioned": 0, "text": "old"},
+            {"question_id": "q1", "engine": "gemini", "timestamp": "2026-11-23T06", "mentioned": 0, "text": "new"},
+            {"question_id": "q1", "engine": "claude", "timestamp": "2026-11-23T06", "mentioned": 0, "text": "c"},
+            {"question_id": "q1", "engine": "claude", "timestamp": "2026-11-23T06", "mentioned": 0, "text": "v",
+             "variant": 1, "prompt": "Quick question: Q?"},
+        ])
+        out = build_answers(rows)["q1"]
+        assert [(a["engine"], a["variant"], a["text"]) for a in out] == [
+            ("claude", 0, "c"), ("gemini", 0, "new"), ("claude", 1, "v")]
+        assert out[2]["prompt"] == "Quick question: Q?"

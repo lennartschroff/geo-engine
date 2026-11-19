@@ -2,19 +2,33 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "demo_monitoring",
   "type": "object",
-  "required": ["results", "cited_sources", "trend", "pieces", "audit_meta"],
+  "required": [
+    "results",
+    "cited_sources",
+    "trend",
+    "pieces",
+    "audit_meta"
+  ],
   "additionalProperties": false,
   "properties": {
-    "_comment": { "type": "string" },
+    "_comment": {
+      "type": "string"
+    },
     "results": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["competitor", "r"],
+        "required": [
+          "competitor",
+          "r"
+        ],
         "additionalProperties": false,
         "properties": {
           "competitor": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "null = not tracked (e.g. a real export, where no maintained competitor list exists yet — see TASKS.md C5a)"
           },
           "r": {
@@ -29,51 +43,217 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "kind", "cites", "qs", "present", "act"],
+        "required": [
+          "name",
+          "kind",
+          "cites",
+          "qs",
+          "present",
+          "act"
+        ],
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "kind": { "type": "string" },
-          "cites": { "type": "integer", "minimum": 0 },
-          "qs": { "type": "integer", "minimum": 0 },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string"
+          },
+          "cites": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "qs": {
+            "type": "integer",
+            "minimum": 0
+          },
           "present": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "null = not applicable, e.g. the competitor's own site"
           },
-          "act": { "type": "string" }
+          "act": {
+            "type": "string"
+          }
         }
       }
     },
     "trend": {
       "type": "array",
-      "items": { "type": "number" }
+      "items": {
+        "type": "number"
+      }
     },
     "pieces": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["mark", "week", "type", "de", "en", "qs", "before", "after"],
+        "required": [
+          "mark",
+          "week",
+          "type",
+          "de",
+          "en",
+          "qs",
+          "before",
+          "after"
+        ],
         "additionalProperties": false,
         "properties": {
-          "mark": { "type": "string" },
-          "week": { "type": "integer", "minimum": 0 },
-          "type": { "type": "string" },
-          "de": { "type": "string" },
-          "en": { "type": "string" },
-          "qs": { "type": "array", "items": { "type": "string" } },
-          "before": { "type": "number" },
-          "after": { "type": "number" }
+          "mark": {
+            "type": "string"
+          },
+          "week": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string"
+          },
+          "de": {
+            "type": "string"
+          },
+          "en": {
+            "type": "string"
+          },
+          "qs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "before": {
+            "type": "number"
+          },
+          "after": {
+            "type": "number"
+          }
         }
       }
     },
     "audit_meta": {
       "type": "object",
-      "required": ["date", "pages", "posts"],
+      "required": [
+        "date",
+        "pages",
+        "posts"
+      ],
       "additionalProperties": false,
       "properties": {
-        "date": { "type": "string", "format": "date" },
-        "pages": { "type": "integer", "minimum": 0 },
-        "posts": { "type": "integer", "minimum": 0 }
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "posts": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "trend_ci": {
+      "type": "array",
+      "description": "Mention rate per ISO week with 95% Wilson interval (TASKS.md D3).",
+      "items": {
+        "type": "object",
+        "required": [
+          "week",
+          "n",
+          "k",
+          "rate",
+          "lo",
+          "hi"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "week": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-W[0-9]{2}$"
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "lo": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "hi": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "answers": {
+      "type": "object",
+      "description": "Latest answer text per question (TASKS.md D1).",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "engine",
+            "variant",
+            "model",
+            "date",
+            "prompt",
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "enum": [
+                "claude",
+                "gpt",
+                "gemini"
+              ]
+            },
+            "variant": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "model": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "competitors": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     }
   }
