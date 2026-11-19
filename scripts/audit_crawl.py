@@ -172,6 +172,10 @@ def main() -> None:
     (ROOT / "data").mkdir(exist_ok=True)
     (ROOT / "docs").mkdir(exist_ok=True)
     (ROOT / "data" / f"crawl-{today}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    # Site-level checks for scripts/audit_findings.py (kept separate so crawl-*.json stays a plain page list).
+    checks = {"base": base, "date": today, "crawler_access": access, "llms_txt_status": llms, "robots_txt": robots}
+    (ROOT / "data" / f"site-checks-{today}.json").write_text(json.dumps(checks, ensure_ascii=False, indent=1),
+                                                             encoding="utf-8")
 
     ok = [r for r in rows if "error" not in r]
     schema = collections.Counter(t for r in ok for t in r["schema_types"])
