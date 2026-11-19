@@ -90,11 +90,7 @@ class TestSchemaTypes:
 
 
 class TestDiscoverUrlsViaLinks:
-    """Fallback page discovery for sites with no sitemap.xml -- confirmed
-    necessary against a real site (de.safenow.app, a Webflow site with no
-    sitemap at all: audit_crawl.py found 0 pages before this fallback
-    existed). Network calls are mocked here; the real-site check is manual.
-    """
+    """Fallback page discovery for sites without a sitemap. Network calls are mocked."""
 
     def _mock_response(self, html):
         resp = Mock()
@@ -106,48 +102,85 @@ class TestDiscoverUrlsViaLinks:
         <html><body>
           <a href="/pricing">Pricing</a>
           <a href="/about">About</a>
-          <a href="https://de.safenow.app/contact">Contact</a>
+          <a href="https://www.example.com/contact">Contact</a>
         </body></html>
         """
         with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
-        assert "https://de.safenow.app/" in urls
-        assert "https://de.safenow.app/pricing" in urls
-        assert "https://de.safenow.app/about" in urls
-        assert "https://de.safenow.app/contact" in urls
+            urls = ac.discover_urls_via_links("https://www.example.com")
+        assert "https://www.example.com/" in urls
+        assert "https://www.example.com/pricing" in urls
+        assert "https://www.example.com/about" in urls
+        assert "https://www.example.com/contact" in urls
 
     def test_ignores_external_links(self):
         html = '<a href="https://other-site.example/page">External</a>'
         with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
+            urls = ac.discover_urls_via_links("https://www.example.com")
         assert not any("other-site" in u for u in urls)
 
     def test_ignores_mailto_and_tel_links(self):
         html = '<a href="mailto:hi@example.com">Mail</a><a href="tel:+123">Call</a>'
         with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
+            urls = ac.discover_urls_via_links("https://www.example.com")
         assert all(u.startswith("http") for u in urls)
 
     def test_strips_query_and_fragment(self):
         html = '<a href="/page?utm_source=x#section">Page</a>'
         with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
-        assert "https://de.safenow.app/page" in urls
+            urls = ac.discover_urls_via_links("https://www.example.com")
+        assert "https://www.example.com/page" in urls
         assert not any("?" in u or "#" in u for u in urls)
 
     def test_deduplicates_repeated_links(self):
         html = '<a href="/page">A</a><a href="/page">B</a><a href="/page">C</a>'
         with patch("audit_crawl.requests.get", return_value=self._mock_response(html)):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
-        assert urls.count("https://de.safenow.app/page") == 1
+            urls = ac.discover_urls_via_links("https://www.example.com")
+        assert urls.count("https://www.example.com/page") == 1
 
     def test_no_links_still_returns_the_homepage(self):
         with patch("audit_crawl.requests.get", return_value=self._mock_response("<html></html>")):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
-        assert urls == ["https://de.safenow.app/"]
+            urls = ac.discover_urls_via_links("https://www.example.com")
+        assert urls == ["https://www.example.com/"]
 
     def test_request_failure_returns_just_the_homepage_not_an_exception(self):
         import requests
         with patch("audit_crawl.requests.get", side_effect=requests.RequestException("boom")):
-            urls = ac.discover_urls_via_links("https://de.safenow.app")
-        assert urls == ["https://de.safenow.app/"]
+            urls = ac.discover_urls_via_links("https://www.example.com")
+        assert urls == ["https://www.example.com/"]
+
+
+class TestInspectPage:
+    HTML = """<html><head><title>RAG guide</title>
+      <meta name="description" content="How retrieval works.">
+      <meta property="article:published_time" content="2024-03-05T10:00:00Z">
+      <script type="application/ld+json">{"@type": "FAQPage"}</script></head>
+      <body><nav><h1>Menu</h1></nav><main><h1>What is RAG?</h1>
+      <h2>Why does it matter?</h2><h2>Setup</h2><h3>Costs?</h3>
+      <p>We have shipped 42 pipelines for over 10 years, with 95% uptime.</p></main>
+      <footer>Imprint</footer></body></html>"""
+
+    def test_extracts_page_signals(self):
+        resp = Mock(status_code=200, text=self.HTML)
+        with patch("audit_crawl.requests.get", return_value=resp):
+            rec = ac.inspect_page("https://www.example.com/rag")
+        assert rec["status"] == 200 and rec["title"] == "RAG guide"
+        assert rec["meta_description"] == "How retrieval works."
+        assert rec["schema_types"] == ["FAQPage"] and rec["published"] == "2024-03-05"
+        assert rec["h1"] == ["What is RAG?"]  # the nav H1 is dropped
+        assert rec["h2_count"] == 3 and rec["question_headings"] == 2
+        assert rec["figures"] == 3 and rec["relative_time"] == ["over 10 years"]
+        assert "Imprint" not in rec["text"]
+
+    def test_request_error_is_recorded_not_raised(self):
+        import requests
+        with patch("audit_crawl.requests.get", side_effect=requests.RequestException("timeout")):
+            rec = ac.inspect_page("https://www.example.com/x")
+        assert rec == {"url": "https://www.example.com/x", "error": "timeout"}
+
+    def test_sitemap_index_is_followed_one_level(self):
+        index = "<sitemapindex><sitemap><loc>https://www.example.com/s1.xml</loc></sitemap></sitemapindex>"
+        child = ("<urlset><url><loc>https://www.example.com/a</loc></url>"
+                 "<url><loc>https://www.example.com/a</loc></url></urlset>")
+        responses = {"https://www.example.com/sitemap.xml": index, "https://www.example.com/s1.xml": child}
+        with patch("audit_crawl.requests.get", side_effect=lambda url, **kw: Mock(text=responses[url])):
+            assert ac.urls_from_sitemaps("https://www.example.com", ["/sitemap.xml"]) == ["https://www.example.com/a"]
