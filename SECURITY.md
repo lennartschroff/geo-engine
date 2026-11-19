@@ -1,37 +1,32 @@
 # Security
 
-## Principles
+## How keys are handled
 
-1. **No secrets in the repository.** API keys live only in a local `.env` file, which is git-ignored. `.env.example` contains empty placeholders.
-2. **No secrets in the browser.** The web app is fully static and runs under a Content Security Policy with `connect-src 'none'`. It cannot send data anywhere, even if someone modifies the bundled data.
-3. **Local-only API access.** Scripts that query OpenAI, Anthropic or Google read keys from environment variables at runtime and never log, print or persist them.
-4. **Automated checks.** Every push runs `gitleaks` (see `.github/workflows/secret-scan.yml`).
-5. **No third-party content in git.** Crawl output (`data/crawl-*.json`, `docs/audit-summary-*.md`) and monitoring databases are git-ignored.
+- **Never in git.** Keys belong in a local `.env` (ignored by git) or in GitHub repository secrets. `.env.example` lists the variable names with empty values.
+- **Never in the browser.** The web app has no way to send data: its Content Security Policy sets `connect-src 'none'`, and all its data is bundled into the page.
+- **Only where they're used.** `monitoring/run.py` reads keys from the environment when it starts and never prints, logs or stores them.
+- **Checked automatically.** `.github/workflows/secret-scan.yml` runs gitleaks on every push and pull request.
+- **No third-party content in git.** Crawl results (`data/crawl-*.json`, `data/site-checks-*.json`, `docs/audit-summary-*.md`) and monitoring databases are ignored by git.
 
-## Before every push
-
-```bash
-git status            # .env must not appear
-git diff --cached     # check what you are about to commit
-```
-
-Optional local guard (requires [gitleaks](https://github.com/gitleaks/gitleaks)):
+## Before pushing
 
 ```bash
-gitleaks detect --source . --verbose
+git status          # .env must not be listed
+git diff --cached   # look at what you're about to commit
+./scripts/check.sh  # CI checks, plus gitleaks if installed
 ```
 
-## If a key leaks
+## If a key was exposed
 
-1. **Revoke the key immediately** in the provider console (OpenAI, Anthropic, Google AI Studio). Deleting the commit is not enough, because the key stays in the git history and in forks.
-2. Create a new key and put it in `.env` only.
-3. Check the provider's usage dashboard for unexpected calls.
+1. Revoke it at once in the provider's console (Anthropic, OpenAI or Google AI Studio). Removing the commit doesn't help: the key remains in the history and in any copy.
+2. Create a new key and keep it in `.env` or a repository secret only.
+3. Look at the provider's usage page for calls you didn't make.
 
-## Recommended provider settings
+## Sensible provider settings
 
-- Set a **monthly spend limit** on every API key.
-- Use a separate key for this project so it can be revoked without side effects.
+- Give each key a monthly spending limit.
+- Use a key just for this project, so revoking it affects nothing else.
 
-## Reporting
+## Reporting a problem
 
-Please report vulnerabilities privately through GitHub's *Security → Report a vulnerability*.
+Use GitHub's private reporting: *Security → Report a vulnerability*.
