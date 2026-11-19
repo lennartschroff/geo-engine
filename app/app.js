@@ -244,7 +244,7 @@
     const BASE_BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
     // Like allQ() for questions: content blocks added in-browser (no terminal, no
     // API key, no backend — just localStorage) merge in alongside the bundled ones.
-    const allBlocksList = () => BASE_BLOCKS.concat(state.customBlocks.map(cb => ({ id: cb.id, type: cb.type, tags: cb.categories, de: cb.text, en: cb.text, source: null, placeholder: false })));
+    const allBlocksList = () => BASE_BLOCKS.concat(state.customBlocks.map(cb => ({ id: cb.id, type: cb.type, tags: cb.categories, de: cb.text, en: cb.text, source: cb.source || null, placeholder: false })));
 
     // ---------- Helpers ----------
     const overlaps = CORE.overlaps;
@@ -260,6 +260,7 @@
       libCat: 'all', libType: 'all', writeStep: 1, allBlocks: false, selectedQ: DEFAULT_Q,
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
       newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '', pagesMsg: '',
+      importText: '', importSource: '', importCands: [], importMsg: '',
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}
     }, saved);
     let drag = null;
@@ -270,13 +271,15 @@
         const v = raw ? JSON.parse(raw) : {};
         return {
           lang: v.lang === 'de' ? 'de' : 'en', active: v.active || {}, custom: Array.isArray(v.custom) ? v.custom : [],
-          customBlocks: Array.isArray(v.customBlocks) ? v.customBlocks : [], drafts: v.drafts || {}, auditDone: v.auditDone || {}
+          customBlocks: Array.isArray(v.customBlocks) ? v.customBlocks : [], drafts: v.drafts || {}, auditDone: v.auditDone || {},
+          // Unreviewed suggestions survive a reload, so review work isn't lost.
+          importCands: Array.isArray(v.importCands) ? v.importCands : [], importSource: typeof v.importSource === 'string' ? v.importSource : ''
         };
       } catch (e) { return {}; }
     }
     function persist() {
       try {
-        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone }));
+        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource }));
       } catch (e) { /* storage unavailable – state stays in memory */ }
     }
     function set(patch) { Object.assign(state, patch); persist(); render(); }
@@ -649,7 +652,7 @@
       const l = L();
       return '<div class="row lgrid"><span class="mono small" style="color:' + TYPE_FG[o.b.type] + '">' + esc(l.types[o.b.type]) + '</span>' +
         '<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span>' + esc(blockText(o.b)) + '</span>' +
-        (o.b.placeholder ? placeholderBadge() : '<span class="small muted">' + esc(o.b.source ? BRAND.domain + o.b.source : '') + '</span>') + '</div>' +
+        (o.b.placeholder ? placeholderBadge() : '<span class="small muted">' + esc(o.b.source ? (o.b.source.charAt(0) === '/' ? BRAND.domain + o.b.source : L().importFrom + o.b.source) : '') + '</span>') + '</div>' +
         '<span class="s13" style="text-align:right;color:' + (o.cov ? C.warn : C.faint) + '">' + esc(o.cov ? l.openQs(o.cov) : '–') + '</span></div>';
     }
 
@@ -681,11 +684,87 @@
         '<div style="display:flex;flex-direction:column;gap:6px"><span class="s13 muted">' + esc(l.blockCatLabel) + '</span><div style="display:flex;flex-wrap:wrap;gap:6px">' + catPills + '</div></div>' +
         '<button class="btn" style="align-self:flex-start" ' + click(addBlock) + '>' + esc(l.saveBlock) + '</button>' +
         '<span class="small" style="color:' + (state.blockMsg ? '#1A3A9C' : C.muted) + '">' + esc(state.blockMsg ? l.msg[state.blockMsg] : l.blockFormHint) + '</span></div>' +
+        importCard() +
         '<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E6E4DE">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
         (needsContent.length ? '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px;color:' + C.warn + '">' + esc(l.libNeedsContent) + ' (' + needsContent.length + ')</h2>' + needsContent.map(libraryRow).join('') + '</div>' : '') +
         '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(state.libCat === 'all' ? l.libReady : l.libRec(catLabel(state.libCat))) + '</h2>' +
         (ready.length ? ready.map(libraryRow).join('') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></section>';
     }
+    // ---------- Import: suggest blocks from your own content, then review ----------
+    // Text never leaves the browser: pasted, or read from a local file with
+    // FileReader. Suggestions are verbatim sentences (CORE.extractBlockCandidates);
+    // nothing reaches the library until a person accepts it.
+    function htmlToText(html) {
+      const marked = String(html).replace(/<\/(p|h[1-6]|li|div|section|article|blockquote|tr|dd|dt)>/gi, '$&\n\n').replace(/<br\s*\/?>/gi, '\n');
+      const doc = new DOMParser().parseFromString(marked, 'text/html');
+      doc.querySelectorAll('script, style, noscript, nav, header, footer, form').forEach(n => n.remove());
+      return ((doc.querySelector('main') || doc.body || doc.documentElement).textContent || '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*/g, '\n\n');
+    }
+    function loadImportFile(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const raw = String(reader.result || '');
+        const name = file.name.toLowerCase();
+        const text = /\.html?$/.test(name) ? htmlToText(raw) : /\.(md|markdown)$/.test(name) ? CORE.textFromMarkdown(raw) : raw;
+        state.importText = text.slice(0, 200000);
+        state.importSource = file.name;
+        suggestBlocks();
+      };
+      reader.readAsText(file);
+    }
+    function suggestBlocks() {
+      const text = state.importText.trim();
+      if (text.length < 40) { set({ importMsg: 'short' }); return; }
+      const stamp = Date.now().toString(36);
+      const cands = CORE.extractBlockCandidates(text, CATS.map(c => ({ id: c.id, keywords: c.kw })), 40)
+        .map((c, i) => Object.assign({ id: 'imp' + stamp + i }, c));
+      set({ importCands: cands, importSource: state.importSource || L().importPasted, importMsg: cands.length ? 'found' : 'none' });
+    }
+    function acceptCands(ids) {
+      const take = state.importCands.filter(c => ids.indexOf(c.id) !== -1 && c.categories.length && c.text.trim().length >= 8);
+      if (!take.length) { set({ importMsg: 'noCat' }); return; }
+      const now = new Date().toISOString();
+      const blocks = take.map((c, i) => ({ id: 'cb' + Date.now().toString(36) + i, type: c.type, text: c.text.trim().slice(0, 600), categories: c.categories.slice(), source: state.importSource, createdAt: now }));
+      const left = state.importCands.filter(c => take.indexOf(c) === -1);
+      set({ customBlocks: state.customBlocks.concat(blocks), importCands: left, importMsg: left.length ? 'accepted' : 'done', importAccepted: blocks.length });
+    }
+    function updateCand(id, patch, rerender) {
+      const cands = state.importCands.map(c => c.id === id ? Object.assign({}, c, patch) : c);
+      if (rerender) set({ importCands: cands }); else { state.importCands = cands; persist(); }
+    }
+    function importCard() {
+      const l = L();
+      const msg = state.importMsg === 'found' ? l.importFound(state.importCands.length)
+        : state.importMsg === 'accepted' || state.importMsg === 'done' ? l.importAccepted(state.importAccepted || 0)
+        : state.importMsg ? l.importMsgs[state.importMsg] : l.importHint;
+      const rows = state.importCands.map((c, n) => {
+        const typeOpts = TYPES.map(t => '<option value="' + t + '"' + (c.type === t ? ' selected' : '') + '>' + esc(l.types[t]) + '</option>').join('');
+        const cur = c.categories[0] || '';
+        const catOpts = '<option value=""' + (cur ? '' : ' selected') + '>' + esc(l.importTopicPh) + '</option>' +
+          CATS.map(k => '<option value="' + k.id + '"' + (cur === k.id ? ' selected' : '') + '>' + esc(catLabel(k.id)) + '</option>').join('');
+        return '<div class="cand"><div class="cand-controls">' +
+          '<label for="imp-type-' + c.id + '" class="sr">' + esc(l.importTypeAria(n + 1)) + '</label><select id="imp-type-' + c.id + '" ' + attr('change', e => updateCand(c.id, { type: e.target.value }, true)) + '>' + typeOpts + '</select>' +
+          '<label for="imp-cat-' + c.id + '" class="sr">' + esc(l.importTopicAria(n + 1)) + '</label><select id="imp-cat-' + c.id + '" ' + attr('change', e => updateCand(c.id, { categories: e.target.value ? [e.target.value].concat(c.categories.filter(x => x !== e.target.value)) : [] }, true)) + '>' + catOpts + '</select>' +
+          '<button id="imp-ok-' + c.id + '" class="btn sm" ' + (cur ? '' : 'disabled ') + click(() => acceptCands([c.id])) + '>' + esc(l.importAccept) + '</button>' +
+          '<button id="imp-no-' + c.id + '" class="btn sm plain" ' + click(() => set({ importCands: state.importCands.filter(x => x.id !== c.id), importMsg: '' })) + '>' + esc(l.importReject) + '</button></div>' +
+          '<label for="imp-text-' + c.id + '" class="sr">' + esc(l.importTextAria(n + 1)) + '</label><textarea id="imp-text-' + c.id + '" rows="2" ' + attr('input', e => updateCand(c.id, { text: e.target.value }, false)) + '>' + esc(c.text) + '</textarea></div>';
+      }).join('');
+      const ready = state.importCands.filter(c => c.categories.length).map(c => c.id);
+      return '<div class="card"><div class="listhead" style="min-height:0"><h2>' + esc(l.importTitle) + '</h2></div>' +
+        '<label for="importtext" class="sr">' + esc(l.importTextLabel) + '</label><textarea id="importtext" rows="4" placeholder="' + esc(l.importPh) + '" ' + attr('input', e => { state.importText = e.target.value; state.importSource = ''; }) + '>' + esc(state.importText) + '</textarea>' +
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">' +
+        '<button class="btn" ' + click(suggestBlocks) + '>' + esc(l.importSuggest) + '</button>' +
+        '<label for="import-file" class="btn plain" style="cursor:pointer">' + esc(l.importFile) + '</label>' +
+        '<input id="import-file" type="file" accept=".txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html" class="sr" ' + attr('change', loadImportFile) + '></div>' +
+        '<span class="small" role="status" style="color:' + (state.importMsg && state.importMsg !== 'noCat' && state.importMsg !== 'none' && state.importMsg !== 'short' ? '#1A3A9C' : C.muted) + '">' + esc(msg) + '</span>' +
+        (rows ? '<div class="cands"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="s13 muted" style="flex:1 1 200px">' + esc(l.importReview(state.importSource)) + '</span>' +
+          '<button class="btn sm" ' + (ready.length ? '' : 'disabled ') + click(() => acceptCands(ready)) + '>' + esc(l.importAcceptAll(ready.length)) + '</button>' +
+          '<button class="btn sm plain" ' + click(() => set({ importCands: [], importMsg: '' })) + '>' + esc(l.importDiscardAll) + '</button></div>' + rows + '</div>' : '') +
+        '</div>';
+    }
+
     function addBlock() {
       const text = state.newBlockText.trim();
       if (text.length < 8) { set({ blockMsg: 'blockShort' }); return; }
