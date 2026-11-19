@@ -37,7 +37,11 @@
 
   // ---------- Shared helpers & event wiring (used by every screen) ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const C = { fg: '#16181D', muted: '#6B6F78', faint: '#9A9DA5', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
+  // faint was #9A9DA5 (2.71:1 on white, failed WCAG AA). It's used for text
+  // (dashes, "too early" labels), so it now equals muted (5.0:1 on white,
+  // 4.7:1 on the --soft card background). graphic (#8A877F, 3.6:1) is for
+  // non-text marks like the "not run" dot outline, which need 3:1 (WCAG 1.4.11).
+  const C = { fg: '#16181D', muted: '#6B6F78', faint: '#6B6F78', graphic: '#8A877F', accent: '#1F4FD1', warn: '#C2410C', amber: '#B45309', border: '#CFCCC4' };
   // Small line icons (stroke="currentColor", inherits color from surrounding
   // text) -- used instead of emoji throughout, matching the rest of the app's
   // monochrome, minimal visual language.
@@ -110,9 +114,9 @@
     const d = setupDraft;
     const topicRows = d.topics.map((t, i) =>
       '<div style="display:flex;gap:8px;align-items:center">' +
-      '<input type="text" style="flex:1 1 160px" value="' + esc(t.label) + '" placeholder="e.g. SEO services" ' + attr('input', e => { d.topics[i].label = e.target.value; }) + '>' +
-      '<input type="text" style="flex:2 1 220px" value="' + esc(t.keywords) + '" placeholder="keywords, comma, separated" ' + attr('input', e => { d.topics[i].keywords = e.target.value; }) + '>' +
-      '<button class="icon" aria-label="Remove topic" ' + click(() => { d.topics.splice(i, 1); renderSetup(); }) + '>×</button></div>'
+      '<input type="text" style="flex:1 1 160px" aria-label="Topic ' + (i + 1) + ' name" value="' + esc(t.label) + '" placeholder="e.g. SEO services" ' + attr('input', e => { d.topics[i].label = e.target.value; }) + '>' +
+      '<input type="text" style="flex:2 1 220px" aria-label="Topic ' + (i + 1) + ' keywords" value="' + esc(t.keywords) + '" placeholder="keywords, comma, separated" ' + attr('input', e => { d.topics[i].keywords = e.target.value; }) + '>' +
+      '<button class="icon" aria-label="Remove topic ' + (i + 1) + '" ' + click(() => { d.topics.splice(i, 1); renderSetup(); }) + '>×</button></div>'
     ).join('');
     root.innerHTML =
       '<div style="max-width:640px;margin:56px auto;padding:0 32px;display:flex;flex-direction:column;gap:24px">' +
@@ -327,7 +331,7 @@
     }
 
     // ---------- Render helpers ----------
-    const tabBtn = (label, on_, fn) => '<button class="tab' + (on_ ? ' on' : '') + '" ' + click(fn) + '>' + esc(label) + '</button>';
+    const tabBtn = (label, on_, fn) => '<button class="tab' + (on_ ? ' on' : '') + '"' + (on_ ? ' aria-current="page"' : '') + ' ' + click(fn) + '>' + esc(label) + '</button>';
     const stat = (n, l, color, big) => '<div class="stat"><span class="n' + (big ? ' big' : '') + '"' + (color ? ' style="color:' + color + '"' : '') + '>' + esc(n) + '</span><span class="l">' + esc(l) + '</span></div>';
     const track = (w, color) => '<div class="track"><div style="width:' + Math.max(0, Math.min(100, w)) + '%;' + (color ? 'background:' + color : '') + '"></div></div>';
     // Shown instead of a bare "no rows" message when you're set up with your own
@@ -345,7 +349,7 @@
       const p = st.p ? '#' + st.p : '';
       const m = {
         cited: [C.accent, C.accent, l.dot.cited, p], mentioned: ['#fff', C.accent, l.dot.mentioned, p],
-        absent: [C.warn, C.warn, l.dot.absent, ''], notrun: ['#fff', C.border, l.dot.notrun, ''],
+        absent: [C.warn, C.warn, l.dot.absent, ''], notrun: ['#fff', C.graphic, l.dot.notrun, ''],
         inactive: ['#fff', '#E6E4DE', l.dot.inactive, '']
       }[st.k];
       return '<span class="cell"><span class="dot" title="' + esc(m[2]) + '" style="background:' + m[0] + ';border-color:' + m[1] + '"></span>' +
@@ -593,7 +597,7 @@
     }
 
     function placeholderBadge() {
-      return '<span class="badge" style="background:#FBEBDD;color:' + C.warn + '">' + esc(L().closeNow) + '</span>';
+      return '<span class="badge" style="background:#FBEBDD;color:#9A3412">' + esc(L().closeNow) + '</span>';
     }
 
     function libraryRow(o) {
@@ -759,11 +763,40 @@
     function copyMarkdown(blocks, title) { copyToClipboard(CORE.toMarkdown(draftItems(blocks), title), 'markdown'); }
     function copyHtml(blocks, title) { copyToClipboard(CORE.toHtml(draftItems(blocks), title), 'html'); }
 
+    // ---------- Focus preservation (see render) ----------
+    const FOCUSABLE = 'button, input, select, textarea, a[href], [tabindex]';
+    const focusLabel = el => (el.getAttribute('aria-label') || el.textContent || '').trim();
+    function captureFocus() {
+      const el = document.activeElement;
+      if (!el || el === document.body || !root.contains(el)) return null;
+      const all = Array.from(root.querySelectorAll(FOCUSABLE));
+      return { id: el.id, caret: el.id ? el.selectionStart : null, label: focusLabel(el), index: all.indexOf(el) };
+    }
+    function restoreFocus(k) {
+      if (!k) return;
+      let el = k.id ? document.getElementById(k.id) : null;
+      const all = Array.from(root.querySelectorAll(FOCUSABLE));
+      if (!el && k.label) {
+        const same = all.filter(x => focusLabel(x) === k.label);
+        el = same.length === 1 ? same[0] : same.find(x => all.indexOf(x) === k.index) || same[0];
+      }
+      if (!el && k.index >= 0) el = all[Math.min(k.index, all.length - 1)];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      if (typeof k.caret === 'number' && el.setSelectionRange) { try { el.setSelectionRange(k.caret, k.caret); } catch (e) { /* not a text input */ } }
+    }
+
+    // Every view gets exactly one <h1> for screen-reader navigation; views
+    // whose visible design has no page title get a visually hidden one.
+    const withH1 = (html, title) => html.indexOf('<h1') === -1 ? '<h1 class="sr">' + esc(title) + '</h1>' + html : html;
+
     // ---------- Root render ----------
     function render() {
-      // Keep focus and caret on text inputs across re-renders.
-      const focused = document.activeElement && document.activeElement.id;
-      const caret = focused && document.activeElement.selectionStart;
+      // Keep focus (and caret) across re-renders. Every click re-renders the
+      // whole app, which used to drop keyboard focus back to <body> after any
+      // button press -- keyboard users had to tab from the top again.
+      // Inputs are matched by id; anything else by its label + position.
+      const focusKey = captureFocus();
       handlers = [];
       const l = L();
 
@@ -795,23 +828,21 @@
       // brand's button when it's already active reopens the setup editor,
       // instead of a dedicated extra "Edit setup" link next to it.
       const modeSwitch = '<div class="lang" role="group" aria-label="Mode">' +
-        '<button class="' + (mode === 'demo' ? 'on' : '') + '" ' + click(() => { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }) + '>' + esc(l.modeDemo) + '</button>' +
-        '<button class="' + (mode === 'own' ? 'on' : '') + '" ' + click(() => {
+        '<button class="' + (mode === 'demo' ? 'on' : '') + '" aria-pressed="' + (mode === 'demo') + '" ' + click(() => { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }) + '>' + esc(l.modeDemo) + '</button>' +
+        '<button class="' + (mode === 'own' ? 'on' : '') + '" aria-pressed="' + (mode === 'own') + '" ' + click(() => {
           if (mode !== 'own') { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); } else { initSetupDraft(); renderSetup(); }
         }) + '>' + esc(own ? own.brand.short : l.modeOwn) + '</button></div>';
       root.innerHTML =
+        '<a class="skip" href="#main">' + esc(state.lang === 'de' ? 'Zum Inhalt springen' : 'Skip to content') + '</a>' +
         '<header><div class="bar"><div class="brand"><b>' + esc(BRAND.short) + '</b><span class="s13 muted">GEO Engine</span></div>' +
         '<nav class="tabs" aria-label="' + esc(l.sections) + '">' + tabs + '</nav>' +
         '<div class="right">' + modeSwitch +
         '<div class="lang" role="group" aria-label="Language">' +
         '<button class="' + (state.lang === 'en' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'en') + '" ' + click(() => set({ lang: 'en' })) + '>EN</button>' +
         '<button class="' + (state.lang === 'de' ? 'on' : '') + '" aria-pressed="' + (state.lang === 'de') + '" ' + click(() => set({ lang: 'de' })) + '>DE</button></div></div></div></header>' +
-        '<main>' + subnav + views[state.tab](ctx) + '</main>';
+        '<main id="main" tabindex="-1">' + subnav + withH1(views[state.tab](ctx), l.tabs[state.tab]) + '</main>';
 
-      if (focused) {
-        const el = document.getElementById(focused);
-        if (el) { el.focus(); if (typeof caret === 'number' && el.setSelectionRange) el.setSelectionRange(caret, caret); }
-      }
+      restoreFocus(focusKey);
     }
 
     render();
