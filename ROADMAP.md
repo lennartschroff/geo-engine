@@ -1,44 +1,43 @@
 # Roadmap
 
-Status is tracked in detail in `TASKS.md`; this file is the high-level view.
+The overview. Details and reasoning for each item are in [TASKS.md](TASKS.md).
 
-The prototype covers the full user journey with demo data. These are the steps to turn it into a production-grade tool, roughly in order of impact.
+## Done
 
-## Milestone 1: Real data pipeline (core value)
+**Monitoring**
+- Questions sent to Claude, ChatGPT and Gemini, results stored in SQLite, one random rephrasing per question
+- Mention detection with brand aliases, rank among named providers, cited domains
+- Cost estimate and per-run cap before any real call; dry-run with recorded answers
+- Weekly schedule in GitHub Actions; settings in one file
+- Export into the app; real target `targets/geo-engine` monitors this project
 
-- [ ] **Monitoring CLI** (`monitoring/run.py`): send the key questions to OpenAI, Anthropic and Gemini with web search enabled, 3 runs per question, and store `question_id, engine, model, run_index, timestamp, language, mentioned, position, cited_urls, answer_text` in SQLite.
-- [x] **Mention detection**: match brand aliases from `data/brand.json`, extract rank among named providers, and normalize cited URLs to domains.
-- [x] **Cost guard**: estimate tokens and cost before a run, require `--yes` above a threshold, and cap with `--max-calls`.
-- [x] **Dry-run / mock mode** with recorded fixtures so the pipeline can be tested without API keys.
-- [x] **Export** `monitoring/runs.sqlite` → `data/monitoring.json` and load it in the app instead of `demo_monitoring.json`.
-- [ ] **Scheduling**: weekly GitHub Action (keys as encrypted repository secrets) or a local cron job.
+**Analysis in the app**
+- Full answers with highlighted brand and competitor names
+- Share of voice per topic
+- Weekly trend with 95% ranges
 
-## Milestone 2: Quality & engineering
+**Content**
+- Website audit from a real crawl: page scores and a prioritised to-do list
+- Library import from pasted text, `.txt`, `.md`, `.html` (Word and PDF via a script)
+- Blocks to article: compose, polish in your own AI chat, fact-check before export
+- Markdown and HTML export with FAQPage structured data
 
-- [x] Unit tests for scoring, gap ranking and mention detection (`pytest`, plus a small JS test runner).
-- [x] JSON Schema for every file in `data/`, validated in CI.
-- [x] Linting: `ruff` for Python. ESLint/Prettier deliberately skipped (zero-dependency app, see TASKS.md B2).
-- [x] CI workflow: lint, test and build on every pull request.
-- [x] Accessibility pass (keyboard-only drag & drop alternative, contrast check).
+**Engineering**
+- Tests for Python and JavaScript, JSON schemas, lint, CI, secret scanning
+- Accessibility: WCAG AA contrast, keyboard use, screen-reader labels
 
-## Milestone 3: Product features
+## Next
 
-- [x] **Answer viewer**: show the full engine answer and highlight brand and competitor mentions.
-- [x] **Competitor tracking**: share of voice per competitor and topic.
-- [x] **Trend view from real runs** with confidence intervals (answers vary between runs).
-- [x] **Draft export** to Markdown / HTML including FAQPage JSON-LD.
-- [x] **AI-assisted drafting**: turn a block sequence into a readable text (local script, keys stay server-side).
-- [x] **Audit → app**: load `crawl-*.json` and compute page scores automatically instead of shipping them as static data.
-- [ ] **Block extraction**: suggest new content blocks from PDFs, transcripts and blog posts.
+- Check the first real monitoring runs for false matches on the generic name "GEO Engine"
+- Publish answer-first articles about the monitored questions on the project's GitHub Pages site and follow the trend
+- Short screen recording for the README
 
-## Milestone 4: Presentation
+## Maybe later
 
-- [ ] Short screen recording / GIF of the draft studio in the README.
-- [x] Case-study write-up: the problem, approach, scoring rationale and learnings.
-- [ ] Optional: hosted backend (e.g. FastAPI + SQLite) with authentication, for team use.
+- A hosted backend (for example FastAPI and SQLite) with accounts, for teams
 
-## Known limitations
+## Limits to keep in mind
 
-- API answers are not identical to what users see in the consumer apps.
-- The GEO score and page score are heuristics, not validated measures.
-- Answers vary between runs, so only rates and trends are meaningful, not single results.
+- API answers differ from what people see in the consumer apps.
+- The GEO score and the page score are rules of thumb, not validated measures.
+- Answers vary from run to run; only rates over several runs mean something.
