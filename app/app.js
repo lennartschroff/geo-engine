@@ -99,7 +99,7 @@
       '<div style="display:flex;align-items:center;gap:10px;color:' + C.fg + '">' + iconSliders(22) + '<h2>Set up your own brand</h2></div>' +
       '<p class="s14 muted" style="margin:0">Takes about two minutes. Nothing leaves your browser.</p>' +
       '<button class="btn outline" style="align-self:flex-start" ' + click(chooseOwn) + '>Get started →</button></div></div>' +
-      '<span class="small muted">You can switch between the two at any time from the header.</span></div>';
+      '<span class="small muted">You can switch between the two at any time from the menu.</span></div>';
   }
   function chooseDemo() { mode = 'demo'; saveMode('demo'); boot(); }
   function chooseOwn() { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); }
