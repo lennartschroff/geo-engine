@@ -260,7 +260,7 @@
       libCat: 'all', libType: 'all', writeStep: 1, allBlocks: false, selectedQ: DEFAULT_Q,
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
       newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '', pagesMsg: '',
-      importText: '', importSource: '', importCands: [], importMsg: '',
+      importText: '', importSource: '', importCands: [], importMsg: '', polished: {}, factConfirm: {},
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}
     }, saved);
     let drag = null;
@@ -273,13 +273,14 @@
           lang: v.lang === 'de' ? 'de' : 'en', active: v.active || {}, custom: Array.isArray(v.custom) ? v.custom : [],
           customBlocks: Array.isArray(v.customBlocks) ? v.customBlocks : [], drafts: v.drafts || {}, auditDone: v.auditDone || {},
           // Unreviewed suggestions survive a reload, so review work isn't lost.
-          importCands: Array.isArray(v.importCands) ? v.importCands : [], importSource: typeof v.importSource === 'string' ? v.importSource : ''
+          importCands: Array.isArray(v.importCands) ? v.importCands : [], importSource: typeof v.importSource === 'string' ? v.importSource : '',
+          polished: v.polished && typeof v.polished === 'object' ? v.polished : {}, factConfirm: v.factConfirm && typeof v.factConfirm === 'object' ? v.factConfirm : {}
         };
       } catch (e) { return {}; }
     }
     function persist() {
       try {
-        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource }));
+        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource, polished: state.polished, factConfirm: state.factConfirm }));
       } catch (e) { /* storage unavailable – state stays in memory */ }
     }
     function set(patch) { Object.assign(state, patch); persist(); render(); }
@@ -870,7 +871,49 @@
         '<div class="col-score"><div style="padding-bottom:10px;border-bottom:1px solid #E6E4DE"><h2 style="font-size:15px">' + esc(l.scoreTitle) + '</h2></div>' +
         '<div style="display:flex;align-items:baseline;gap:8px"><span class="score" style="color:' + scoreColor + '">' + sc.score + '</span><span class="muted">/ 100</span></div>' +
         '<span style="font-weight:500;color:' + scoreColor + '">' + esc(verdict) + '</span><div style="display:flex;flex-direction:column;gap:10px">' + crit + '</div>' +
-        (ph ? '<span class="s13 warn">' + esc(l.ph(ph)) + '</span>' : '') + '</div></div></section>';
+        (ph ? '<span class="s13 warn">' + esc(l.ph(ph)) + '</span>' : '') + '</div></div>' +
+        (n ? articlePanel(sel, draftBlocks) : '') + '</section>';
+    }
+
+    // ---------- Blocks -> readable article (compose, polish elsewhere, check) ----------
+    function articlePanel(sel, draftBlocks) {
+      const l = L();
+      const items = draftItems(draftBlocks);
+      const composed = CORE.composeArticle(items, sel.text, state.lang);
+      const polished = (state.polished[sel.id] || '').trim();
+      const current = polished || composed;
+      const known = BRAND_NAMES.concat(COMPETITORS);
+      const facts = polished ? CORE.checkFacts(composed, polished, known) : null;
+      const dropped = polished ? CORE.blockCoverage(items, polished).filter(c => c.dropped) : [];
+      const clean = !facts || (facts.ok && !dropped.length);
+      const confirmed = !!state.factConfirm[sel.id];
+      const canExport = clean || confirmed;
+      const flag = (label, list, fmt) => list.length ? '<div class="flags"><span class="s13" style="font-weight:500">' + esc(label) + '</span><ul>' + list.map(x => '<li>' + fmt(x) + '</li>').join('') + '</ul></div>' : '';
+      const kind = x => esc(l.artKinds[x.kind] + ': ') + '<span class="mono">' + esc(x.value) + '</span>';
+      const checks = CORE.citabilityChecks(current).map(c => '<div class="crit"><span style="color:' + (c.ok ? C.accent : C.warn) + '">' + (c.ok ? '✓' : '!') + '</span><div><span>' + esc(l.artChecks[c.id]) + '</span>' +
+        (c.items && c.items.length ? '<span class="small muted">' + esc(c.items.slice(0, 2).map(t => t.length > 90 ? t.slice(0, 90) + '…' : t).join(' / ')) + '</span>' : '') + '</div></div>').join('');
+      const factBlock = !facts ? '<p class="s13 muted">' + esc(l.artStep3Empty) + '</p>'
+        : clean ? '<p class="s14" style="color:' + C.accent + '">✓ ' + esc(l.artFactsOk) + '</p>'
+          : '<div role="status" class="factwarn"><span class="s14" style="font-weight:500;color:' + C.warn + '">' + esc(l.artFactsBad) + '</span>' +
+            flag(l.artMissing, facts.missing, kind) + flag(l.artAdded, facts.added, kind) +
+            flag(l.artDropped, dropped, x => esc(x.text.length > 120 ? x.text.slice(0, 120) + '…' : x.text)) +
+            '<label class="s14" style="display:flex;gap:8px;align-items:center;min-height:44px;cursor:pointer"><input type="checkbox" id="factconfirm-' + esc(sel.id) + '"' + (confirmed ? ' checked' : '') + ' ' +
+            attr('change', () => { const m = Object.assign({}, state.factConfirm); m[sel.id] = !confirmed; set({ factConfirm: m }); }) + '><span>' + esc(l.artConfirm) + '</span></label></div>';
+      return '<div class="article"><div class="head"><h2>' + esc(l.artTitle) + '</h2><p class="s14 muted" style="margin:0">' + esc(l.artSub) + '</p></div>' +
+        '<div class="artstep"><h3>' + esc(l.artStep1) + '</h3><p class="s13 muted">' + esc(l.artStep1Sub) + '</p><div class="preview">' + CORE.mdToHtml(composed) + '</div></div>' +
+        '<div class="artstep"><h3>' + esc(l.artStep2) + '</h3><p class="s13 muted">' + esc(l.artStep2Sub) + '</p>' +
+        '<button class="btn sm" style="align-self:flex-start" ' + click(() => copyToClipboard(CORE.buildPolishPrompt(composed, state.lang), 'prompt')) + '>' + esc(state.copied === 'prompt' ? l.copied : l.artCopyPrompt) + '</button>' +
+        '<label for="polished-' + esc(sel.id) + '" class="s13" style="font-weight:500">' + esc(l.artPasteLabel) + '</label>' +
+        '<textarea id="polished-' + esc(sel.id) + '" rows="8" placeholder="' + esc(l.artPastePh) + '" ' + attr('input', e => {
+          const m = Object.assign({}, state.polished); m[sel.id] = e.target.value; const f = Object.assign({}, state.factConfirm); delete f[sel.id]; set({ polished: m, factConfirm: f });
+        }) + '>' + esc(state.polished[sel.id] || '') + '</textarea>' +
+        (polished ? '<button class="link s13" style="align-self:flex-start" ' + click(() => { const m = Object.assign({}, state.polished); delete m[sel.id]; set({ polished: m }); }) + '>' + esc(l.artClear) + '</button>' : '') + '</div>' +
+        '<div class="artstep"><h3>' + esc(l.artStep3) + '</h3>' + factBlock + '<div style="display:flex;flex-direction:column;gap:10px">' + checks + '</div>' +
+        '<span class="s13 muted">' + esc(l.artVersion(polished ? 'polished' : 'composed')) + '</span>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn sm" ' + (canExport ? '' : 'disabled ') + click(() => copyToClipboard(current, 'artmd')) + '>' + esc(state.copied === 'artmd' ? l.copied : l.artCopyMd) + '</button>' +
+        '<button class="btn sm plain" ' + (canExport ? '' : 'disabled ') + click(() => copyToClipboard(CORE.articleToHtml(current, state.lang), 'arthtml')) + '>' + esc(state.copied === 'arthtml' ? l.copied : l.artCopyHtml) + '</button>' +
+        '</div></div></div>';
     }
 
     function markOver(el) {
