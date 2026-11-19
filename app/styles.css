@@ -151,3 +151,10 @@ mark.m-brand { background: #C9D6F7; color: var(--fg); padding: 0 2px; border-rad
 mark.m-comp { background: #FBEBDD; color: var(--fg); padding: 0 2px; border-radius: 2px; }
 /* 95% range whisker on trend bars (D3) */
 .ci { position: absolute; left: 50%; width: 2px; margin-left: -1px; background: var(--fg); }
+
+/* Library import review (suggested blocks) */
+.card textarea, .cand textarea { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--input); border-radius: 6px; font: inherit; resize: vertical; background: var(--bg); }
+.cands { display: flex; flex-direction: column; gap: 12px; }
+.cand { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.cand-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn[disabled] { opacity: .55; cursor: not-allowed; }
