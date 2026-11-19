@@ -32,6 +32,21 @@
     };
   }
 
+  // Monitoring part of an export from scripts/export_monitoring.py.
+  function demoFromExport(parsed, prev) {
+    return {
+      results: parsed.results,
+      cited_sources: Array.isArray(parsed.cited_sources) ? parsed.cited_sources : [],
+      trend: Array.isArray(parsed.trend) && parsed.trend.length ? parsed.trend : (prev ? prev.trend : []),
+      trend_ci: Array.isArray(parsed.trend_ci) ? parsed.trend_ci : [],
+      answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
+      competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
+      pieces: prev ? prev.pieces : [],
+      audit_meta: parsed.audit_meta || (prev ? prev.audit_meta : { date: '', pages: 0, posts: 0 }),
+    };
+  }
+  const validSetup = x => x && x.brand && Array.isArray(x.brand.aliases) && Array.isArray(x.categories) && Array.isArray(x.questions) && x.questions.length > 0;
+
   let mode = loadMode();
   let own = loadOwn();
 
@@ -122,6 +137,10 @@
       '<div style="max-width:640px;margin:56px auto;padding:0 32px;display:flex;flex-direction:column;gap:24px">' +
       '<button class="link" style="align-self:flex-start" ' + click(() => { mode = 'demo'; saveMode('demo'); setupDraft = null; boot(); }) + '>← Back to the demo</button>' +
       '<div class="head"><h1>Set up your brand</h1><p>Runs entirely in your browser — nothing is sent anywhere, no API key needed for this part.</p></div>' +
+      '<div class="card" style="gap:10px"><span class="s14" style="font-weight:500">Already have monitoring results?</span>' +
+      '<span class="s13 muted">Load monitoring_export.json (from a monitoring run or the scheduled GitHub Action). It sets up the brand, topics, questions and results in one step.</span>' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label for="su-export-file" class="btn sm plain" style="cursor:pointer">Load export…</label>' +
+      '<input id="su-export-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadExportSetup) + '></div></div>' +
       '<div class="card">' +
       '<label for="su-name">Company name</label><input id="su-name" type="text" value="' + esc(d.name) + '" placeholder="e.g. Lighthouse Marketing" ' + attr('input', e => { d.name = e.target.value; }) + '>' +
       '<label for="su-domain">Website domain</label><input id="su-domain" type="text" value="' + esc(d.domain) + '" placeholder="e.g. lighthouse-marketing.com" ' + attr('input', e => { d.domain = e.target.value; }) + '>' +
@@ -172,6 +191,30 @@
         setupDraft.error = 'Could not read that file — expected the JSON scripts/suggest_topics.py produces.';
       }
       renderSetup();
+    };
+    reader.readAsText(file);
+  }
+  // Whole setup from a monitoring export (export_monitoring.py writes a
+  // "setup" section: the target's brand, topics and questions). Question ids
+  // come from the export, so old per-question state is cleared, as in submitSetup.
+  function loadExportSetup(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!parsed || !parsed.results || !validSetup(parsed.setup)) throw new Error('not a monitoring export with setup');
+        own = emptyOwnData(parsed.setup.brand, parsed.setup.categories, parsed.setup.questions);
+        own.demo = demoFromExport(parsed, null);
+        saveOwn(own);
+        try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (err) { /* storage unavailable */ }
+        setupDraft = null;
+        boot();
+      } catch (err) {
+        setupDraft.error = 'Could not read that file — expected monitoring_export.json from scripts/export_monitoring.py.';
+        renderSetup();
+      }
     };
     reader.readAsText(file);
   }
@@ -504,16 +547,12 @@
         try {
           const parsed = JSON.parse(reader.result);
           if (!parsed || typeof parsed !== 'object' || !parsed.results) throw new Error('missing results');
-          own.demo = {
-            results: parsed.results,
-            cited_sources: Array.isArray(parsed.cited_sources) ? parsed.cited_sources : [],
-            trend: Array.isArray(parsed.trend) && parsed.trend.length ? parsed.trend : own.demo.trend,
-            trend_ci: Array.isArray(parsed.trend_ci) ? parsed.trend_ci : [],
-            answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
-            competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
-            pieces: own.demo.pieces,
-            audit_meta: parsed.audit_meta || own.demo.audit_meta,
-          };
+          // An export with a setup section brings its own questions; result ids
+          // refer to those, so they replace the current ones.
+          if (validSetup(parsed.setup)) {
+            own.brand = parsed.setup.brand; own.categories = parsed.setup.categories; own.questions = parsed.setup.questions;
+          }
+          own.demo = demoFromExport(parsed, own.demo);
           saveOwn(own);
           boot();
         } catch (err) {
