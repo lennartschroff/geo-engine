@@ -384,3 +384,47 @@ describe('toHtml', () => {
     assert.match(html, /<blockquote><p>A wise quote\.<\/p><\/blockquote>/);
   });
 });
+
+describe('findMentions / highlightMentions (D1)', () => {
+  test('matches case-insensitively and across hyphen/space, whole words only', () => {
+    const spans = CORE.findMentions('Contoso-AI vs contoso ai; ContosoAI no', ['Contoso AI'], []);
+    assert.equal(spans.length, 2);
+  });
+  test('longest match wins on overlap (alias "Contoso" inside "Contoso AI")', () => {
+    const spans = CORE.findMentions('Try Contoso AI.', ['Contoso', 'Contoso AI'], []);
+    assert.deepEqual(spans.map(s => s[3]), ['Contoso AI']);
+  });
+  test('escapes HTML and marks brand vs competitor', () => {
+    const html = CORE.highlightMentions('<b>Acme</b> & Contoso', ['Contoso'], ['Acme']);
+    assert.equal(html, '&lt;b&gt;<mark class="m-comp">Acme</mark>&lt;/b&gt; &amp; <mark class="m-brand">Contoso</mark>');
+  });
+  test('regex metacharacters in names are literal', () => {
+    assert.equal(CORE.findMentions('We use C++ (and C+).', [], ['C++']).length, 1);
+  });
+});
+
+describe('shareOfVoice (D2)', () => {
+  const qs = [{ id: 'q1', tags: ['a'] }, { id: 'q2', tags: ['a', 'b'] }];
+  const answers = { q1: [{ text: 'Contoso and Acme' }, { text: 'Acme, Acme, Beta' }], q2: [{ text: 'Contoso Contoso' }] };
+  test('counts each name once per answer and computes the brand share', () => {
+    const [a, b] = CORE.shareOfVoice(answers, qs, ['a', 'b'], ['Contoso'], ['Acme', 'Beta']);
+    assert.equal(a.answers, 3);
+    assert.equal(a.brand, 2);
+    assert.equal(a.total, 5); // Contoso 2 + Acme 2 + Beta 1
+    assert.equal(a.share, 40);
+    assert.equal(a.top[0].name, 'Acme');
+    assert.equal(b.share, 100);
+  });
+  test('null share when nothing is mentioned', () => {
+    const [c] = CORE.shareOfVoice({ q1: [{ text: 'nothing' }] }, qs, ['a'], ['Contoso'], ['Acme']);
+    assert.equal(c.share, null);
+  });
+});
+
+describe('intervalsOverlap (D3)', () => {
+  test('overlapping and disjoint ranges', () => {
+    assert.equal(CORE.intervalsOverlap({ lo: 10, hi: 30 }, { lo: 25, hi: 40 }), true);
+    assert.equal(CORE.intervalsOverlap({ lo: 10, hi: 20 }, { lo: 25, hi: 40 }), false);
+    assert.equal(CORE.intervalsOverlap(null, { lo: 1, hi: 2 }), false);
+  });
+});

@@ -281,7 +281,66 @@
       .sort((a, b) => b.relevance - a.relevance);
   }
 
+  // ---------- Answer viewer + share of voice (TASKS.md D1/D2) ----------
+  // Name matching mirrors monitoring/mention_detection.py: case-insensitive,
+  // hyphen and whitespace treated alike, whole words only.
+  function nameRegex(name) {
+    const parts = String(name).trim().split(/[\s\-]+/).filter(Boolean).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    if (!parts.length) return null;
+    return new RegExp('(?<![\\p{L}\\p{N}_])' + parts.join('[\\s\\-]+') + '(?![\\p{L}\\p{N}_])', 'giu');
+  }
+
+  /** All [start, end, kind, name] mention spans, longest match wins on overlap. */
+  function findMentions(text, brandAliases, competitors) {
+    const spans = [];
+    const add = (names, kind) => (names || []).forEach(n => {
+      const re = nameRegex(n); if (!re) return;
+      let m; while ((m = re.exec(text))) spans.push([m.index, m.index + m[0].length, kind, n]);
+    });
+    add(brandAliases, 'brand'); add(competitors, 'competitor');
+    spans.sort((a, b) => a[0] - b[0] || (b[1] - b[0]) - (a[1] - a[0]));
+    const out = []; let end = -1;
+    for (const s of spans) if (s[0] >= end) { out.push(s); end = s[1]; }
+    return out;
+  }
+
+  /** Escaped HTML with brand mentions in <mark class="m-brand"> and competitors in <mark class="m-comp">. */
+  function highlightMentions(text, brandAliases, competitors) {
+    const t = String(text == null ? '' : text);
+    let html = '', i = 0;
+    for (const [start, end, kind] of findMentions(t, brandAliases, competitors)) {
+      html += htmlEscape(t.slice(i, start)) + '<mark class="' + (kind === 'brand' ? 'm-brand' : 'm-comp') + '">' + htmlEscape(t.slice(start, end)) + '</mark>';
+      i = end;
+    }
+    return html + htmlEscape(t.slice(i));
+  }
+
+  /**
+   * Share of voice per topic: of all answers to that topic's questions, how
+   * often the brand vs. each competitor is named (once per answer at most).
+   * share = brand / (brand + all competitor mentions), null with no mentions.
+   * answers: { questionId: [{ text }] }, questions: [{ id, tags }].
+   */
+  function shareOfVoice(answers, questions, categoryIds, brandAliases, competitors) {
+    return categoryIds.map(cat => {
+      const counts = { brand: 0 }; (competitors || []).forEach(c => { counts[c] = 0; });
+      let n = 0;
+      questions.filter(q => (q.tags || []).includes(cat)).forEach(q => (answers[q.id] || []).forEach(a => {
+        n++;
+        const seen = new Set(findMentions(a.text, brandAliases, competitors).map(s => s[2] === 'brand' ? 'brand' : s[3]));
+        seen.forEach(k => { counts[k]++; });
+      }));
+      const total = Object.values(counts).reduce((x, y) => x + y, 0);
+      const top = (competitors || []).map(name => ({ name, count: counts[name] })).filter(c => c.count > 0).sort((a, b) => b.count - a.count);
+      return { cat, answers: n, brand: counts.brand, total, share: total ? Math.round(100 * counts.brand / total) : null, top };
+    });
+  }
+
+  /** True when two 95% intervals overlap, i.e. the change may be noise (D3). */
+  const intervalsOverlap = (a, b) => !!a && !!b && a.lo <= b.hi && b.lo <= a.hi;
+
   return {
+    findMentions, highlightMentions, shareOfVoice, intervalsOverlap,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,
     QUESTION_TEMPLATES, generateForCategory, generateQuestions, slugify,
     tokenize, buildCorpusStats, idf, bm25Score, rankByRelevance,
