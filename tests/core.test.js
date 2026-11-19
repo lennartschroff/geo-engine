@@ -477,3 +477,73 @@ describe('extractBlockCandidates (Library import)', () => {
     assert.equal(CORE.textFromMarkdown('# Title\n\n- **Bold** [link](https://x.y) `code`').trim(), 'Title\n\nBold link code');
   });
 });
+
+describe('Write: compose, polish prompt, fact check (answer-first articles)', () => {
+  const items = [
+    { type: 'statement', text: 'Contoso AI is an AI engineering firm in Austin that builds RAG systems.' },
+    { type: 'figure', text: 'Contoso pipelines reach production within four to six weeks, with 3 to 8 knowledge sources.' },
+    { type: 'case', text: 'In 2024, Contoso analyzed 40,000 support tickets for an insurer within four days.' },
+    { type: 'quote', text: '“The pilot paid for itself before the second quarter was over”, says the CFO.' },
+    { type: 'faq', text: 'When is RAG worth it? – When the underlying knowledge changes often.' },
+  ];
+  const names = ['Contoso AI', 'Contoso'];
+  const md = CORE.composeArticle(items, 'How do I build a RAG pipeline?', 'en');
+
+  test('compose: question as title, answer first, sections, FAQ, all text verbatim', () => {
+    assert.ok(md.startsWith('# How do I build a RAG pipeline?\n\nContoso AI is an AI engineering firm'));
+    ['## In figures', '## Example from practice', '> “The pilot', '## Frequently asked questions', '### When is RAG worth it?']
+      .forEach(x => assert.ok(md.includes(x), x));
+    items.filter(i => i.type !== 'faq').forEach(i => assert.ok(md.includes(i.text)));
+    assert.equal(CORE.checkFacts(md, md, names).ok, true);
+  });
+
+  test('compose in German uses German headings', () => {
+    assert.ok(CORE.composeArticle(items, 'Frage?', 'de').includes('## Häufige Fragen'));
+  });
+
+  test('prompt carries the rules and the article', () => {
+    const p = CORE.buildPolishPrompt(md, 'en');
+    assert.ok(p.includes('Do not add any fact') && p.endsWith(md));
+    assert.ok(CORE.buildPolishPrompt(md, 'de').includes('Füge keine Tatsache'));
+  });
+
+  test('faithful rewrite passes: reformatted numbers and number words are the same fact', () => {
+    const rw = 'Contoso AI builds RAG systems in Austin. Pipelines go live in 4 to 6 weeks using 3 to 8 sources. ' +
+      'In 2024 Contoso analyzed 40.000 tickets in four days. "The pilot paid for itself before the second quarter was over", says the CFO.';
+    assert.deepEqual(CORE.checkFacts(md, rw, names), { missing: [], added: [], ok: true });
+  });
+
+  test('changed number, invented name and altered quote are flagged', () => {
+    const rw = 'Contoso AI, backed by NVIDIA, builds RAG systems in Austin. 4 to 6 weeks, 3 to 8 sources. ' +
+      'In 2024 Contoso analyzed 45,000 tickets in four days. "The pilot paid for itself quickly", says the CFO.';
+    const r = CORE.checkFacts(md, rw, names);
+    assert.equal(r.ok, false);
+    assert.deepEqual(r.missing.map(m => m.kind + ':' + m.value), ['number:40000', 'quote:The pilot paid for itself before the second quarter was over']);
+    assert.deepEqual(r.added.map(m => m.kind + ':' + m.value), ['number:45000', 'name:NVIDIA']);
+  });
+
+  test('a dropped block is caught by coverage even without numbers', () => {
+    const rw = 'Contoso AI is an engineering firm in Austin building RAG systems.';
+    const cov = CORE.blockCoverage(items, rw);
+    assert.equal(cov[0].dropped, false);
+    assert.equal(cov[4].dropped, true); // the FAQ answer vanished
+  });
+
+  test('citability checks', () => {
+    const byId = a => Object.fromEntries(CORE.citabilityChecks(a).map(c => [c.id, c]));
+    const good = byId(md);
+    assert.equal(good.selfContained.ok, true);
+    assert.equal(good.headings.ok, true);
+    assert.equal(good.dated.ok, true);
+    const bad = byId('# T\n\nShort.\n\nIt is great and this is a very long sentence that keeps going and going without any end in sight because nobody edited it at all for the reader, and then it adds even more clauses, commas and side remarks before it finally stops.');
+    assert.equal(bad.answerFirst.ok, false);
+    assert.equal(bad.selfContained.ok, false);
+    assert.equal(bad.sentenceLength.ok, false);
+    assert.equal(bad.dated.ok, false);
+  });
+
+  test('mdToHtml renders the article shapes and escapes HTML', () => {
+    assert.equal(CORE.mdToHtml('# T\n\n## H\n\nA <b> **bold**\n\n> Q'),
+      '<h1>T</h1>\n<h2>H</h2>\n<p>A &lt;b&gt; <strong>bold</strong></p>\n<blockquote><p>Q</p></blockquote>');
+  });
+});

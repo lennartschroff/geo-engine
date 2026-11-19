@@ -281,6 +281,157 @@
       .sort((a, b) => b.relevance - a.relevance);
   }
 
+  // ---------- Article composer, AI-polish prompt, fact check (Write tab) ----------
+  // Step 1 composes blocks into an answer-first article (no AI, no filler
+  // sentences -- filler makes passages less quotable). Step 2 is an optional
+  // AI rewrite done by the user in their own chatbot. Step 3 checks the
+  // rewrite against the blocks: every number, name and quote must survive,
+  // and nothing new may appear.
+
+  const ARTICLE_HEADINGS = {
+    en: { figures: 'In figures', example: 'Example from practice', more: 'Background', faq: 'Frequently asked questions' },
+    de: { figures: 'In Zahlen', example: 'Beispiel aus der Praxis', more: 'Hintergrund', faq: 'Häufige Fragen' },
+  };
+
+  /** items: [{ type, text }] in draft order -> Markdown article. */
+  function composeArticle(items, question, lang) {
+    const H = ARTICLE_HEADINGS[lang === 'de' ? 'de' : 'en'];
+    const of = t => items.filter(it => it.type === t);
+    const leadPool = items.filter(it => it.type === 'statement' || it.type === 'definition');
+    const lead = (leadPool.length ? leadPool : items.filter(it => it.type !== 'faq' && it.type !== 'quote')).slice(0, 2);
+    const used = new Set(lead);
+    const rest = t => of(t).filter(it => !used.has(it));
+    const out = [];
+    if (question) out.push('# ' + question, '');
+    if (lead.length) out.push(lead.map(it => it.text).join(' '), '');
+    const more = items.filter(it => !used.has(it) && (it.type === 'statement' || it.type === 'definition'));
+    if (more.length) out.push('## ' + H.more, '', more.map(it => it.text).join(' '), '');
+    if (rest('figure').length) out.push('## ' + H.figures, '', rest('figure').map(it => it.text).join(' '), '');
+    if (rest('case').length || rest('quote').length) {
+      out.push('## ' + H.example, '');
+      rest('case').forEach(it => out.push(it.text, ''));
+      rest('quote').forEach(it => out.push('> ' + it.text, ''));
+    }
+    if (of('faq').length) {
+      out.push('## ' + H.faq, '');
+      of('faq').forEach(it => { const f = splitFaqText(it.text); out.push('### ' + f.question, '', f.answer, ''); });
+    }
+    return out.join('\n').trim() + '\n';
+  }
+
+  const POLISH_PROMPT = {
+    en: ['You are editing a web article so that AI assistants (ChatGPT, Claude, Gemini, Perplexity) can quote it accurately.',
+      'Rewrite the article below into fluent, natural English. Rules:',
+      '1. Keep every fact exactly: all numbers, years, names, quotes (word for word) and claims. Do not add any fact, number, name, example or source that is not in the text, and do not drop any.',
+      '2. Start with a 40-60 word paragraph that directly answers the title question.',
+      '3. Keep the headings (you may phrase them as questions) and keep the FAQ as question + answer pairs.',
+      '4. Write self-contained sentences: name the subject instead of starting with "it" or "this". Keep sentences short, about 20 words on average.',
+      '5. No marketing superlatives, no filler, no emojis.',
+      '6. Return only the article, in Markdown.'],
+    de: ['Du überarbeitest einen Webartikel so, dass KI-Assistenten (ChatGPT, Claude, Gemini, Perplexity) ihn korrekt zitieren können.',
+      'Formuliere den Artikel unten in flüssiges, natürliches Deutsch um. Regeln:',
+      '1. Behalte jede Tatsache exakt bei: alle Zahlen, Jahreszahlen, Namen, Zitate (wörtlich) und Aussagen. Füge keine Tatsache, Zahl, Namen, Beispiel oder Quelle hinzu, die nicht im Text steht, und lass nichts weg.',
+      '2. Beginne mit einem Absatz von 40-60 Wörtern, der die Titelfrage direkt beantwortet.',
+      '3. Behalte die Zwischenüberschriften (gern als Fragen formuliert) und die FAQ als Frage-Antwort-Paare.',
+      '4. Schreibe Sätze, die für sich allein verständlich sind: nenne das Subjekt, statt mit "es" oder "das" zu beginnen. Halte Sätze kurz, im Schnitt etwa 15-20 Wörter.',
+      '5. Keine Werbesprache, keine Füllsätze, keine Emojis.',
+      '6. Gib nur den Artikel zurück, in Markdown.'],
+  };
+  function buildPolishPrompt(markdown, lang) {
+    return POLISH_PROMPT[lang === 'de' ? 'de' : 'en'].join('\n') + '\n\n---\n\n' + markdown;
+  }
+
+  const NUMBER_WORDS = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+    eins: 1, ein: 1, zwei: 2, drei: 3, vier: 4, fünf: 5, sechs: 6, sieben: 7, acht: 8, neun: 9, zehn: 10, elf: 11, zwölf: 12,
+  };
+  // "ein" is too common as an article to count as the number one.
+  const NUMBER_WORD_RE = new RegExp('(?<![\\p{L}])(' + Object.keys(NUMBER_WORDS).filter(w => w !== 'ein').join('|') + ')(?![\\p{L}])', 'giu');
+
+  /** Numbers (thousand separators removed, number words 1-12 as digits), acronyms, quotes. */
+  function extractFacts(text, knownNames) {
+    const t = String(text || '');
+    const numbers = new Set();
+    (t.replace(NUMBER_WORD_RE, w => String(NUMBER_WORDS[w.toLowerCase()])).match(/\d+(?:[.,]\d+)*/g) || []).forEach(n => {
+      const plain = /^\d{1,3}([.,]\d{3})+$/.test(n) ? n.replace(/[.,]/g, '') : n.replace(',', '.');
+      numbers.add(plain);
+    });
+    const names = new Set((t.match(/(?<![\p{L}\p{N}])[A-ZÄÖÜ]{2,}[a-z]?(?![\p{L}\p{N}])/gu) || []).map(x => x.replace(/s$/, '')));
+    (knownNames || []).forEach(n => { if (findMentions(t, [n], []).length) names.add(n); });
+    const quotes = (t.match(/[„“"»«][^„“"»«]{12,}[“”"»«]/g) || []).map(q => q.slice(1, -1).trim()).filter(q => q.split(/\s+/).length >= 4);
+    return { numbers: [...numbers], names: [...names], quotes };
+  }
+
+  /**
+   * Compares a rewrite with its source. missing = facts from the source not
+   * found in the rewrite; added = numbers/names in the rewrite that the
+   * source doesn't have (the usual sign of an invented fact).
+   */
+  function checkFacts(sourceText, rewrittenText, knownNames) {
+    const a = extractFacts(sourceText, knownNames);
+    const b = extractFacts(rewrittenText, knownNames);
+    const flat = x => String(x).replace(/[„“"»«”]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+    const rew = flat(rewrittenText);
+    const missing = [
+      ...a.numbers.filter(n => b.numbers.indexOf(n) === -1).map(v => ({ kind: 'number', value: v })),
+      ...a.names.filter(n => b.names.indexOf(n) === -1).map(v => ({ kind: 'name', value: v })),
+      ...a.quotes.filter(q => rew.indexOf(flat(q)) === -1).map(v => ({ kind: 'quote', value: v })),
+    ];
+    const added = [
+      ...b.numbers.filter(n => a.numbers.indexOf(n) === -1).map(v => ({ kind: 'number', value: v })),
+      ...b.names.filter(n => a.names.indexOf(n) === -1).map(v => ({ kind: 'name', value: v })),
+    ];
+    return { missing, added, ok: !missing.length && !added.length };
+  }
+
+  /**
+   * Which source blocks may have been dropped: share of each block's
+   * distinctive words (6+ letters) still present in the rewrite. Rewording
+   * lowers it a little; a dropped block lands near 0. Flag below `min`.
+   */
+  function blockCoverage(items, rewrittenText, min) {
+    const limit = min == null ? 0.4 : min;
+    const stem = w => w.toLowerCase().slice(0, 6);
+    const have = new Set((String(rewrittenText || '').match(/[\p{L}]{6,}/gu) || []).map(stem));
+    return items.map(it => {
+      const ws = [...new Set((it.text.match(/[\p{L}]{6,}/gu) || []).map(stem))];
+      const ratio = ws.length ? ws.filter(w => have.has(w)).length / ws.length : 1;
+      return { type: it.type, text: it.text, ratio: Math.round(ratio * 100) / 100, dropped: ratio < limit };
+    });
+  }
+
+  const PRONOUN_START = /^(it|this|that|these|those|they|es|dies|das|diese|dieser|dieses|sie)\b/i;
+  /** Readability / citability checks on a Markdown article. */
+  function citabilityChecks(markdown) {
+    const lines = String(markdown || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+    const paras = lines.filter(x => !/^#/.test(x) && !/^>/.test(x));
+    const words = x => x.split(/\s+/).filter(Boolean).length;
+    const sentences = paras.join(' ').split(/(?<=[.!?])\s+/).filter(x => words(x) > 0);
+    const avg = sentences.length ? Math.round(sentences.reduce((n, x) => n + words(x), 0) / sentences.length) : 0;
+    const lead = paras[0] || '';
+    const long = sentences.filter(x => words(x) > 35);
+    const pronounLed = paras.filter(x => PRONOUN_START.test(x));
+    return [
+      { id: 'answerFirst', ok: words(lead) >= 15 && words(lead) <= 80, value: words(lead) },
+      { id: 'sentenceLength', ok: avg > 0 && avg <= 22 && !long.length, value: avg, items: long },
+      { id: 'selfContained', ok: !pronounLed.length, items: pronounLed },
+      { id: 'headings', ok: lines.filter(x => /^##\s/.test(x)).length >= 2, value: lines.filter(x => /^##\s/.test(x)).length },
+      { id: 'dated', ok: /\b(19|20)\d{2}\b/.test(paras.join(' ')) },
+    ];
+  }
+
+  /** Minimal Markdown -> HTML for the article shapes produced here (headings, paragraphs, quotes, simple lists). */
+  function mdToHtml(markdown) {
+    const inline = x => htmlEscape(x).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    return String(markdown || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean).map(block => {
+      const h = block.match(/^(#{1,4})\s+(.*)$/);
+      if (h) return '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>';
+      if (/^>/.test(block)) return '<blockquote><p>' + inline(block.replace(/^>\s?/gm, '')) + '</p></blockquote>';
+      if (/^[-*]\s/.test(block)) return '<ul>' + block.split('\n').map(li => '<li>' + inline(li.replace(/^[-*]\s+/, '')) + '</li>').join('') + '</ul>';
+      return '<p>' + inline(block.replace(/\n/g, ' ')) + '</p>';
+    }).join('\n');
+  }
+
   // ---------- Block suggestions from your own content (Library import) ----------
   // Heuristics, not an LLM: they propose candidates, a person decides. Nothing
   // is invented -- every candidate is a sentence (or Q+A pair) taken verbatim
@@ -417,6 +568,7 @@
 
   return {
     findMentions, highlightMentions, shareOfVoice, intervalsOverlap, textFromMarkdown, extractBlockCandidates,
+    composeArticle, buildPolishPrompt, extractFacts, checkFacts, blockCoverage, citabilityChecks, mdToHtml,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,
     QUESTION_TEMPLATES, generateForCategory, generateQuestions, slugify,
     tokenize, buildCorpusStats, idf, bm25Score, rankByRelevance,
