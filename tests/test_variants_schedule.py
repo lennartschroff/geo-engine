@@ -78,6 +78,10 @@ class TestSchedule:
         assert is_due(s, date(2026, 12, 7))  # first Monday of Dec 2026
         assert not is_due(s, date(2026, 12, 14))
 
+    def test_off_is_never_due(self):
+        s = {"frequency": "off", "weekday": "monday"}
+        assert not any(is_due(s, date(2026, 11, d)) for d in range(1, 31))
+
     def test_unknown_frequency_raises(self):
         with pytest.raises(ValueError):
             is_due({"frequency": "hourly", "weekday": "monday"}, date(2026, 11, 23))
