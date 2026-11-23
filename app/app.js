@@ -101,6 +101,7 @@
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     sort: '<path d="M8 4v16M4 16l4 4 4-4M16 20V4M12 8l4-4 4 4"/>',
     run: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="currentColor"/>',
+    runs: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="currentColor"/>',
     download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
@@ -387,7 +388,7 @@
     // Library is reference material you dip into, not a destination -- kept
     // last/rightmost so it's still one click away without competing with the
     // two active steps.
-    const GROUPS = { monitor: ['questions', 'run', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
+    const GROUPS = { monitor: ['questions', 'runs', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
     const TYPE_FG = { statement: 'var(--type-statement)', definition: 'var(--type-definition)', figure: 'var(--type-figure)', case: 'var(--type-case)', quote: 'var(--type-quote)', faq: 'var(--type-faq)' };
@@ -423,7 +424,7 @@
       importText: '', importSource: '', importCands: [], importMsg: '', polished: {}, factConfirm: {},
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {},
       // Redesign: overlays, filters, sorting. Not persisted.
-      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1,
+      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null,
       qSearch: '', qTopic: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page'
     }, saved);
@@ -433,8 +434,11 @@
       try {
         const raw = window.localStorage.getItem(STORE_KEY);
         const v = raw ? JSON.parse(raw) : {};
+        // Language is one setting for the whole app, not per mode.
+        let lang = v.lang;
+        try { lang = window.localStorage.getItem('geo-engine:lang') || lang; } catch (e) { /* storage unavailable */ }
         return {
-          lang: v.lang === 'de' ? 'de' : 'en', active: v.active || {}, custom: Array.isArray(v.custom) ? v.custom : [],
+          lang: lang === 'de' ? 'de' : 'en', active: v.active || {}, custom: Array.isArray(v.custom) ? v.custom : [],
           customBlocks: Array.isArray(v.customBlocks) ? v.customBlocks : [], drafts: v.drafts || {}, auditDone: v.auditDone || {},
           // Unreviewed suggestions survive a reload, so review work isn't lost.
           importCands: Array.isArray(v.importCands) ? v.importCands : [], importSource: typeof v.importSource === 'string' ? v.importSource : '',
@@ -444,6 +448,7 @@
     }
     function persist() {
       try {
+        window.localStorage.setItem('geo-engine:lang', state.lang);
         window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource, polished: state.polished, factConfirm: state.factConfirm }));
       } catch (e) { /* storage unavailable – state stays in memory */ }
     }
@@ -546,23 +551,8 @@
     // data exists (so this never becomes a permanent extra screen to navigate).
     function viewGettingStarted() {
       const l = L();
-      const steps = [
-        { done: true, title: l.gsStep1Title, text: l.gsStep1Text },
-        { done: allBlocksList().length > 0, title: l.gsStep2Title, text: l.gsStep2Text, actionLabel: l.gsStep2Action, action: () => set({ tab: 'library' }) },
-        { done: D.audit.length > 0 || D.pages.length > 0, title: l.gsStep3Title, text: l.gsStep3Text, actionLabel: l.gsStep3Action, action: () => set({ tab: 'website' }) },
-        { done: Object.keys(D.demo.results).length > 0, title: l.gsStep4Title, text: l.gsStep4Text, actionLabel: l.gsStep4Action, action: () => set({ tab: 'sources' }) }
-      ];
-      const rows = steps.map(s =>
-        '<div class="card" style="flex-direction:row;align-items:flex-start;gap:16px;padding:20px 24px">' +
-        '<span style="flex-shrink:0;margin-top:1px;color:' + (s.done ? C.accent : C.faint) + '">' + (s.done ? iconCheck(20) : iconCircle(20)) + '</span>' +
-        '<div style="display:flex;flex-direction:column;gap:4px;flex-grow:1;min-width:0">' +
-        '<span style="font-weight:500' + (s.done ? ';color:' + C.muted : '') + '">' + esc(s.title) + '</span>' +
-        '<span class="s14 muted">' + esc(s.text) + '</span></div>' +
-        (s.action && !s.done ? '<button class="btn sm plain" style="flex-shrink:0" ' + click(s.action) + '>' + esc(s.actionLabel) + '</button>' : '') +
-        '</div>'
-      ).join('');
-      return '<section><div class="head"><h1>' + esc(l.gsTitle(BRAND.short)) + '</h1><p>' + esc(l.gsSub) + '</p></div>' +
-        '<div style="display:flex;flex-direction:column;gap:12px">' + rows + '</div></section>';
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.gsTitle(BRAND.short)) + '</h1><p>' + esc(l.ui.setup.sub) + '</p></div></div>' +
+        '<div class="panel">' + setupBody() + '</div></section>';
     }
 
     // Weekly visibility series shared by Overview and Impact. With real
@@ -804,6 +794,7 @@
           own.demo = demoFromExport(parsed, own.demo);
           saveOwn(own);
           boot();
+          toast(L().ui.setup.toastLoaded);
         } catch (err) {
           set({ monitoringMsg: 'error' });
         }
@@ -1316,90 +1307,143 @@
       own.runList = qs.map(q => q.id);
       saveOwn(own);
       render();
-      toast(L().ui.run.toastSaved);
+      toast(L().ui.setup.toastSaved);
     }
-    // Next date the daily/weekly schedule fires (the Action wakes ~06:00 Berlin).
-    function nextRun(sch) {
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const d = new Date();
-      d.setHours(6, 0, 0, 0);
-      if (sch.frequency === 'daily') { if (d <= new Date()) d.setDate(d.getDate() + 1); return d; }
-      if (sch.frequency !== 'weekly') return null;
-      const want = days.indexOf(sch.weekday);
-      while (d.getDay() !== want || d <= new Date()) d.setDate(d.getDate() + 1);
-      return d;
-    }
-
-    function viewRun() {
-      const l = L(); const R = l.ui.run;
-      if (!MON) return '<section><div class="head"><h1>' + esc(l.tabs.run) + '</h1></div><div class="empty">' + esc(l.noRows) + '</div></section>';
-      const T = MON.target;
+    // ---------- Runs: start a run, load results, choose the questions ----------
+    // Plain language on purpose; the technical details live in the setup popup.
+    function viewRuns() {
+      const l = L(); const R = l.ui.runs;
+      const repo = MON && MON.github_repo ? 'https://github.com/' + MON.github_repo + '/actions/workflows/monitoring.yml' : '';
       const list = runListNow();
-      const grp = {
-        key: list.filter(q => q.key), on: list.filter(q => !q.key && !q.custom), own: list.filter(q => q.custom)
-      };
-      const engines = MON.engines.filter(e => e.enabled);
-      const wordings = 1 + MON.variants;
-      const calls = list.length * wordings * MON.runs_per_question * engines.length;
-      const usd = engines.reduce((a, e) => a + e.usd_per_call * list.length * wordings * MON.runs_per_question, 0);
-      const over = calls > MON.budget.max_calls_per_run || usd > MON.budget.max_usd_per_run;
-      const nx = nextRun(MON.schedule);
+      const engines = MON ? MON.engines.filter(e => e.enabled) : [];
+      const perQ = engines.reduce((a, e) => a + e.usd_per_call, 0);
+      const fullCalls = list.length * (1 + (MON ? MON.variants : 0)) * (MON ? MON.runs_per_question : 1);
+      const money = v => v.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+      // ~8 s per answer, measured on the first real run (60 answers, 2026-11-23).
+      const minutes = n => Math.max(2, Math.ceil(n * engines.length * 8 / 60));
+      const ext = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
+      const left = mode === 'own' ? setupLeft() : 0;
+
+      const notice = mode === 'demo'
+        ? '<div class="callout"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">' + esc(R.demoTitle) + '</span><span class="s13 muted">' + esc(R.demoText) + '</span></div>' +
+          '<button class="btn" ' + click(() => { if (own) switchToOwn(); else useTarget(); }) + '>' + esc(l.ui.setup.demoCta) + '</button></div>'
+        : left ? '<div class="banner"><span class="swatch" style="border-radius:50%;background:var(--amber)"></span><span class="item">' + esc(R.setupLeft(left)) + '</span>' +
+          '<button class="btn sm" style="margin-left:auto" ' + click(openSetup) + '>' + esc(R.setupGo) + '</button></div>' : '';
+
+      const card = (icon, title, text, cost) => '<div class="panel"><div class="panel-b" style="display:flex;flex-direction:column;gap:10px;height:100%">' +
+        '<div style="display:flex;align-items:center;gap:10px"><span class="nba-n" style="color:var(--accent)">' + ic(icon, 15) + '</span><h2 style="font-size:15px">' + esc(title) + '</h2></div>' +
+        '<p class="s14" style="margin:0;color:var(--fg2)">' + esc(text) + '</p><span class="s13 muted">' + esc(cost) + '</span>' +
+        (repo ? '<a class="btn" style="align-self:flex-start;margin-top:auto;text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + repo + '">' + esc(R.start) + ext + '</a>' : '') + '</div></div>';
+      const starts = '<div class="grid g-2">' +
+        card('check', R.testTitle, R.testText, R.cost(money(perQ), 2)) +
+        card('runs', R.fullTitle, R.fullText(list.length), R.cost(money(perQ * fullCalls), minutes(fullCalls))) + '</div>' +
+        '<p class="s13 muted" style="margin:-8px 0 0">' + esc(R.how) + '</p>';
+
+      const date = Object.keys(D.demo.results || {}).length ? dataDate() : '';
+      const results = '<div class="panel"><div class="panel-b" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">' +
+        '<div style="display:flex;flex-direction:column;gap:2px;flex:1 1 320px"><h2 style="font-size:15px">' + esc(R.resTitle) + '</h2>' +
+        '<span class="s14" style="color:' + (date ? 'var(--fg2)' : 'var(--muted)') + '">' + esc(date ? R.resLast(date) : R.resNone) + '</span><span class="s13 muted">' + esc(R.resText) + '</span></div>' +
+        (mode === 'own' ? '<label for="runs-file" class="btn' + (date ? ' plain' : '') + '" style="cursor:pointer">' + ic('upload', 15) + esc(R.resLoad) + '</label>' +
+          '<input id="runs-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' : '') +
+        (repo ? '<a class="btn plain" style="text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + repo + '">' + esc(R.resRuns) + ext + '</a>' : '') +
+        (state.monitoringMsg === 'error' ? '<span class="s13 warn" style="flex-basis:100%">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div></div>';
+
       const diff = runDiff();
-      const off = allQ().length - list.length;
-
-      const demo = mode === 'demo' && T ? '<div class="callout"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">' + esc(R.demoTitle) + '</span>' +
-        '<span class="s13 muted">' + esc(R.demoText(T.path)) + '</span></div>' +
-        (own ? '<button class="btn" ' + click(switchToOwn) + '>' + esc(R.openOwn(own.brand.short)) + '</button>'
-          : '<button class="btn" ' + click(useTarget) + '>' + ic('run', 15) + esc(R.useTarget(T.brand.short)) + '</button>') + '</div>' : '';
-
-      const tile = (label, value, sub, extra) => '<div class="kpi-tile"><div class="top">' + esc(label) + '</div><div class="mid"><span class="n">' + value + '</span>' + (extra || '') + '</div><span class="l">' + sub + '</span></div>';
-      const kpis = '<div class="kpis">' +
-        tile(R.kQuestions, list.length, esc(R.kSplit(grp.key.length, grp.on.length, grp.own.length))) +
-        tile(R.kCalls, calls, esc(R.kCallsSub(list.length, MON.variants, engines.length))) +
-        tile(R.kCost, esc(usd.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD' })), esc(R.kCostSub)) +
-        tile(R.kNext, nx ? esc(nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short' })) : esc(MON.schedule.frequency === 'off' ? R.offShort : '–'),
-          esc((nx ? nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { weekday: 'long' }) + ' · ' : '') + (R.every[MON.schedule.frequency] || ''))) + '</div>';
-
-      const row = q => '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px">' +
-        '<input type="checkbox" checked aria-label="' + esc(l.ariaOff + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
-        '<div style="display:flex;flex-direction:column;min-width:0"><span>' + esc(q.text) + '</span><span class="small muted">' + esc(catLabels(q.tags)) + '</span></div>' +
-        '<button class="icon" aria-label="' + esc(l.ui.answers + ': ' + q.text) + '" data-tt="' + esc(l.ui.answers) + '" ' + click(() => openQuestion(q.id)) + '>' + ic('chevron', 14) + '</button></div>';
-      const section = (title, qs) => qs.length ? '<div class="nav-group" style="padding:12px 18px 4px">' + esc(title) + ' · ' + qs.length + '</div>' + qs.map(row).join('') : '';
-      const status = mode !== 'own' ? '' : '<div class="banner" style="margin:0;border-radius:0;border-width:0 0 1px">' +
-        (diff.changed ? '<span class="swatch" style="border-radius:50%;background:var(--amber)"></span><span class="item" style="color:var(--amber)">' + esc(diff.never ? R.neverSaved : R.changed(diff.added, diff.removed)) + '</span>'
-          : '<span class="swatch" style="border-radius:50%;background:var(--good)"></span><span class="item good">' + esc(R.saved) + '</span>') + '</div>';
-      const runList = '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.listTitle) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div></div>' + status +
-        '<div>' + section(R.grpKey, grp.key) + section(R.grpOn, grp.on) + section(R.grpOwn, grp.own) + '</div>' +
-        '<div class="panel-b" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line2)">' +
-        (off ? '<span class="s13 muted">' + esc(R.more(off)) + ' · <button class="link" ' + click(() => set({ tab: 'questions', scope: 'more', onlyGaps: false })) + '>' + esc(R.showMore) + '</button></span>' : '') +
-        '<div class="form"><label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(R.addPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(true); }) + '>' +
+      const off = allQ().filter(q => !isActive(q));
+      const row = q => { const on = isActive(q); return '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px;' + (on ? '' : 'opacity:.6') + '">' +
+        '<input type="checkbox"' + (on ? ' checked' : '') + ' aria-label="' + esc((on ? l.ariaOff : l.ariaOn) + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
+        '<div style="display:flex;flex-direction:column;min-width:0"><span>' + esc(q.text) + '</span><span class="small muted">' + esc((q.key ? l.keyQ + ' · ' : q.custom ? l.metaCustom + ' · ' : '') + catLabels(q.tags)) + '</span></div>' +
+        '<button class="icon" aria-label="' + esc(l.ui.answers + ': ' + q.text) + '" data-tt="' + esc(l.ui.answers) + '" ' + click(() => openQuestion(q.id)) + '>' + ic('chevron', 14) + '</button></div>'; };
+      const S = l.ui.setup;
+      const questions = '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.listTitle(list.length)) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div>' +
+        (mode === 'own' ? '<button class="btn sm' + (diff.changed ? '' : ' plain') + '" ' + click(saveRunList) + '>' + ic('download', 14) + esc(S.pickSave) + '</button>' : '') + '</div>' +
+        (mode === 'own' ? '<div class="banner" style="border-radius:0;border-width:0 0 1px">' +
+          '<span class="swatch" style="border-radius:50%;background:' + (diff.changed ? 'var(--amber)' : 'var(--good)') + '"></span><span class="item">' + esc(diff.never ? S.pickNever : diff.changed ? S.pickChanged : S.pickSaved) + '</span>' +
+          (diff.changed ? '<span class="s13 muted">' + esc(R.saveNote) + '</span><button class="link" ' + click(() => set({ setup: true, setupOpen: 'pick', fx: 'setup' })) + '>' + esc(R.saveWhy) + '</button>' : '') + '</div>' : '') +
+        '<div>' + list.map(row).join('') + off.map(row).join('') + '</div>' +
+        '<div class="panel-b" style="border-top:1px solid var(--line2)"><div class="form"><label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(l.newQPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(true); }) + '>' +
         '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + CATS.map(c => '<option value="' + c.id + '"' + (state.newCat === c.id ? ' selected' : '') + '>' + esc(catLabel(c.id)) + '</option>').join('') + '</select>' +
         '<button class="btn plain" ' + click(() => addQuestion(true)) + '>' + esc(l.save) + '</button></div>' +
         (state.formMsg === 'short' ? '<span class="small warn">' + esc(l.msg.short) + '</span>' : '') + '</div></div>';
 
-      const repo = MON.github_repo;
-      const cmd = 'python monitoring/run.py\npython scripts/export_monitoring.py';
-      const step = (n, title, text, body) => '<div style="display:flex;gap:12px;padding:14px 18px;border-top:1px solid var(--line2)">' +
-        '<span class="nba-n">' + n + '</span><div style="display:flex;flex-direction:column;gap:8px;min-width:0;flex-grow:1"><span style="font-weight:600">' + esc(title) + '</span>' +
-        '<span class="s13 muted">' + esc(text) + '</span>' + (body || '') + '</div></div>';
-      const canSave = mode === 'own' && T;
-      const start = '<div class="panel" style="position:sticky;top:68px"><div class="panel-h"><h2>' + esc(R.startTitle) + '</h2></div>' +
-        (over ? '<div class="banner" style="margin:12px 18px 0;color:var(--warn)">' + esc(R.overBudget(MON.budget.max_calls_per_run, MON.budget.max_usd_per_run)) + '</div>' : '') +
-        '<div style="padding-top:4px">' +
-        (canSave ? step(1, R.s1, R.s1Text(T.path), '<button class="btn' + (diff.changed ? '' : ' plain') + '" style="align-self:flex-start" ' + click(saveRunList) + '>' + ic('download', 15) + esc(R.s1Btn) + '</button>') : '') +
-        step(canSave ? 2 : 1, R.s2, R.s2Text, repo ? '<a class="btn" style="align-self:flex-start;text-decoration:none" target="_blank" rel="noopener noreferrer" href="https://github.com/' + esc(repo) + '/actions/workflows/monitoring.yml">' + ic('external', 15) + esc(R.s2Btn) + '</a>' : '') +
-        step(canSave ? 3 : 2, R.s3, R.s3Text, '<code class="mono s13" style="display:block;white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px">' + esc(cmd) + '</code>' +
-          '<button class="btn sm plain" style="align-self:flex-start" ' + click(() => copyToClipboard(cmd, 'runcmd')) + '>' + ic('copy', 14) + esc(state.copied === 'runcmd' ? l.copied : R.copyCmd) + '</button>') +
-        (mode === 'own' ? step(canSave ? 4 : 3, R.s4, R.s4Text, '<label for="run-results-file" class="btn sm plain" style="align-self:flex-start;cursor:pointer">' + ic('upload', 14) + esc(l.chooseFile) + '</label>' +
-          '<input id="run-results-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
-          (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '')) : '') +
-        '</div><div class="panel-b" style="border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px"><span class="small muted" style="font-weight:600;text-transform:uppercase;letter-spacing:.05em">' + esc(R.engines) + '</span>' +
-        MON.engines.map(e => { const i = ENGINES.findIndex(x => x.id === e.id); return '<div class="s13" style="display:flex;align-items:center;gap:8px;' + (e.enabled ? '' : 'opacity:.5') + '"><span class="swatch" style="background:var(--viz-' + (i + 1) + ')"></span><b style="font-weight:500">' + esc(ENGINES[i].name) + '</b><span class="mono small muted">' + esc(e.model) + '</span><span class="muted" style="margin-left:auto">' + esc(e.enabled ? R.perCall(e.usd_per_call) : R.off) + '</span></div>'; }).join('') +
-        '</div></div>';
-
-      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.run) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
-        demo + kpis + '<div class="grid g-main" style="align-items:start">' + runList + start + '</div></section>';
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.runs) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
+        notice + starts + results + questions + '</section>';
     }
+
+    // ---------- Setup: one-time steps, shown as a popup until they're done ----------
+    // brand and results are detected; keys and the test run happen on GitHub,
+    // which the app can't see (no network), so the person ticks them off.
+    const SETUP_KEY = 'geo-engine:setup-later';
+    const setupMarks = () => (own && own.setupDone) || {};
+    function markSetup(id, v) { own.setupDone = Object.assign({}, setupMarks(), { [id]: v }); saveOwn(own); render(); }
+    function setupSteps() {
+      const l = L(); const S = l.ui.setup;
+      const repo = MON && MON.github_repo ? 'https://github.com/' + MON.github_repo : '';
+      const hasResults = Object.keys(D.demo.results || {}).length > 0;
+      return [
+        { id: 'brand', title: S.brand, text: S.brandText(BRAND.name || BRAND.short), done: true,
+          buttons: [{ label: S.brandLink, fn: () => { set({ setup: false }); initSetupDraft(); renderSetup(); } }] },
+        { id: 'keys', title: S.keys, text: S.keysText, done: !!setupMarks().keys || hasResults, manual: true,
+          links: [{ label: S.keyClaude, href: 'https://console.anthropic.com/settings/keys' }, { label: S.keyGemini, href: 'https://aistudio.google.com/apikey' }]
+            .concat(repo ? [{ label: S.keyGithub, href: repo + '/settings/secrets/actions' }] : []) },
+        { id: 'test', title: S.test, text: S.testText, done: !!setupMarks().test || hasResults, manual: true,
+          links: repo ? [{ label: S.testLink, href: repo + '/actions/workflows/monitoring.yml' }] : [] },
+        { id: 'results', title: S.results, text: S.resultsText, done: hasResults, file: true,
+          links: repo ? [{ label: S.resultsLink, href: repo + '/actions/workflows/monitoring.yml' }] : [] },
+      ];
+    }
+    const setupLeft = () => setupSteps().filter(x => !x.done).length;
+    function setupBody() {
+      const l = L(); const S = l.ui.setup;
+      const steps = setupSteps();
+      const done = steps.filter(x => x.done).length;
+      const openId = state.setupOpen || (steps.find(x => !x.done) || {}).id;
+      const ext = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
+      const item = (x, n) => {
+        const open = x.id === openId;
+        const head = '<button class="setup-h" aria-expanded="' + open + '" ' + click(() => set({ setupOpen: open ? '-' : x.id })) + '>' +
+          '<span class="setup-n' + (x.done ? ' done' : '') + '">' + (x.done ? ic('check', 14) : n + 1) + '</span>' +
+          '<span class="t' + (x.done ? ' muted' : '') + '">' + esc(x.title) + '</span>' + ic(open ? 'up' : 'down', 14) + '</button>';
+        if (!open) return '<div class="setup-step">' + head + '</div>';
+        const links = (x.links || []).map((k, i) => '<a class="btn' + (i === (x.links.length - 1) && !x.done ? '' : ' plain') + ' sm" target="_blank" rel="noopener noreferrer" href="' + esc(k.href) + '">' + esc(k.label) + ext + '</a>').join('');
+        const btns = (x.buttons || []).map(b => '<button class="btn sm plain" ' + click(b.fn) + '>' + esc(b.label) + '</button>').join('');
+        const file = x.file ? '<label for="setup-file" class="btn sm' + (x.done ? ' plain' : '') + '" style="cursor:pointer">' + ic('upload', 14) + esc(S.choose) + '</label>' +
+          '<input id="setup-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' : '';
+        const mark = x.manual ? '<button class="btn sm ghost" ' + click(() => markSetup(x.id, !x.done)) + '>' + (x.done ? '' : ic('check', 14)) + esc(x.done ? S.undo : S.done) + '</button>' : '';
+        return '<div class="setup-step open">' + head + '<div class="setup-b"><p>' + esc(x.text) + '</p>' +
+          '<div class="setup-actions">' + links + btns + file + mark + '</div>' +
+          (x.file && state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div></div>';
+      };
+      // Optional extras: which questions are checked, and the schedule.
+      const diff = runDiff();
+      const pickOpen = openId === 'pick';
+      const pick = '<div class="setup-step' + (pickOpen ? ' open' : '') + '"><button class="setup-h" aria-expanded="' + pickOpen + '" ' + click(() => set({ setupOpen: pickOpen ? '-' : 'pick' })) + '>' +
+        '<span class="setup-n opt">' + ic('questions', 13) + '</span><span class="t">' + esc(S.pick) + '</span>' + ic(pickOpen ? 'up' : 'down', 14) + '</button>' +
+        (pickOpen ? '<div class="setup-b"><p>' + esc(S.pickText) + '</p>' +
+          '<span class="s13" style="color:' + (diff.changed ? 'var(--amber)' : 'var(--good)') + '">' + esc(diff.never ? S.pickNever : diff.changed ? S.pickChanged : S.pickSaved) + '</span>' +
+          '<div class="setup-actions"><button class="btn sm plain" ' + click(() => set({ setup: false, tab: 'questions', scope: 'all' })) + '>' + esc(S.pickGo) + '</button>' +
+          '<button class="btn sm' + (diff.changed ? '' : ' plain') + '" ' + click(saveRunList) + '>' + ic('download', 14) + esc(S.pickSave) + '</button></div></div>' : '') + '</div>';
+      const autoOpen = openId === 'auto';
+      const auto = '<div class="setup-step' + (autoOpen ? ' open' : '') + '"><button class="setup-h" aria-expanded="' + autoOpen + '" ' + click(() => set({ setupOpen: autoOpen ? '-' : 'auto' })) + '>' +
+        '<span class="setup-n opt">' + ic('impact', 13) + '</span><span class="t">' + esc(S.auto) + '</span>' + ic(autoOpen ? 'up' : 'down', 14) + '</button>' +
+        (autoOpen ? '<div class="setup-b"><p>' + esc(S.autoText) + '</p>' +
+          '<details><summary class="s13 muted" style="cursor:pointer">' + esc(S.dev) + '</summary><code class="mono s13 setup-code">python monitoring/run.py\npython scripts/export_monitoring.py</code></details></div>' : '') + '</div>';
+      return '<div class="setup-prog"><span class="s13 muted">' + esc(S.progress(done, steps.length)) + '</span><div class="bar-t" style="flex-grow:1"><div style="width:' + Math.round(done / steps.length * 100) + '%;background:var(--good)"></div></div></div>' +
+        (done === steps.length ? '<p class="s14 good" style="margin:0;padding:4px 20px 12px">' + esc(S.allDone) + '</p>' : '') +
+        '<div class="setup-list">' + steps.map(item).join('') + '</div>' +
+        '<div class="nav-group" style="padding:14px 20px 2px">' + esc(S.optional) + '</div><div class="setup-list">' + pick + auto + '</div>';
+    }
+    function setupHtml(enter) {
+      const S = L().ui.setup;
+      const close = () => { try { window.sessionStorage.setItem(SETUP_KEY, '1'); } catch (e) { /* storage unavailable */ } set({ setup: false }); };
+      return '<div class="scrim' + (enter ? ' enter' : '') + '" ' + click(close) + '></div>' +
+        '<div class="modal setup-modal' + (enter ? ' enter' : '') + '" role="dialog" aria-modal="true" aria-labelledby="setup-title">' +
+        '<div class="setup-top"><div><h2 id="setup-title" style="font-size:18px">' + esc(S.title) + '</h2><p class="s13 muted" style="margin:4px 0 0">' + esc(S.sub) + '</p></div>' +
+        '<button class="icon-btn" data-autofocus aria-label="' + esc(L().ui.close) + '" ' + click(close) + '>' + ic('x', 16) + '</button></div>' +
+        setupBody() +
+        '<div class="setup-foot"><button class="btn plain" ' + click(close) + '>' + esc(S.later) + '</button></div></div>';
+    }
+    function openSetup() { set({ setup: true, setupOpen: null, palette: false, navOpen: false, fx: 'setup' }); }
 
     // ---------- Shell helpers ----------
     const LOGO = '<svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M9 16a7 7 0 1 0 7-7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="16" cy="16" r="2.8" fill="currentColor"/></svg>';
@@ -1410,6 +1454,14 @@
     }
     function themeClick() { const t = toggleTheme(); render(); toast(L().ui.toastTheme(t)); }
     function openPalette() { set({ palette: true, palQuery: '', palSel: 0, help: false, navOpen: false, fx: 'palette' }); }
+    function sideSetup() {
+      const S = L().ui.setup;
+      if (mode === 'demo') return '<button class="side-cta" ' + click(() => { if (own) switchToOwn(); else if (MON && MON.target) useTarget(); else switchToOwn(); }) + '>' + ic('run', 16) + '<span>' + esc(S.demoCta) + '</span>' + ic('chevron', 14) + '</button>';
+      const steps = setupSteps(); const done = steps.filter(x => x.done).length;
+      if (done === steps.length) return '';
+      return '<button class="side-cta" ' + click(openSetup) + '>' + CH.ring(Math.round(done / steps.length * 100), { size: 22, stroke: 3, color: 'var(--good)', unit: '', label: S.progress(done, steps.length) }).replace(/<text[\s\S]*?<\/text>/, '') +
+        '<span>' + esc(S.nav) + '</span><span class="nav-count">' + done + '/' + steps.length + '</span></button>';
+    }
     function openQuestion(id) { set({ drawerQ: id, palette: false, fx: state.drawerQ ? null : 'drawer' }); }
 
     // Small numbers next to nav items: what needs attention on that page.
@@ -1421,7 +1473,6 @@
       const ph = allBlocksList().filter(b => b.placeholder).length;
       return {
         questions: ctx.gapQs.length ? { n: ctx.gapQs.length, warn: true, tip: l.ui.bannerGaps(ctx.gapQs.length) } : null,
-        run: runDiff().changed ? { n: '!', warn: true, tip: l.ui.run.navTip } : null,
         sources: targets ? { n: targets, tip: l.srcStatTargets + ': ' + targets } : null,
         website: high ? { n: high, warn: true, tip: l.webStatHigh + ': ' + high } : null,
         library: ph ? { n: ph, tip: l.libNeedsContent + ': ' + ph } : null,
@@ -1444,6 +1495,7 @@
       if (state.drawerQ) html += drawerHtml(fx === 'drawer');
       if (state.palette) html += paletteHtml(fx === 'palette');
       if (state.help) html += helpHtml(fx === 'help');
+      if (state.setup) html += setupHtml(fx === 'setup');
       return html;
     }
 
@@ -1497,6 +1549,7 @@
         { icon: 'write', label: l.ui.actWrite, run: () => set({ tab: 'write', writeStep: 1, brief: '', palette: false }) },
         mode === 'demo' ? { icon: 'swap', label: l.ui.actOwn, run: () => { state.palette = false; switchToOwn(); } } : { icon: 'swap', label: l.ui.actDemo, run: () => { state.palette = false; switchToDemo(); } },
         mode === 'own' ? { icon: 'library', label: l.ui.actSetup, run: () => { state.palette = false; switchToOwn(); } } : null,
+        mode === 'own' ? { icon: 'run', label: l.ui.setup.title, run: openSetup } : null,
         { icon: 'keyboard', label: l.ui.actHelp, hint: '?', run: () => set({ palette: false, help: true, fx: 'help' }) },
       ].filter(Boolean).map(a => Object.assign({ group: l.ui.palActions }, a));
       const qs = allQ().map(q => ({
@@ -1550,7 +1603,7 @@
     }
 
     // ---------- Keyboard ----------
-    const GO_KEYS = { o: 'overview', q: 'questions', m: 'run', s: 'sources', i: 'impact', w: 'website', r: 'write', l: 'library' };
+    const GO_KEYS = { o: 'overview', q: 'questions', m: 'runs', s: 'sources', i: 'impact', w: 'website', r: 'write', l: 'library' };
     let gPressed = 0;
     onKey = e => {
       const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
@@ -1558,6 +1611,7 @@
       if (e.key === 'Escape') {
         if (state.palette) set({ palette: false });
         else if (state.help) set({ help: false });
+        else if (state.setup) { try { window.sessionStorage.setItem(SETUP_KEY, '1'); } catch (err) { /* storage unavailable */ } set({ setup: false }); }
         else if (state.drawerQ) set({ drawerQ: null });
         else if (state.navOpen) set({ navOpen: false });
         else if (typing && e.target.type === 'search') { e.target.blur(); }
@@ -1568,7 +1622,7 @@
       if (gPressed && Date.now() - gPressed < 1200 && GO_KEYS[key]) { gPressed = 0; e.preventDefault(); set({ tab: GO_KEYS[key] }); return; }
       gPressed = key === 'g' ? Date.now() : 0;
       if (e.key === '?') { e.preventDefault(); set({ help: !state.help, fx: state.help ? null : 'help' }); return; }
-      if (state.help) return;
+      if (state.help || state.setup) return;
       if (key === 't') { e.preventDefault(); themeClick(); return; }
       if (e.key === '/') {
         const f = root.querySelector('[data-filter]');
@@ -1614,7 +1668,7 @@
 
       const isFreshOwn = mode === 'own' && allBlocksList().length === 0 && D.audit.length === 0 && D.pages.length === 0 && Object.keys(D.demo.results).length === 0;
       const views = {
-        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, run: viewRun, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
+        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, runs: viewRuns, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
         write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
       };
       document.documentElement.lang = state.lang;
@@ -1640,7 +1694,7 @@
         '<div class="side-brand"><span class="logo" aria-hidden="true">' + LOGO + '</span><div><b>' + esc(BRAND.short) + '</b><span>GEO Engine</span></div></div>' +
         '<button class="search-btn" ' + click(openPalette) + '>' + ic('search', 15) + '<span>' + esc(l.ui.search) + '</span><span class="kbd">' + MOD + 'K</span></button>' +
         '<nav class="nav">' + nav + '</nav>' +
-        '<div class="side-foot">' + modeSwitch +
+        '<div class="side-foot">' + sideSetup() + modeSwitch +
         '<button class="side-hint" ' + click(() => set({ help: true, fx: 'help' })) + '>' + ic('keyboard', 15) + '<span>' + esc(l.ui.shortcuts) + '</span><span class="kbd" style="margin-left:auto">?</span></button></div></aside>';
       const topbar = '<header class="topbar">' +
         '<button class="icon-btn menu-btn" aria-label="' + esc(l.ui.menu) + '" aria-controls="sidenav" aria-expanded="' + state.navOpen + '" ' + click(() => set({ navOpen: !state.navOpen })) + '>' + ic('menu', 18) + '</button>' +
@@ -1658,12 +1712,16 @@
 
       // A freshly opened overlay takes focus; otherwise keep it where it was.
       if (fx === 'palette') { const i = document.getElementById('pal-input'); if (i) i.focus(); }
-      else if (fx === 'drawer' || fx === 'help') { const c = root.querySelector('[data-autofocus]'); if (c) c.focus(); }
+      else if (fx === 'drawer' || fx === 'help' || fx === 'setup') { const c = root.querySelector('[data-autofocus]'); if (c) c.focus(); }
       else restoreFocus(focusKey);
       const sel = root.querySelector('.pal-item.sel, .qrow.sel');
       if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
     }
 
+    // Open the setup popup while steps are missing, once per browser session.
+    let later = false;
+    try { later = window.sessionStorage.getItem(SETUP_KEY) === '1'; } catch (e) { /* storage unavailable */ }
+    if (mode === 'own' && !later && setupLeft() > 0) Object.assign(state, { setup: true, fx: 'setup' });
     render();
   }
 
