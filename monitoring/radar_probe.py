@@ -146,8 +146,9 @@ def run_probe_cli(conn, args, settings, data_dir, config, categories, qwords, no
         return 0
 
     estimate, notes = run_mod.estimate_run_cost(len(chosen), engines, 1, cfgs)
-    print(f"Probing {len(chosen)} candidate(s) on {engines}: {estimate.num_calls} call(s), "
-          f"estimated ${estimate.total_usd:.4f}" + ("" if args.dry_run else " (real API calls)"))
+    real = f"estimated ${estimate.total_usd:.4f} (real API calls)"
+    cost = "dry run with recorded answers, $0" if args.dry_run else real
+    print(f"Probing {len(chosen)} candidate(s) on {engines}: {estimate.num_calls} call(s), {cost}")
     for c in chosen:
         print(f"  {c.score:>3}  {c.query}")
     try:
