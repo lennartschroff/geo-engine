@@ -574,3 +574,42 @@ describe('article HTML export', () => {
     assert.ok(!CORE.articleToHtml('# T\n\nText.', 'en').includes('ld+json'));
   });
 });
+
+describe('radarList', () => {
+  const C = [
+    { id: 'a', query: 'Alpha?', score: 60, new: true, parts: { open: 80 }, origins: ['hackernews'] },
+    { id: 'b', query: 'Beta?', score: 75, new: true, parts: { open: 50 }, origins: ['engine'] },
+    { id: 'c', query: 'Gamma?', score: 90, new: true, parts: { open: 90 }, origins: ['engine', 'stackexchange'] },
+    { id: 't', query: 'Tracked?', score: 70, new: false, parts: { open: 40 }, origins: ['engine'] },
+  ];
+  test('new candidates best first; tracked listed apart', () => {
+    const r = CORE.radarList(C);
+    assert.deepEqual(r.list.map(c => c.id), ['c', 'b', 'a']);
+    assert.deepEqual(r.tracked.map(c => c.id), ['t']);
+  });
+  test('filters and counts', () => {
+    const r = CORE.radarList(C, { filter: 'open' });
+    assert.deepEqual(r.list.map(c => c.id), ['c', 'a']);
+    assert.deepEqual(r.counts, { all: 3, open: 2, community: 2, engine: 2 });
+    assert.deepEqual(CORE.radarList(C, { filter: 'community' }).list.map(c => c.id), ['c', 'a']);
+  });
+  test('dismissed ones are hidden unless asked for, and not counted', () => {
+    const r = CORE.radarList(C, { hidden: { c: true } });
+    assert.deepEqual(r.list.map(c => c.id), ['b', 'a']);
+    assert.equal(r.hidden, 1);
+    assert.equal(r.counts.all, 2);
+    assert.equal(CORE.radarList(C, { hidden: { c: true }, showHidden: true }).list.length, 3);
+  });
+  test('empty or missing input', () => {
+    assert.deepEqual(CORE.radarList(undefined).list, []);
+  });
+});
+
+describe('radarTrend', () => {
+  test('up, flat, down, none', () => {
+    assert.equal(CORE.radarTrend(0.8), 'up');
+    assert.equal(CORE.radarTrend(0.5), 'flat');
+    assert.equal(CORE.radarTrend(0.3), 'down');
+    assert.equal(CORE.radarTrend(null), 'none');
+  });
+});
