@@ -12,12 +12,11 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  publish:
-    name: Build and publish
+  # Two jobs, as in GitHub's own template: the artifact is only fully stored
+  # once the build job has ended, so the deploy job always finds it.
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.publish.outputs.page_url }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -33,6 +32,14 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: app
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
       - name: Publish
         id: publish
         uses: actions/deploy-pages@v5
