@@ -391,7 +391,7 @@
     // ---------- State ----------
     const saved = load();
     const state = Object.assign({
-      lang: 'en', tab: 'overview', scope: 'key', onlyGaps: false, srcFilter: 'all', openAnswers: null,
+      lang: 'en', tab: 'overview', scope: 'key', onlyGaps: false, srcFilter: 'all',
       libCat: 'all', libType: 'all', writeStep: 1, allBlocks: false, selectedQ: DEFAULT_Q,
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
       newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '', pagesMsg: '',
