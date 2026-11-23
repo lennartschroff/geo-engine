@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from monitoring.run_list import FILENAME as RUN_LIST_FILE  # noqa: E402
 from monitoring.run_list import load_run_list  # noqa: E402
+
 DATA = ROOT / "data"
 SCHEMAS = ROOT / "schemas"
 
