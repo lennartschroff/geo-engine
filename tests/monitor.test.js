@@ -164,3 +164,35 @@ describe('radar scan', () => {
     assert.equal(M.parseRadarScan('{"signals":[]}'), null);
   });
 });
+
+describe('request timeout', () => {
+  test('a provider that never answers times out, is retried, then gives up', async () => {
+    let calls = 0; const waits = [];
+    const hang = () => { calls++; return new Promise(() => {}); };
+    await assert.rejects(
+      M.callEngine('gemini', { model: 'm' }, 'q', 'k', { fetch: hang, sleep: s => { waits.push(s); return Promise.resolve(); }, timeoutMs: 20 }),
+      /timed out/);
+    assert.equal(calls, 3);
+    assert.deepEqual(waits, M.RETRY_WAITS);
+  });
+});
+
+describe('radar scan: cut-off answers', () => {
+  test('keeps every complete signal from an answer that hit the length limit', () => {
+    const full = JSON.stringify({ signals: [
+      { question: 'First complete question here?', horizon: 'now', change: 'a "quoted" {brace}' },
+      { question: 'Second complete question here?', horizon: 'next' },
+      { question: 'Third question that gets cut', horizon: 'la' },
+    ] });
+    const cut = '```json\n' + full.slice(0, full.indexOf('Third') + 10);
+    const r = M.parseRadarScan(cut, []);
+    assert.deepEqual(r.candidates.map(c => c.query), ['First complete question here?', 'Second complete question here?']);
+    assert.equal(r.candidates[0].change, 'a "quoted" {brace}');
+    assert.deepEqual(r.topics, []);
+  });
+  test('the scan may use more output tokens than a normal check', () => {
+    const body = JSON.parse(M.request('claude', { model: 'm', max_tokens: M.RADAR_SCAN_TOKENS }, 'p', 'k').init.body);
+    assert.equal(body.max_tokens, 4000);
+    assert.equal(JSON.parse(M.request('claude', { model: 'm' }, 'p', 'k').init.body).max_tokens, 1024);
+  });
+});

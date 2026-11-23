@@ -57,7 +57,7 @@
   function request(engine, cfg, prompt, key) {
     const json = body => JSON.stringify(body);
     if (engine === 'claude') {
-      const body = { model: cfg.model, max_tokens: 1024, thinking: { type: 'disabled' }, messages: [{ role: 'user', content: prompt }] };
+      const body = { model: cfg.model, max_tokens: cfg.max_tokens || 1024, thinking: { type: 'disabled' }, messages: [{ role: 'user', content: prompt }] };
       if (cfg.max_searches > 0) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: cfg.max_searches }];
       return { url: 'https://api.anthropic.com/v1/messages', init: { method: 'POST', body: json(body), headers: {
         'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01',
@@ -108,6 +108,7 @@
   const TRANSIENT_STATUS = [500, 502, 503, 504, 529];
   const TRANSIENT_WORDS = ['overloaded', 'high demand', 'service_unavailable', 'unavailable', 'timed out', 'timeout'];
   const RETRY_WAITS = [10, 30];
+  const REQUEST_TIMEOUT_MS = 120000;
   function isTransient(err) {
     if (err && TRANSIENT_STATUS.indexOf(err.status) !== -1) return true;
     const t = String((err && err.message) || err).toLowerCase();
@@ -130,13 +131,24 @@
     return parse(engine, body || {});
   }
   async function callEngine(engine, cfg, prompt, key, opts) {
-    const o = Object.assign({ fetch: (u, i) => fetch(u, i), sleep: s => new Promise(r => setTimeout(r, s * 1000)), onRetry: null, signal: null }, opts);
+    const o = Object.assign({ fetch: (u, i) => fetch(u, i), sleep: s => new Promise(r => setTimeout(r, s * 1000)), onRetry: null, signal: null, timeoutMs: REQUEST_TIMEOUT_MS }, opts);
     for (let attempt = 0; ; attempt++) {
-      try { return await callOnce(engine, cfg, prompt, key, o.fetch); } catch (err) {
+      // A provider that never answers would otherwise keep the page waiting
+      // forever. A timeout counts as temporary, so it is retried like a 503.
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      let timer;
+      const timeout = new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          if (ac) ac.abort();
+          const e = new Error('Request timed out after ' + Math.round(o.timeoutMs / 1000) + ' s'); e.status = 0; reject(e);
+        }, o.timeoutMs);
+      });
+      const fetchFn = (u, i) => o.fetch(u, ac ? Object.assign({}, i, { signal: ac.signal }) : i);
+      try { return await Promise.race([callOnce(engine, cfg, prompt, key, fetchFn), timeout]); } catch (err) {
         if (attempt >= RETRY_WAITS.length || !isTransient(err) || (o.signal && o.signal.aborted)) throw err;
         if (o.onRetry) o.onRetry(err, RETRY_WAITS[attempt]);
         await o.sleep(RETRY_WAITS[attempt]);
-      }
+      } finally { clearTimeout(timer); }
     }
   }
 
@@ -290,6 +302,8 @@
   // measured data; the app says so and lets monitoring check it later.
   const DRIVERS = ['technology', 'market', 'society', 'regulation', 'environment'];
   const HORIZONS = ['now', 'next', 'later'];
+  // 12 questions with two sentences each need more room than a normal answer.
+  const RADAR_SCAN_TOKENS = 4000;
   function radarScanPrompt(c, lang) {
     const known = (c.questions || []).slice(0, 15);
     return [
@@ -304,6 +318,7 @@
       '{"signals":[{"question":"...","topic":"...","horizon":"now|next|later","driver":"technology|market|society|regulation|environment","change":"...","signal":"...","confidence":"high|medium|low"}],"trends":[{"term":"...","direction":"up|flat|down","why":"..."}]}',
       'signals: 12 questions, about 4 per horizon. "question" as a customer would type it; do not name ' + c.name + '. "topic" is one of the company\'s topics. "change": one short sentence on what is changing. "signal": one short sentence on an observable sign that it is starting. "confidence": how sure you are that the question will matter.',
       'trends: 3 to 6 short topic terms (2 to 4 words) that are moving in this market.',
+      'Keep "change" and "signal" under 20 words each.',
       'Do not invent numbers, studies, laws, dates or company names. If you are unsure, say so with a low confidence.',
       'Write questions, changes, signals and trends in ' + (lang === 'de' ? 'German' : 'English') + '.',
     ].filter(Boolean).join('\n');
@@ -314,12 +329,29 @@
     for (const ch of normalize(t)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
     return 'ai' + (h >>> 0).toString(36);
   }
+  // Complete {...} objects inside the array that follows "name": in a JSON
+  // text that may be cut off (an answer that hit the length limit).
+  function salvageArray(t, name) {
+    const at = t.indexOf('"' + name + '"');
+    if (at === -1) return [];
+    const out = [];
+    let depth = 0, start = -1, inStr = false, esc = false;
+    for (let i = t.indexOf('[', at) + 1; i > 0 && i < t.length; i++) {
+      const ch = t[i];
+      if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true;
+      else if (ch === '{') { if (depth++ === 0) start = i; }
+      else if (ch === '}') { if (--depth === 0) { try { out.push(JSON.parse(t.slice(start, i + 1))); } catch (e) { /* skip a broken one */ } } }
+      else if (ch === ']' && depth === 0) break;
+    }
+    return out;
+  }
   function parseRadarScan(text, topicIds, when) {
     const t = String(text || '');
     const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a === -1 || b <= a) return null;
+    if (a === -1) return null;
     let j;
-    try { j = JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+    try { j = JSON.parse(t.slice(a, b + 1)); } catch (e) { j = { signals: salvageArray(t, 'signals'), trends: salvageArray(t, 'trends') }; }
     const str = (x, n) => typeof x === 'string' ? x.trim().slice(0, n || 300) : '';
     const pick = (x, list, dflt) => list.includes(String(x).toLowerCase()) ? String(x).toLowerCase() : dflt;
     const topicOf = label => { const n = normalize(label); const hit = (topicIds || []).find(x => normalize(x.label) === n); return hit ? hit.id : null; };
@@ -343,7 +375,7 @@
   }
 
   return {
-    radarScanPrompt, parseRadarScan, textId, DRIVERS, HORIZONS,
+    radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
     suggestPrompt, parseSuggestions, templateQuestions,
     ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
