@@ -1416,7 +1416,7 @@
         topics: CATS.map(c => catLabel(c.id)), questions: allQ().map(q => q.text) };
       let parsed = null, err = null;
       try {
-        const r = await MONITOR.callEngine(id, engineCfg(id), MONITOR.radarScanPrompt(company, state.lang), KEYS[id]);
+        const r = await MONITOR.callEngine(id, Object.assign({}, engineCfg(id), { max_tokens: MONITOR.RADAR_SCAN_TOKENS }), MONITOR.radarScanPrompt(company, state.lang), KEYS[id]);
         parsed = MONITOR.parseRadarScan(r.answer_text, CATS.map(c => ({ id: c.id, label: catLabel(c.id) })));
       } catch (e) { err = e; }
       if (token !== RADAR_SCAN.token) return;
