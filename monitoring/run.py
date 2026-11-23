@@ -44,6 +44,8 @@ sys.path.insert(0, str(ROOT))
 
 from monitoring.cost_estimate import check_call_budget, estimate_cost, needs_confirmation  # noqa: E402
 from monitoring.mention_detection import detect_mention, normalize_domains  # noqa: E402
+from monitoring.run_list import FILENAME as RUN_LIST_FILE  # noqa: E402
+from monitoring.run_list import load_run_list  # noqa: E402
 from monitoring.variants import make_variants  # noqa: E402
 
 ALL_ENGINES = ["claude", "gpt", "gemini"]
@@ -261,11 +263,18 @@ def detect_language(text: str) -> str:
 
 
 def load_questions(question_ids: list[str] | None, scope: str = "key", data_dir: str = "data") -> list[dict]:
+    """Questions for this run. Order of precedence: --questions ids, then the
+    target's run_list.json (saved from the app's Run page), then the
+    settings' scope ("key" = the 15 key questions, anything else = all)."""
     questions = json.loads((ROOT / data_dir / "questions.json").read_text(encoding="utf-8"))
+    run_list = load_run_list(ROOT / data_dir)
     if question_ids:
         wanted = set(question_ids)
-        questions = [q for q in questions if q["id"] in wanted]
-    elif scope == "key":
+        extra = [q for q in (run_list or []) if q["id"] not in {x["id"] for x in questions}]
+        return [q for q in questions + extra if q["id"] in wanted]
+    if run_list is not None:
+        return run_list
+    if scope == "key":
         questions = [q for q in questions if q.get("key")]  # default: the 15 key questions
     return questions
 
@@ -430,7 +439,12 @@ def main() -> int:
     # The real target (e.g. targets/geo-engine) or the bundled demo data in data/.
     data_dir = args.target or settings.get("target") or "data"
     print(f"Target: {data_dir}")
-    questions = load_questions(question_ids, settings["questions"], data_dir=data_dir)
+    try:
+        questions = load_questions(question_ids, settings["questions"], data_dir=data_dir)
+    except ValueError as e:
+        return _fail(f"Can't use the run list: {e}")
+    if not question_ids and (ROOT / data_dir / RUN_LIST_FILE).exists():
+        print(f"Questions from {data_dir}/{RUN_LIST_FILE} (saved on the app's Run page)")
     if not questions:
         return _fail("No matching questions found.")
 

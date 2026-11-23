@@ -411,3 +411,43 @@ class TestTarget:
         monkeypatch.setattr(sys, "argv", base + ["--target", "data"])
         run_module.main()
         assert seen == ["targets/geo-engine", "data"]
+
+
+class TestRunList:
+    """targets/<name>/run_list.json (saved from the app's Run page) decides the questions."""
+
+    QUESTIONS = [
+        {"id": "q1", "nr": 1, "text": "Key one", "categories": ["a"], "key": True, "schedule": "weekly"},
+        {"id": "q2", "nr": 2, "text": "Optional two", "categories": ["a"], "key": False, "schedule": "manual"},
+    ]
+
+    @pytest.fixture
+    def target(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_module, "ROOT", tmp_path)
+        (tmp_path / "t").mkdir()
+        (tmp_path / "t" / "questions.json").write_text(json.dumps(self.QUESTIONS), encoding="utf-8")
+        return tmp_path / "t"
+
+    def _write(self, target, data):
+        (target / "run_list.json").write_text(json.dumps(data), encoding="utf-8")
+
+    def test_without_run_list_the_scope_applies(self, target):
+        assert [q["id"] for q in run_module.load_questions(None, "key", data_dir="t")] == ["q1"]
+
+    def test_run_list_replaces_the_scope_and_keeps_custom_questions(self, target):
+        own = {"id": "c9x", "text": "My own question", "categories": ["a"], "custom": True}
+        self._write(target, {"questions": [{"id": "q2", "text": "Optional two", "categories": ["a"]}, own]})
+        qs = run_module.load_questions(None, "key", data_dir="t")
+        assert [q["id"] for q in qs] == ["q2", "c9x"]
+        assert qs[1]["custom"] is True and qs[1]["text"] == "My own question"
+
+    def test_explicit_ids_can_pick_custom_questions_from_the_run_list(self, target):
+        self._write(target, {"questions": [{"id": "c9x", "text": "Mine", "categories": []}]})
+        assert [q["id"] for q in run_module.load_questions(["q1", "c9x"], data_dir="t")] == ["q1", "c9x"]
+
+    @pytest.mark.parametrize("bad", [{"questions": []}, {"questions": [{"id": "q1"}]}, [],
+                                     {"questions": [{"id": "x", "text": "a"}, {"id": "x", "text": "b"}]}])
+    def test_broken_run_list_raises_instead_of_falling_back(self, target, bad):
+        self._write(target, bad)
+        with pytest.raises(ValueError):
+            run_module.load_questions(None, "key", data_dir="t")

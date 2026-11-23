@@ -16,6 +16,10 @@ from pathlib import Path
 from jsonschema import Draft7Validator
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from monitoring.run_list import FILENAME as RUN_LIST_FILE  # noqa: E402
+from monitoring.run_list import load_run_list  # noqa: E402
 DATA = ROOT / "data"
 SCHEMAS = ROOT / "schemas"
 
@@ -126,6 +130,16 @@ def target_errors() -> list[str]:
             unknown = set(q["categories"]) - cats
             if unknown:
                 errors.append(f"{rel}/questions.json/{q['id']}: unknown category id(s) {sorted(unknown)}")
+        # Optional run list saved from the app's Run page (monitoring/run_list.py).
+        try:
+            run_list = load_run_list(tdir)
+        except (ValueError, json.JSONDecodeError) as e:
+            errors.append(f"{rel}/{RUN_LIST_FILE}: {e}")
+            run_list = None
+        for q in run_list or []:
+            unknown = set(q["categories"]) - cats
+            if unknown:
+                errors.append(f"{rel}/{RUN_LIST_FILE}/{q['id']}: unknown category id(s) {sorted(unknown)}")
         aliases = {a.lower() for a in loaded["brand"]["aliases"]}
         overlap = {n for n in loaded["competitors"]["names"] if n.lower() in aliases}
         if overlap:
