@@ -334,11 +334,14 @@ class TestMainWithSettings:
     def test_one_failing_engine_does_not_stop_the_others(self, monkeypatch, env):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
         monkeypatch.setenv("GEMINI_API_KEY", "k")
-        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude", Mock(side_effect=Exception("529 overloaded")))
+        claude = Mock(side_effect=Exception("529 overloaded"))
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude", claude)
         monkeypatch.setitem(run_module.ENGINE_CALLS, "gemini",
                             Mock(return_value={"answer_text": "Brand is good.", "cited_urls": []}))
+        monkeypatch.setattr(run_module, "_sleep", lambda s: None)
         code, rows = self._run(monkeypatch, env, _settings(), "--engines", "claude,gemini", "--yes")
         assert code == 2  # partial success
+        assert claude.call_count == len(run_module.RETRY_WAITS) + 1  # retried, then skipped for the run
         assert {r["engine"] for r in rows} == {"gemini"} and len(rows) == 2
         assert all(r["mentioned"] == 1 for r in rows)
 
@@ -508,3 +511,44 @@ class TestRunList:
         self._write(target, bad)
         with pytest.raises(ValueError):
             run_module.load_questions(None, "key", data_dir="t")
+
+
+class TestRetries:
+    """Temporary provider errors are retried; permanent ones are not."""
+
+    class Err(Exception):
+        def __init__(self, msg, status_code=None):
+            super().__init__(msg)
+            self.status_code = status_code
+
+    @pytest.fixture(autouse=True)
+    def no_sleep(self, monkeypatch):
+        self.waits = []
+        monkeypatch.setattr(run_module, "_sleep", self.waits.append)
+
+    def test_overload_is_retried_until_it_works(self):
+        calls = iter([self.Err("x", 503), self.Err("Error code: 503 - high demand"), "ok"])
+
+        def fn():
+            v = next(calls)
+            if isinstance(v, Exception):
+                raise v
+            return v
+        assert run_module.with_retries(fn, "gemini q1") == "ok"
+        assert self.waits == list(run_module.RETRY_WAITS)
+
+    def test_gives_up_after_the_last_attempt(self):
+        def fn():
+            raise self.Err("overloaded", 529)
+        with pytest.raises(self.Err):
+            run_module.with_retries(fn, "claude q1")
+        assert len(self.waits) == len(run_module.RETRY_WAITS)
+
+    @pytest.mark.parametrize("err", [Err("invalid x-api-key", 401), Err("Gemini returned a rate-limit error (429)"),
+                                     ValueError("model not found")])
+    def test_permanent_errors_raise_at_once(self, err):
+        def fn():
+            raise err
+        with pytest.raises(type(err)):
+            run_module.with_retries(fn, "x")
+        assert self.waits == []

@@ -36,7 +36,9 @@ import random
 import re
 import sqlite3
 import sys
+import time
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -84,6 +86,37 @@ def _load_dotenv() -> None:
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
             value = value[1:-1]
         os.environ.setdefault(key.strip(), value)
+
+
+# Temporary provider trouble worth waiting out: overload, 5xx, timeouts.
+# A 429 is not in the list: on Gemini's free tier it means "needs billing",
+# which no amount of waiting fixes (see call_gemini).
+TRANSIENT_STATUS = {500, 502, 503, 504, 529}
+TRANSIENT_WORDS = ("overloaded", "high demand", "service_unavailable", "unavailable", "timed out", "timeout")
+RETRY_WAITS = (10, 30)  # seconds before the 2nd and 3rd attempt
+_sleep = time.sleep     # replaced in tests
+
+
+def is_transient(e: Exception) -> bool:
+    code = getattr(e, "status_code", None) or getattr(e, "code", None)
+    if isinstance(code, int) and code in TRANSIENT_STATUS:
+        return True
+    text = str(e).lower()
+    return any(f"error code: {c}" in text for c in TRANSIENT_STATUS) or any(w in text for w in TRANSIENT_WORDS)
+
+
+def with_retries(fn, label: str):
+    """Call fn(); on a transient error wait and try again (RETRY_WAITS), then
+    give up by re-raising. Permanent errors (bad key, bad model) raise at once."""
+    for attempt, wait in enumerate((*RETRY_WAITS, None), start=1):
+        try:
+            return fn()
+        except Exception as e:  # provider SDKs raise their own exception types
+            if wait is None or not is_transient(e):
+                raise
+            print(f"[{label}: temporary error, retrying in {wait}s (attempt {attempt + 1} of {len(RETRY_WAITS) + 1}): "
+                  f"{str(e)[:160]}]", file=sys.stderr)
+            _sleep(wait)
 
 
 def _fail(message: str) -> int:
@@ -540,8 +573,9 @@ def main() -> int:
                 continue
             for run_index in range(runs):
                 try:
-                    row = run_one(q, engine, run_index, brand_aliases, competitor_names, args.dry_run,
-                                  engine_cfg=engine_cfgs[engine], prompt_text=text, variant=variant)
+                    call = partial(run_one, q, engine, run_index, brand_aliases, competitor_names, args.dry_run,
+                                   engine_cfg=engine_cfgs[engine], prompt_text=text, variant=variant)
+                    row = with_retries(call, f"{engine} {q['id']}")
                 except Exception as e:  # any provider/SDK error, not just our RuntimeErrors
                     if args.dry_run:
                         raise
