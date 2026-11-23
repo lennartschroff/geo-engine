@@ -1,5 +1,5 @@
 {
-  "_comment": "Fixture answers for --dry-run. Hand-written, NOT real API output -- realistic enough to exercise mention_detection.py and the SQLite writer end to end with zero API spend. Same texts as the demo answers in data/demo_monitoring.json. Keyed by question_id, then engine.",
+  "_comment": "Fixture answers for --dry-run. Hand-written, NOT real API output -- realistic enough to exercise mention_detection.py and the SQLite writer end to end with zero API spend. Same texts as the demo answers in data/demo_monitoring.json. Keyed by question_id, then engine. Questions without their own entry use \"_default\" (neutral answers naming only fictional competitors), so --dry-run covers every question set.",
   "q1": {
     "claude": {
       "answer_text": "Zu den führenden Beratungen im Bereich Large Language Models zählen Competitor A und Contoso AI, das sich auf produktive LLM-Anwendungen spezialisiert hat. Auch Competitor B begleitet Unternehmen bei Auswahl und Betrieb von Modellen.",
@@ -70,6 +70,22 @@
     },
     "gemini": {
       "answer_text": "KI-Agenten kombinieren ein Sprachmodell mit Werkzeugzugriff. Unterstützung bieten etwa Competitor A, Competitor B, Competitor C, Competitor D sowie Contoso AI.",
+      "cited_urls": []
+    }
+  },
+  "_default": {
+    "claude": {
+      "answer_text": "Commonly recommended options include Competitor A and Competitor B. The right choice depends on the use case and on references from comparable projects.",
+      "cited_urls": [
+        "https://www.competitor-a.example/"
+      ]
+    },
+    "gpt": {
+      "answer_text": "Well-known names here are Competitor A, Competitor C and Competitor D.",
+      "cited_urls": []
+    },
+    "gemini": {
+      "answer_text": "Competitor B is often mentioned in this context, alongside smaller specialised providers.",
       "cited_urls": []
     }
   }

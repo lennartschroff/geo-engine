@@ -287,7 +287,9 @@ def load_competitor_names(data_dir: str = "data") -> list[str]:
 
 def load_fixture_answer(question_id: str, engine: str) -> dict | None:
     fixtures = json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
-    return fixtures.get(question_id, {}).get(engine)
+    # Fixtures exist for a few demo questions; every other question falls back
+    # to "_default", so a dry run works for any question set, real targets too.
+    return fixtures.get(question_id, {}).get(engine) or fixtures.get("_default", {}).get(engine)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
