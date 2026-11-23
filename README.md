@@ -68,6 +68,8 @@ python3 -m http.server -d app 8000      # then open http://localhost:8000
 
 After editing anything in `data/`, rebuild the bundle with `python3 scripts/build_web_data.py`.
 
+Keyboard: `Cmd/Ctrl+K` opens search and commands, `g` then a letter jumps to a page (`o` Overview, `q` Questions, `s` Sources, `i` Impact, `w` Website, `r` Write, `l` Library), `j`/`k` and `Enter` step through questions, `/` focuses the filter, `t` switches light and dark mode, `?` lists all shortcuts.
+
 To audit a website you own:
 
 ```bash
@@ -87,7 +89,7 @@ pip install -r requirements-dev.txt   # requirements.txt plus pytest, ruff, json
 ruff check .
 python scripts/validate_data.py       # schemas and cross-file references, incl. targets/
 pytest tests/
-node --test tests/core.test.js
+node --test tests/core.test.js tests/charts.test.js
 ./scripts/check.sh                    # everything CI runs, plus gitleaks if installed
 ```
 
