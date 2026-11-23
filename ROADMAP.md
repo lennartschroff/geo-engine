@@ -32,6 +32,13 @@ The overview. Details and reasoning for each item are in [TASKS.md](TASKS.md).
 - Publish answer-first articles about the monitored questions on the project's GitHub Pages site and follow the trend
 - Short screen recording for the README
 
+## Exploring (branch `radar`)
+
+- **Question Radar:** spot questions while they are still new and poorly answered, write
+  for them before competitors do, then check with monitoring whether the head start paid
+  off. First signal: the web searches the engines already run while answering. Concept in
+  [docs/QUESTION_RADAR.md](docs/QUESTION_RADAR.md), tasks in Epic H.
+
 ## Maybe later
 
 - A hosted backend (for example FastAPI and SQLite) with accounts, for teams

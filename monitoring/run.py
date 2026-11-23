@@ -132,8 +132,11 @@ def _fail(message: str) -> int:
 def call_claude(question_text: str, cfg: dict | None = None) -> dict:
     """One real call to Claude (default claude-sonnet-5) with web search enabled.
 
-    Returns {"answer_text": str, "cited_urls": list[str]}. Raises RuntimeError
-    with a clear message if the API key is missing or the call fails — never
+    Returns {"answer_text": str, "cited_urls": list[str], "search_queries":
+    list[str]}. search_queries are the web searches Claude ran (one
+    server_tool_use block each, query in input["query"]) -- the raw signal for
+    the Question Radar (docs/QUESTION_RADAR.md). Raises RuntimeError with a
+    clear message if the API key is missing or the call fails — never
     silently returns a fake result.
     """
     try:
@@ -171,14 +174,22 @@ def call_claude(question_text: str, cfg: dict | None = None) -> dict:
         for result in block.content
         if getattr(result, "type", None) == "web_search_result"
     ]
-    return {"answer_text": answer_text, "cited_urls": cited_urls}
+    search_queries = [
+        block.input["query"]
+        for block in response.content
+        if block.type == "server_tool_use" and block.name == "web_search"
+        and isinstance(block.input, dict) and block.input.get("query")
+    ]
+    return {"answer_text": answer_text, "cited_urls": cited_urls, "search_queries": search_queries}
 
 
 def call_gemini(question_text: str, cfg: dict | None = None) -> dict:
     """One real call to Gemini (default gemini-3.5-flash-lite) via the
     google-genai SDK's interactions API.
 
-    Returns {"answer_text": str, "cited_urls": list[str]}.
+    Returns {"answer_text": str, "cited_urls": list[str], "search_queries": []}.
+    search_queries stays empty: Gemini only reports its searches with
+    grounding on, which we can't test without billing (see below).
 
     cfg["grounding"] toggles Google Search grounding. It defaults to off:
     tested against a real free-tier key (2026-11-19), a grounded call
@@ -232,15 +243,17 @@ def call_gemini(question_text: str, cfg: dict | None = None) -> dict:
             for ann in getattr(block, "annotations", None) or []:
                 if getattr(ann, "type", None) == "url_citation" and getattr(ann, "url", None):
                     cited_urls.append(ann.url)
-    return {"answer_text": answer_text, "cited_urls": cited_urls}
+    return {"answer_text": answer_text, "cited_urls": cited_urls, "search_queries": []}
 
 
 def call_gpt(question_text: str, cfg: dict | None = None) -> dict:
     """One real call to OpenAI (default gpt-5-mini) via the Responses API
     with the web_search tool.
 
-    Returns {"answer_text": str, "cited_urls": list[str]}. Citations are the
-    message's url_citation annotations (documented response shape, OpenAI
+    Returns {"answer_text": str, "cited_urls": list[str], "search_queries":
+    list[str]}. search_queries come from the web_search_call output items
+    (action.query; same documented shape, same "not yet verified for real"
+    caveat). Citations are the message's url_citation annotations (documented response shape, OpenAI
     web search guide, checked 2026-11-19). Written and unit-tested against
     a mocked client; NOT yet verified with a real call -- the first real
     run is gated on your approval of its cost (see TASKS.md C4c).
@@ -266,14 +279,31 @@ def call_gpt(question_text: str, cfg: dict | None = None) -> dict:
     )
 
     cited_urls = []
+    search_queries = []
     for item in getattr(response, "output", None) or []:
+        if getattr(item, "type", None) == "web_search_call":
+            search_queries.extend(_gpt_search_queries(getattr(item, "action", None)))
+            continue
         if getattr(item, "type", None) != "message":
             continue
         for block in getattr(item, "content", None) or []:
             for ann in getattr(block, "annotations", None) or []:
                 if getattr(ann, "type", None) == "url_citation" and getattr(ann, "url", None):
                     cited_urls.append(ann.url)
-    return {"answer_text": response.output_text, "cited_urls": cited_urls}
+    return {"answer_text": response.output_text, "cited_urls": cited_urls, "search_queries": search_queries}
+
+
+def _gpt_search_queries(action) -> list[str]:
+    """Queries from a web_search_call's action. Defensive: the action may be
+    an SDK object or a dict, carry one `query` and/or a `queries` list, or be
+    another action type (open_page, find_in_page) with no query at all."""
+    if action is None:
+        return []
+    get = action.get if isinstance(action, dict) else lambda k: getattr(action, k, None)
+    if get("type") not in (None, "search"):
+        return []
+    found = [get("query")] + list(get("queries") or [])
+    return list(dict.fromkeys(q for q in found if isinstance(q, str) and q.strip()))
 
 
 ENGINE_CALLS = {"claude": call_claude, "gpt": call_gpt, "gemini": call_gemini}
@@ -356,6 +386,10 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN variant INTEGER NOT NULL DEFAULT 0")
     if "question_text" not in existing:
         conn.execute("ALTER TABLE runs ADD COLUMN question_text TEXT")
+    # Added for the Question Radar (2026-11-23): the engine's own web search
+    # queries for this answer, JSON list. NULL on rows from before that.
+    if "search_queries" not in existing:
+        conn.execute("ALTER TABLE runs ADD COLUMN search_queries TEXT")
     conn.commit()
 
 
@@ -397,6 +431,7 @@ def run_one(
         "answer_text": answer["answer_text"],
         "variant": variant,
         "question_text": prompt,
+        "search_queries": json.dumps(answer.get("search_queries") or [], ensure_ascii=False),
     }
 
 
@@ -553,11 +588,11 @@ def main() -> int:
                     break
                 conn.execute(
                     "INSERT INTO runs (question_id, engine, model, run_index, timestamp, language, mentioned, "
-                    "position, cited_urls, answer_text, variant, question_text) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "position, cited_urls, answer_text, variant, question_text, search_queries) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (row["question_id"], row["engine"], row["model"], row["run_index"], row["timestamp"],
                      row["language"], row["mentioned"], row["position"], row["cited_urls"], row["answer_text"],
-                     row["variant"], row["question_text"]),
+                     row["variant"], row["question_text"], row.get("search_queries", "[]")),
                 )
                 # Commit per row, not once at the end: a real run pays per API call made, so a
                 # later call crashing must not lose the real money already spent on earlier rows.

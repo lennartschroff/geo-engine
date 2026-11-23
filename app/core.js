@@ -593,7 +593,41 @@
   /** True when two 95% intervals overlap, i.e. the change may be noise (D3). */
   const intervalsOverlap = (a, b) => !!a && !!b && a.lo <= b.hi && b.lo <= a.hi;
 
+  // ---------- Question Radar (monitoring/radar.py, docs/QUESTION_RADAR.md) ----------
+  const RADAR_OPEN_AT = 70;
+  const isCommunity = o => o !== 'engine' && o !== 'event';
+  const RADAR_FILTERS = {
+    all: () => true,
+    open: c => (c.parts && c.parts.open) >= RADAR_OPEN_AT,
+    community: c => (c.origins || []).some(isCommunity),
+    engine: c => (c.origins || []).includes('engine'),
+  };
+
+  /**
+   * Radar candidates for display: new ones only (tracked ones are listed
+   * apart), minus the ones the user dismissed, filtered and best first.
+   * Counts per filter are over the non-dismissed new candidates.
+   */
+  function radarList(candidates, opts) {
+    const o = Object.assign({ filter: 'all', hidden: {}, showHidden: false }, opts);
+    const fresh = (candidates || []).filter(c => c.new !== false);
+    const visible = fresh.filter(c => o.showHidden || !o.hidden[c.id]);
+    const test = RADAR_FILTERS[o.filter] || RADAR_FILTERS.all;
+    const counts = {};
+    Object.keys(RADAR_FILTERS).forEach(k => { counts[k] = fresh.filter(c => !o.hidden[c.id] && RADAR_FILTERS[k](c)).length; });
+    return {
+      list: visible.filter(test).sort((a, b) => b.score - a.score || String(a.query).localeCompare(String(b.query))),
+      counts,
+      hidden: fresh.filter(c => o.hidden[c.id]).length,
+      tracked: (candidates || []).filter(c => c.new === false).sort((a, b) => b.score - a.score),
+    };
+  }
+
+  /** Direction of a topic: momentum 0..1 (0.5 = steady), null = no data. */
+  const radarTrend = m => m == null ? 'none' : m >= 0.6 ? 'up' : m <= 0.4 ? 'down' : 'flat';
+
   return {
+    radarList, radarTrend, RADAR_OPEN_AT,
     findMentions, highlightMentions, shareOfVoice, intervalsOverlap, textFromMarkdown, extractBlockCandidates,
     composeArticle, buildPolishPrompt, extractFacts, checkFacts, blockCoverage, citabilityChecks, mdToHtml, faqFromMarkdown, articleToHtml,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,

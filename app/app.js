@@ -37,6 +37,8 @@
       trend_ci: Array.isArray(parsed.trend_ci) ? parsed.trend_ci : [],
       answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
       competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
+      // Question Radar (monitoring/radar.py); absent when nothing is on the radar yet.
+      radar: parsed.radar && Array.isArray(parsed.radar.candidates) ? parsed.radar : null,
       pieces: prev ? prev.pieces : [],
       audit_meta: parsed.audit_meta || (prev ? prev.audit_meta : { date: '', pages: 0, posts: 0 }),
     };
@@ -108,6 +110,7 @@
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
     upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
     globe2: '<path d="M4 5h8M8 3v2M5.5 5c1 3.5 3.5 6 6.5 7.5M10.5 5c-1 4-3.5 7-6.5 8.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
+    radar: '<path d="M12 12l6.5-6.5"/><path d="M20.5 12A8.5 8.5 0 1 1 12 3.5"/><path d="M16.2 12A4.2 4.2 0 1 1 12 7.8"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
     swap: '<path d="M7 4L3 8l4 4"/><path d="M3 8h13"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8"/>',
   };
   const ic = (name, size) => icon(size || 16, ICONS[name] || '');
@@ -464,7 +467,8 @@
     // Library is reference material you dip into, not a destination -- kept
     // last/rightmost so it's still one click away without competing with the
     // two active steps.
-    const GROUPS = { monitor: ['questions', 'runs', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
+    // Radar sits next to Questions: it suggests the questions to add next.
+    const GROUPS = { monitor: ['questions', 'radar', 'runs', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
     const TYPE_FG = { statement: 'var(--type-statement)', definition: 'var(--type-definition)', figure: 'var(--type-figure)', case: 'var(--type-case)', quote: 'var(--type-quote)', faq: 'var(--type-faq)' };
@@ -498,7 +502,8 @@
       brief: '', newQ: '', newCat: DEFAULT_CAT, formMsg: '', copied: null,
       newBlockType: 'statement', newBlockText: '', newBlockCats: [], blockMsg: '', monitoringMsg: '', pagesMsg: '',
       importText: '', importSource: '', importCands: [], importMsg: '', polished: {}, factConfirm: {},
-      active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {},
+      active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}, radarHidden: {}, radarTracked: {},
+      radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
       drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null,
       qSearch: '', qTopic: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
@@ -518,14 +523,15 @@
           customBlocks: Array.isArray(v.customBlocks) ? v.customBlocks : [], drafts: v.drafts || {}, auditDone: v.auditDone || {},
           // Unreviewed suggestions survive a reload, so review work isn't lost.
           importCands: Array.isArray(v.importCands) ? v.importCands : [], importSource: typeof v.importSource === 'string' ? v.importSource : '',
-          polished: v.polished && typeof v.polished === 'object' ? v.polished : {}, factConfirm: v.factConfirm && typeof v.factConfirm === 'object' ? v.factConfirm : {}
+          polished: v.polished && typeof v.polished === 'object' ? v.polished : {}, factConfirm: v.factConfirm && typeof v.factConfirm === 'object' ? v.factConfirm : {},
+          radarHidden: v.radarHidden && typeof v.radarHidden === 'object' ? v.radarHidden : {}, radarTracked: v.radarTracked && typeof v.radarTracked === 'object' ? v.radarTracked : {}
         };
       } catch (e) { return {}; }
     }
     function persist() {
       try {
         window.localStorage.setItem('geo-engine:lang', state.lang);
-        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource, polished: state.polished, factConfirm: state.factConfirm }));
+        window.localStorage.setItem(STORE_KEY, JSON.stringify({ lang: state.lang, active: state.active, custom: state.custom, customBlocks: state.customBlocks, drafts: state.drafts, auditDone: state.auditDone, importCands: state.importCands, importSource: state.importSource, polished: state.polished, factConfirm: state.factConfirm, radarHidden: state.radarHidden, radarTracked: state.radarTracked }));
       } catch (e) { /* storage unavailable – state stays in memory */ }
     }
     // fx names the one element that should play its entrance animation on
@@ -1367,6 +1373,126 @@
     // Engines answer in parallel, ~10 s per question (measured 2026-11-23).
     const checkMinutes = n => Math.max(1, Math.ceil(n * 10 / 60));
     const checkCost = n => connected().reduce((a, e) => a + (engineCfg(e.id).usd_per_call || 0) * n, 0);
+
+    // ---------- Radar: questions that are just starting to come up ----------
+    // Data from monitoring/radar.py via the export (own brand) or the demo.
+    // Tracking a candidate makes it one of your questions, so it joins the
+    // run list; from then on monitoring shows whether writing for it paid off.
+    const RADAR_STRONG = 70;
+    const radarData = () => (D.demo && D.demo.radar && Array.isArray(D.demo.radar.candidates)) ? D.demo.radar : null;
+    const radarTrackedQ = c => { const id = state.radarTracked[c.id]; return id ? allQ().find(q => q.id === id) || null : null; };
+    function radarStrong() {
+      const RD = radarData();
+      if (!RD) return 0;
+      return CORE.radarList(RD.candidates, { hidden: state.radarHidden }).list.filter(c => c.score >= RADAR_STRONG && !radarTrackedQ(c)).length;
+    }
+    function trackRadar(c) {
+      const have = radarTrackedQ(c);
+      if (have) return have.id;
+      const cat = c.category && CAT_BY_ID[c.category] ? c.category : DEFAULT_CAT;
+      const q = { id: 'c' + Date.now().toString(36), text: String(c.query).slice(0, 300), tags: [cat], key: false, custom: true, createdAt: new Date().toISOString(), radar: c.id };
+      const tracked = Object.assign({}, state.radarTracked); tracked[c.id] = q.id;
+      set({ custom: state.custom.concat([q]), radarTracked: tracked });
+      toast(L().ui.radar.toastTracked);
+      return q.id;
+    }
+    function writeRadar(c) { openDraft(trackRadar(c)); }
+    function hideRadar(c, hide) { const h = Object.assign({}, state.radarHidden); if (hide) h[c.id] = true; else delete h[c.id]; set({ radarHidden: h }); }
+
+    function viewRadar() {
+      const l = L(); const R = l.ui.radar; const RD = radarData();
+      const head = '<div class="page-head"><div class="head"><h1>' + esc(l.tabs.radar) + '</h1><p>' + esc(R.sub) + '</p></div></div>';
+      if (!RD) {
+        const body = mode === 'own'
+          ? ownHint(R.emptyCmd, R.emptyText) + '<div class="card" style="gap:10px;margin-top:12px"><span class="s13 muted">' + esc(R.emptyLoad) + '</span>' +
+            '<label for="radar-file" class="btn sm plain" style="align-self:flex-start;cursor:pointer">' + ic('upload', 14) + esc(l.chooseFile) + '</label>' +
+            '<input id="radar-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
+            (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div>'
+          : '<div class="empty"><b>' + esc(R.emptyTitle) + '</b></div>';
+        return '<section>' + head + '<div class="panel"><div class="panel-b">' + body + '</div></div></section>';
+      }
+      const r = CORE.radarList(RD.candidates, { filter: state.radarFilter, hidden: state.radarHidden, showHidden: state.radarShowHidden });
+      const all = CORE.radarList(RD.candidates, { hidden: state.radarHidden }).list;
+      const topics = RD.topics || [];
+      const rising = topics.filter(t => CORE.radarTrend(t.momentum) === 'up').length;
+      const H = RD.hits || { flagged: 0, checkable: 0, seen_again: 0, tracked: 0, mentioned_after: 0 };
+      const date = d => d ? new Date(d + 'T00:00:00').toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+      const tile = (label, value, sub) => '<div class="kpi-tile"><div class="top">' + esc(label) + '</div><div class="mid"><span class="n">' + value + '</span></div><span class="l">' + esc(sub) + '</span></div>';
+      const kpis = '<div class="kpis">' +
+        tile(R.kNew, all.length, R.kNewSub(all.filter(c => c.score >= RADAR_STRONG).length)) +
+        tile(R.kOpen, r.counts.open, R.kOpenSub) +
+        tile(R.kRising, rising, R.kRisingSub(topics.length)) +
+        tile(R.kHits, H.flagged ? H.tracked + '/' + H.flagged : '–', R.kHitsSub(H.mentioned_after)) + '</div>';
+
+      const scoreCol = n => n >= RADAR_STRONG ? 'var(--accent-strong)' : n >= 50 ? 'var(--fg)' : 'var(--muted)';
+      const originLabel = o => R.origins[o.split(':')[0]] || o;
+      const partsHtml = c => '<div class="rparts">' + ['momentum', 'demand', 'open', 'fit'].map(k => {
+        const v = c.parts[k];
+        const note = k === 'open' ? ' ' + (c.open_measured ? R.measuredTip : R.estimatedTip) : '';
+        return '<div data-tt="' + esc(R.partTips[k] + note) + '"><div class="rpart-l"><span>' + esc(R.parts[k]) + (k === 'open' && c.open_measured ? ' ' + ic('check', 11) : '') + '</span><span class="num">' + v + '</span></div>' +
+          '<div class="bar-t"><div style="width:' + v + '%;background:' + (k === 'open' && c.open_measured ? 'var(--accent)' : 'var(--viz-1)') + '"></div></div></div>';
+      }).join('') + '</div>';
+      const probeHtml = c => {
+        const e = c.probe || {};
+        const names = Object.keys(e);
+        if (!names.length) return '';
+        return '<span class="small muted">' + names.map(k => {
+          const p = e[k]; const eng = ENGINES.find(x => x.id === k);
+          return esc(R.probe(eng ? eng.name : k, p.named, p.cited, p.hedged)) + (p.brand ? ' · <b class="good" style="font-weight:600">' + esc(R.brandNamed) + '</b>' : '');
+        }).join(' · ') + '</span>';
+      };
+      const row = c => {
+        const tq = radarTrackedQ(c); const hidden = !!state.radarHidden[c.id];
+        const meta = [c.origins.map(originLabel).join(' · '), c.category ? catLabel(c.category) : '', R.seen(c.count || 1, date((c.first_seen || '').slice(0, 10)))]
+          .concat(c.questions && c.questions.length ? [R.fromQs(c.questions.length)] : []).concat(c.unanswered ? [R.unanswered(c.unanswered)] : []).filter(Boolean);
+        const links = (c.links || []).slice(0, 2).map(k => '<a class="link s13" style="display:inline-flex;gap:4px;align-items:center;max-width:100%" target="_blank" rel="noopener noreferrer" href="' + esc(k.url) + '">' +
+          ic('external', 13) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(k.title) + '</span></a>').join('');
+        return '<div class="row rgrid" style="' + (hidden ? 'opacity:.55' : '') + '">' +
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><span class="rscore" style="color:' + scoreCol(c.score) + '">' + c.score + '</span><span class="small muted">' + esc(R.scoreLabel) + '</span></div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px;min-width:0"><span style="font-weight:550">' + esc(c.query) + '</span>' +
+          '<span class="small muted">' + esc(meta.join(' · ')) + '</span>' +
+          (c.variants && c.variants.length ? '<span class="small muted">~ ' + esc(c.variants.slice(0, 2).join(' · ')) + '</span>' : '') +
+          partsHtml(c) + probeHtml(c) + (links ? '<div style="display:flex;flex-direction:column;gap:2px;min-width:0">' + links + '</div>' : '') + '</div>' +
+          '<div class="ractions">' +
+          (tq ? '<span class="badge" style="background:var(--accent-soft);color:var(--accent-strong);justify-content:center">' + ic('check', 13) + esc(R.tracked) + '</span>'
+            : '<button class="btn sm" ' + click(() => trackRadar(c)) + '>' + esc(R.track) + '</button>') +
+          '<button class="btn sm plain" ' + click(() => writeRadar(c)) + '>' + ic('write', 14) + esc(R.write) + '</button>' +
+          '<button class="btn sm plain" ' + click(() => hideRadar(c, !hidden)) + '>' + esc(hidden ? R.restore : R.dismiss) + '</button></div></div>';
+      };
+      const filters = '<div class="seg" role="group" aria-label="' + esc(R.listTitle) + '">' + ['all', 'open', 'community', 'engine'].map(f =>
+        '<button class="' + (state.radarFilter === f ? 'on' : '') + '" aria-pressed="' + (state.radarFilter === f) + '" ' + click(() => set({ radarFilter: f })) + '>' + esc(R.filters[f]) + '<span class="c">' + r.counts[f] + '</span></button>').join('') + '</div>';
+      const list = '<div class="panel"><div class="panel-h" style="flex-wrap:wrap;gap:10px"><div><h2>' + esc(R.listTitle) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div>' + filters + '</div>' +
+        (r.list.length ? '<div>' + r.list.map(row).join('') + '</div>' : '<div class="empty">' + esc(R.noneInFilter) + '</div>') +
+        (r.hidden ? '<div class="panel-b" style="border-top:1px solid var(--line2)"><button class="link s13" ' + click(() => set({ radarShowHidden: !state.radarShowHidden })) + '>' + esc(state.radarShowHidden ? R.hideHidden : R.showHidden(r.hidden)) + '</button></div>' : '') + '</div>';
+
+      const trendCol = { up: 'var(--good)', flat: 'var(--muted)', down: 'var(--warn)', none: 'var(--muted)' };
+      const topicRow = t => {
+        const tr = CORE.radarTrend(t.momentum);
+        const src = (t.sources || []).map(x => originLabel(x.source) + ' ' + x.recent + ' / ' + (Math.round(x.baseline * 10) / 10)).join(' · ');
+        return '<div class="row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 18px" data-tt="' + esc(src) + '">' +
+          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:500">' + esc(t.term) + '</span>' +
+          '<span class="small" style="color:' + trendCol[tr] + '">' + esc(R.trend[tr]) + (t.growth != null ? ' · ' + esc(R.growth(t.growth)) : '') + '</span></div>' +
+          (t.series && t.series.length > 1 ? CH.sparkline(t.series, { w: 84, h: 26, color: tr === 'down' ? 'var(--warn)' : 'var(--viz-1)' }) : '<span></span>') + '</div>';
+      };
+      const side = '<div style="display:flex;flex-direction:column;gap:16px">' +
+        '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.topicsTitle) + '</h2><span class="sub">' + esc(R.topicsSub) + '</span></div></div>' +
+        (topics.length ? '<div>' + topics.map(topicRow).join('') + '</div>' : '<div class="panel-b s13 muted">' + esc(R.noTopics) + '</div>') + '</div>' +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(R.hitsTitle) + '</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
+        [[R.hFlagged, H.flagged], [R.hCheckable, H.checkable], [R.hSeenAgain, H.seen_again], [R.hTracked, H.tracked], [R.hNamed, H.mentioned_after]].map(x =>
+          '<span style="display:flex;justify-content:space-between;gap:12px"><span class="muted">' + esc(x[0]) + '</span><b class="num" style="font-weight:600">' + x[1] + '</b></span>').join('') +
+        '<span class="small muted" style="margin-top:4px">' + esc(R.hitsNote) + '</span></div></div>' +
+        (r.tracked.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.trackedTitle) + '</h2><span class="sub">' + esc(R.trackedSub) + '</span></div></div><div>' +
+          r.tracked.map(c => '<div class="row" style="display:flex;flex-direction:column;gap:2px;padding:10px 18px"><span class="s13" style="font-weight:500">' + esc(c.query) + '</span>' +
+            '<span class="small muted">' + esc(c.flagged_since ? R.flaggedSince(date(c.flagged_since)) : '') + '</span></div>').join('') + '</div></div>' : '') +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(R.howTitle) + '</h2></div><div class="panel-b s13 muted" style="display:flex;flex-direction:column;gap:8px"><span>' + esc(R.howText) + '</span>' +
+        (mode === 'own' ? '<code class="mono small" style="display:block;white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px">' + esc(R.cmds) + '</code>' : '') + '</div></div></div>';
+
+      const note = RD.demo_note ? '<div class="banner">' + ic('info', 15) + '<span class="item">' + esc(R.demoNote) + '</span></div>' : '';
+      return '<section>' + head + note + kpis + '<div class="grid g-main" style="align-items:start">' + list + side + '</div>' +
+        '<span class="small muted">' + esc(R.generated(date(RD.generated))) + '</span></section>';
+    }
+
     const runListNow = () => allQ().filter(isActive);
 
     // Connect a key: one tiny request to prove it works before it's stored.
@@ -1622,6 +1748,7 @@
       const ph = allBlocksList().filter(b => b.placeholder).length;
       return {
         questions: ctx.gapQs.length ? { n: ctx.gapQs.length, warn: true, tip: l.ui.bannerGaps(ctx.gapQs.length) } : null,
+        radar: radarStrong() ? { n: radarStrong(), tip: l.ui.radar.navTip(radarStrong()) } : null,
         sources: targets ? { n: targets, tip: l.srcStatTargets + ': ' + targets } : null,
         website: high ? { n: high, warn: true, tip: l.webStatHigh + ': ' + high } : null,
         library: ph ? { n: ph, tip: l.libNeedsContent + ': ' + ph } : null,
@@ -1818,7 +1945,7 @@
 
       const isFreshOwn = mode === 'own' && allBlocksList().length === 0 && D.audit.length === 0 && D.pages.length === 0 && Object.keys(D.demo.results).length === 0;
       const views = {
-        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, runs: viewRuns, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
+        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, radar: viewRadar, runs: viewRuns, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
         write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
       };
       document.documentElement.lang = state.lang;

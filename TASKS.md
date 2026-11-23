@@ -36,6 +36,30 @@ drops unimplemented engines before the cost estimate. In priority order:
 
 ---
 
+## Epic H — Question Radar (exploring, branch `radar`, 2026-11-23)
+Concept and reasoning: [docs/QUESTION_RADAR.md](docs/QUESTION_RADAR.md). Status 2026-11-23: built end to end
+(collect → score → probe → export → app Radar page → weekly Action). Open: H5 events need sourced dates;
+first real Claude probe (~$0.25 for 5) awaits approval; Gemini free-tier probe hit 503 twice; doc needs a refresh.
+- [x] **H1.** Store the engines' own web search queries per answer (`search_queries`
+  column). Claude from `server_tool_use` blocks (documented shape); ChatGPT from
+  `web_search_call` items (documented shape, mocked tests only — check on the first real
+  run). Gemini: none while grounding is off. — *S*, no extra cost
+- [x] **H2.** `monitoring/radar.py`: merge and count those queries, mark the ones no
+  tracked question covers. Terminal table or `--json`. — *S*, no API calls
+- [x] **H3.** Export radar candidates into `app/data.js` and show them (Monitor → Radar,
+  or a section on Questions; owner decides). "Add to run list" button. — *M*
+- [x] **H4.** Weak-answer test: one call per candidate per engine, score how open the
+  slot is (no named providers, hedging, few sources). **Show the cost estimate and ask
+  before the first real run.** — *M*
+- [ ] **H5.** Future events list (`events.json`: date, topic, expected questions), entered
+  by hand, feeding candidates N weeks ahead. — *S*
+- [x] **H6.** Community/search momentum sources (Reddit, GitHub, Stack Overflow, Trends).
+  Public posts only, store question text without usernames. — *L*
+- [x] **H7.** Radar score (momentum 30, spread 20, open slot 30, fit 20) and a hit-rate
+  report once there are 8+ weeks of runs. — *M*
+
+---
+
 ## Epic G — Real monitoring of this project (2026-11-19)
 - [x] **G1.** Name kept as "GEO Engine" (alternatives checked, user chose to keep it).
 - [x] **G2.** `targets/geo-engine/`: brand (aliases "GEO Engine", "lennartschroff/geo-engine";

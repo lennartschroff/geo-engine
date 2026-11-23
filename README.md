@@ -136,6 +136,8 @@ python3 monitoring/run.py --dry-run      # free, uses recorded test answers
 python3 monitoring/run.py                # real calls: shows a cost estimate, stops above the cap
 python3 monitoring/run.py --yes          # real calls without the confirmation prompt
 python3 scripts/export_monitoring.py     # -> monitoring/monitoring_export.json
+python3 monitoring/radar.py collect      # Question Radar: public questions + topic momentum (free)
+python3 monitoring/radar.py              # show candidates; `probe --top 5` measures open slots (asks first)
 ```
 
 **In the app (simplest):** *Monitor → Runs*, paste a key for Gemini (free), Claude or ChatGPT, click *Check now*. Answers, status, sources and trend show up in the app and stay in that browser.

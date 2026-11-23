@@ -37,6 +37,17 @@ jobs:
           assert sorted(r[0] for r in rows) == [0, 1], rows
           print('variant rows:', rows)
           "
+      - name: Question Radar smoke test (zero API cost)
+        run: |
+          python monitoring/radar.py --db /tmp/ci-var.sqlite --target data
+          python monitoring/radar.py probe --dry-run --engines claude --top 2 --db /tmp/ci-var.sqlite --target data
+          python monitoring/radar.py --json --db /tmp/ci-var.sqlite --target data > /tmp/radar.json
+          python -c "
+          import json
+          d = json.load(open('/tmp/radar.json'))
+          assert d['candidates'] and any(c['open_measured'] for c in d['candidates']), d
+          print('radar candidates:', len(d['candidates']))
+          "
       - name: rebuild app/data.js and check it matches what's committed
         run: |
           python scripts/build_web_data.py

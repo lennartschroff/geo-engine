@@ -97,6 +97,14 @@ def reference_errors() -> list[str]:
             f"demo_monitoring.json/results: missing demo result(s) for key question(s) {sorted(missing_key_results)}"
         )
 
+    for cand in demo.get("radar", {}).get("candidates", []):
+        refs = set(cand.get("questions", [])) | ({cand["closest_question"]} if cand.get("closest_question") else set())
+        unknown = refs - question_ids
+        if unknown:
+            errors.append(f"demo_monitoring.json/radar/{cand['id']}: unknown question id(s) {sorted(unknown)}")
+        if cand.get("category") and cand["category"] not in categories:
+            errors.append(f"demo_monitoring.json/radar/{cand['id']}: unknown category {cand['category']!r}")
+
     for piece in demo.get("pieces", []):
         unknown = set(piece.get("qs", [])) - question_ids
         if unknown:
@@ -145,6 +153,25 @@ def target_errors() -> list[str]:
         overlap = {n for n in loaded["competitors"]["names"] if n.lower() in aliases}
         if overlap:
             errors.append(f"{rel}/competitors.json: {sorted(overlap)} are also brand aliases")
+        errors += radar_errors(tdir, rel, aliases)
+    return errors
+
+
+def radar_errors(tdir: Path, rel: Path, aliases: set[str]) -> list[str]:
+    """Optional Question Radar settings (radar.json). Terms are sent to public
+    search APIs, so the brand's own name must not be among them."""
+    path = tdir / "radar.json"
+    if not path.exists():
+        return []
+    radar = json.loads(path.read_text(encoding="utf-8"))
+    schema = json.loads((SCHEMAS / "radar.schema.json").read_text(encoding="utf-8"))
+    errors = []
+    for err in Draft7Validator(schema).iter_errors(radar):
+        where = "/".join(str(x) for x in err.absolute_path)
+        errors.append(f"{rel}/radar.json{'/' + where if where else ''}: {err.message}")
+    brand_terms = sorted(t for t in radar.get("terms", []) if isinstance(t, str) and t.lower() in aliases)
+    if brand_terms:
+        errors.append(f"{rel}/radar.json/terms: {brand_terms} are brand aliases; use topic terms instead")
     return errors
 
 

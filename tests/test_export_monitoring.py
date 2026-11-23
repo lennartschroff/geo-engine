@@ -235,3 +235,52 @@ class TestBuildSetup:
         assert [q["id"] for q in s["questions"]] == ["q1", "q2", "c1"]
         assert s["questions"][2]["custom"] is True and s["questions"][2]["key"] is False
         assert s["run_list"] == ["q2", "c1"]
+
+
+class TestRadarSection:
+    def _db(self, tmp_path, queries):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        import monitoring.run as run_module
+        db = tmp_path / "r.sqlite"
+        conn = sqlite3.connect(db)
+        run_module.ensure_schema(conn)
+        conn.execute("INSERT INTO runs (question_id, engine, model, run_index, timestamp, mentioned, cited_urls, "
+                     "answer_text, search_queries) VALUES ('q1','claude','m',0,'2026-11-23T06:00:00',0,'[]','a',?)",
+                     (json.dumps(queries),))
+        conn.commit()
+        conn.close()
+        return db
+
+    def test_included_when_there_are_candidates(self, tmp_path):
+        import export_monitoring as em
+        section = em.build_radar(self._db(tmp_path, ["agent evaluation metrics"]), "data")
+        assert section["candidates"][0]["query"] == "agent evaluation metrics"
+
+    def test_none_when_nothing_on_the_radar(self, tmp_path):
+        import export_monitoring as em
+        assert em.build_radar(self._db(tmp_path, []), "data") is None
+
+    def test_radar_error_does_not_break_export(self, tmp_path, monkeypatch, capsys):
+        import export_monitoring as em
+
+        import monitoring.radar as radar
+        monkeypatch.setattr(radar, "export", lambda conn, d: (_ for _ in ()).throw(RuntimeError("boom")))
+        assert em.build_radar(self._db(tmp_path, ["x y"]), "data") is None
+        assert "radar section skipped: boom" in capsys.readouterr().err
+
+    def test_radar_only_database_still_exports(self, tmp_path, monkeypatch):
+        import export_monitoring as em
+
+        import monitoring.radar_sources as rs
+        db = tmp_path / "radar.sqlite"
+        conn = sqlite3.connect(db)
+        rs.ensure_tables(conn)
+        rs.store_count(conn, rs.Count("hackernews", "llms.txt", 5, 2.0), "2026-11-23")
+        conn.commit()
+        conn.close()
+        out = tmp_path / "export.json"
+        argv = ["export_monitoring.py", "--db", str(db), "--out", str(out), "--target", "data"]
+        monkeypatch.setattr(sys, "argv", argv)
+        assert em.main() == 0
+        data = json.loads(out.read_text())
+        assert data["results"] == {} and data["radar"]["topics"][0]["term"] == "llms.txt"

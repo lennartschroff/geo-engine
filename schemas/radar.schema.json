@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "radar",
+  "description": "Question Radar settings for one monitoring target (targets/<name>/radar.json). See docs/QUESTION_RADAR.md.",
+  "type": "object",
+  "required": ["terms"],
+  "additionalProperties": false,
+  "properties": {
+    "_comment": { "type": "string" },
+    "terms": {
+      "description": "Topic terms searched in public communities and counted for momentum. Generic terms, never the brand name.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 2 }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hackernews": { "type": "boolean" },
+        "stackexchange": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" } },
+        "github": { "type": "boolean" },
+        "wikipedia": {
+          "description": "Articles as <language>:<Title_with_underscores>, e.g. en:Search_engine_optimization.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z]{2,3}:[^\\s/]+$" }
+        }
+      }
+    },
+    "events": {
+      "description": "Dated things that will raise new questions. Each needs a source; leave the list empty rather than guess.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "title", "questions", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "title": { "type": "string", "minLength": 3 },
+          "questions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 5 } },
+          "source": { "type": "string", "pattern": "^https?://" }
+        }
+      }
+    },
+    "min_score": { "description": "Candidates at or above this score are logged as flagged (hit-rate tracking).", "type": "integer", "minimum": 0, "maximum": 100 }
+  }
+}

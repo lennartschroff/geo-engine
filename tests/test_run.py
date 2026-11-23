@@ -193,7 +193,7 @@ class TestCallGemini:
         fake_client.interactions.create.return_value = interaction
         with patch("google.genai.Client", return_value=fake_client):
             result = run_module.call_gemini("Any question", GROUNDED)
-        assert result == {"answer_text": "The answer.", "cited_urls": ["https://example.com/a"]}
+        assert result == {"answer_text": "The answer.", "cited_urls": ["https://example.com/a"], "search_queries": []}
 
     def test_no_annotations_yields_empty_cited_urls(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -204,7 +204,7 @@ class TestCallGemini:
         fake_client.interactions.create.return_value = interaction
         with patch("google.genai.Client", return_value=fake_client):
             result = run_module.call_gemini("Any question")
-        assert result == {"answer_text": "Plain answer, no search.", "cited_urls": []}
+        assert result == {"answer_text": "Plain answer, no search.", "cited_urls": [], "search_queries": []}
 
     def test_missing_steps_attribute_does_not_crash(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -213,7 +213,7 @@ class TestCallGemini:
         fake_client.interactions.create.return_value = interaction
         with patch("google.genai.Client", return_value=fake_client):
             result = run_module.call_gemini("Any question")
-        assert result == {"answer_text": "No steps at all.", "cited_urls": []}
+        assert result == {"answer_text": "No steps at all.", "cited_urls": [], "search_queries": []}
 
     def test_grounding_off_sends_no_tools(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -254,7 +254,8 @@ class TestCallGpt:
         fake.responses.create.return_value = self._response("Answer.", ["https://a.com/x", "https://b.org"])
         with patch("openai.OpenAI", return_value=fake):
             result = run_module.call_gpt("Q", {"model": "gpt-test", "reasoning_effort": "low"})
-        assert result == {"answer_text": "Answer.", "cited_urls": ["https://a.com/x", "https://b.org"]}
+        assert result == {"answer_text": "Answer.", "cited_urls": ["https://a.com/x", "https://b.org"],
+                          "search_queries": []}
         kwargs = fake.responses.create.call_args.kwargs
         assert kwargs["model"] == "gpt-test"
         assert kwargs["tools"] == [{"type": "web_search"}]
@@ -353,8 +354,64 @@ class TestSchemaMigration:
             position INTEGER, cited_urls TEXT NOT NULL, answer_text TEXT NOT NULL)""")
         conn.execute("INSERT INTO runs VALUES ('q1','claude','m',0,'t','en',1,1,'[]','a')")
         run_module.ensure_schema(conn)
-        row = conn.execute("SELECT question_id, variant, question_text FROM runs").fetchone()
-        assert row == ("q1", 0, None)
+        row = conn.execute("SELECT question_id, variant, question_text, search_queries FROM runs").fetchone()
+        assert row == ("q1", 0, None, None)
+
+    def test_schema_migration_is_idempotent(self, tmp_path):
+        conn = sqlite3.connect(tmp_path / "new.sqlite")
+        run_module.ensure_schema(conn)
+        run_module.ensure_schema(conn)  # second call must not try to add the columns again
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(runs)")]
+        assert cols.count("search_queries") == 1
+
+
+class TestSearchQueries:
+    """Question Radar (docs/QUESTION_RADAR.md): the engines' own web searches,
+    pulled from the responses we already pay for. Mocked clients only."""
+
+    def test_claude_reads_query_from_server_tool_use_blocks(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        ns = types.SimpleNamespace
+        content = [
+            ns(type="server_tool_use", name="web_search", input={"query": "rag pipeline cost 2026"}),
+            ns(type="web_search_tool_result", content=[ns(type="web_search_result", url="https://a.example/x")]),
+            ns(type="server_tool_use", name="web_search", input={"query": "rag vs fine-tuning"}),
+            ns(type="server_tool_use", name="web_fetch", input={"url": "https://a.example/x"}),
+            ns(type="text", text="Answer."),
+        ]
+        fake = Mock()
+        fake.messages.create.return_value = ns(content=content)
+        with patch("anthropic.Anthropic", return_value=fake):
+            result = run_module.call_claude("Q", {"model": "m", "max_searches": 2})
+        assert result["search_queries"] == ["rag pipeline cost 2026", "rag vs fine-tuning"]
+        assert result["cited_urls"] == ["https://a.example/x"]
+
+    def test_gpt_reads_query_and_queries_from_web_search_calls(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        ns = types.SimpleNamespace
+        output = [
+            ns(type="web_search_call",
+               action=ns(type="search", query="geo tools", queries=["geo tools", "geo vs seo"])),
+            ns(type="web_search_call", action={"type": "search", "query": "llm visibility"}),
+            ns(type="web_search_call", action=ns(type="open_page", url="https://a.example")),
+            ns(type="web_search_call"),
+            ns(type="message", content=[]),
+        ]
+        fake = Mock()
+        fake.responses.create.return_value = ns(output_text="A.", output=output)
+        with patch("openai.OpenAI", return_value=fake):
+            result = run_module.call_gpt("Q", {"model": "m", "reasoning_effort": "low"})
+        assert result["search_queries"] == ["geo tools", "geo vs seo", "llm visibility"]
+
+    def test_run_one_stores_queries_as_json_and_defaults_to_empty(self, monkeypatch):
+        q = {"id": "q1", "text": "Best tools?"}
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude",
+                            lambda text, cfg: {"answer_text": "x", "cited_urls": [], "search_queries": ["über geo"]})
+        row = run_module.run_one(q, "claude", 0, ["Brand"], [], dry_run=False)
+        assert json.loads(row["search_queries"]) == ["über geo"]
+        monkeypatch.setitem(run_module.ENGINE_CALLS, "claude", lambda text, cfg: {"answer_text": "x", "cited_urls": []})
+        row = run_module.run_one(q, "claude", 0, ["Brand"], [], dry_run=False)
+        assert row["search_queries"] == "[]"
 
 
 class TestKeysFlowFromDotenv:
