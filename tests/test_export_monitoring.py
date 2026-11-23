@@ -267,3 +267,20 @@ class TestRadarSection:
         monkeypatch.setattr(radar, "export", lambda conn, d: (_ for _ in ()).throw(RuntimeError("boom")))
         assert em.build_radar(self._db(tmp_path, ["x y"]), "data") is None
         assert "radar section skipped: boom" in capsys.readouterr().err
+
+    def test_radar_only_database_still_exports(self, tmp_path, monkeypatch):
+        import export_monitoring as em
+
+        import monitoring.radar_sources as rs
+        db = tmp_path / "radar.sqlite"
+        conn = sqlite3.connect(db)
+        rs.ensure_tables(conn)
+        rs.store_count(conn, rs.Count("hackernews", "llms.txt", 5, 2.0), "2026-11-23")
+        conn.commit()
+        conn.close()
+        out = tmp_path / "export.json"
+        argv = ["export_monitoring.py", "--db", str(db), "--out", str(out), "--target", "data"]
+        monkeypatch.setattr(sys, "argv", argv)
+        assert em.main() == 0
+        data = json.loads(out.read_text())
+        assert data["results"] == {} and data["radar"]["topics"][0]["term"] == "llms.txt"

@@ -235,10 +235,13 @@ def main() -> int:
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM runs").fetchall()
+    # A database the radar created (radar.py collect) may have no runs table yet.
+    has_runs = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='runs'").fetchone()
+    rows = conn.execute("SELECT * FROM runs").fetchall() if has_runs else []
     conn.close()
 
-    if not rows:
+    radar = build_radar(db_path, args.target or target_from_settings())
+    if not rows and not radar:
         print("No rows in the database yet.", file=sys.stderr)
         return 1
 
@@ -263,7 +266,6 @@ def main() -> int:
         "pieces": [],
         "audit_meta": {"date": datetime.date.today().isoformat(), "pages": 0, "posts": 0},
     }
-    radar = build_radar(db_path, args.target or target_from_settings())
     if radar:
         export["radar"] = radar
     Path(args.out).write_text(json.dumps(export, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
