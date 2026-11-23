@@ -939,7 +939,7 @@
     }
 
     function placeholderBadge() {
-      return '<span class="badge" style="background:var(--warn-soft);color:var(--warn-strong)">' + esc(L().closeNow) + '</span>';
+      return '<span class="badge" style="align-self:flex-start;background:var(--warn-soft);color:var(--warn)">' + esc(L().closeNow) + '</span>';
     }
 
     function libraryRow(o) {
@@ -960,7 +960,9 @@
       const coverage = b => ctx.gapQs.filter(q => overlaps(b.tags, q.tags)).length;
       const catTabs = [{ id: 'all' }].concat(CATS).map(c => tabBtn(c.id === 'all' ? l.all : catLabel(c.id), state.libCat === c.id, () => set({ libCat: c.id }))).join('');
       const typePills = ['all'].concat(TYPES).map(t => '<button class="pill' + (state.libType === t ? ' on' : '') + '" ' + click(() => set({ libType: t })) + '>' + esc(t === 'all' ? l.all : l.types[t]) + '</button>').join('');
-      const filtered = blocksNow.filter(b => (state.libCat === 'all' || b.tags.indexOf(state.libCat) !== -1) && (state.libType === 'all' || b.type === state.libType))
+      const words = state.libSearch.toLowerCase().split(/\s+/).filter(Boolean);
+      const filtered = blocksNow.filter(b => (state.libCat === 'all' || b.tags.indexOf(state.libCat) !== -1) && (state.libType === 'all' || b.type === state.libType) &&
+        words.every(w => (b.en + ' ' + b.de).toLowerCase().indexOf(w) !== -1))
         .map(b => ({ b, cov: coverage(b) }))
         .sort((x, y) => (y.cov - x.cov) || (TYPES.indexOf(x.b.type) - TYPES.indexOf(y.b.type)));
       const needsContent = filtered.filter(o => o.b.placeholder);
@@ -972,17 +974,20 @@
         set({ newBlockCats: has ? state.newBlockCats.filter(x => x !== c.id) : state.newBlockCats.concat([c.id]) });
       }) + '>' + esc(catLabel(c.id)) + '</button>').join('');
       return '<section><div class="head"><h1>' + esc(l.tabs.library) + '</h1><p>' + esc(l.libSub(blocksNow.length, withSource)) + '</p></div>' +
+        '<div style="display:flex;flex-direction:column;gap:10px"><div class="toolbar"><div class="search">' + ic('search', 15) + '<label for="lib-filter" class="sr">' + esc(l.ui.filterLib) + '</label><input id="lib-filter" data-filter type="search" placeholder="' + esc(l.ui.filterLib) + '" value="' + esc(state.libSearch) + '" ' + attr('input', e => set({ libSearch: e.target.value })) + '></div>' +
+        '<span class="count-note">' + esc(l.ui.shown(filtered.length, blocksNow.length)) + '</span></div>' +
+        '<div class="tabs-row">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
+        (needsContent.length ? '<div class="panel"><div class="panel-h"><h2 class="warn">' + esc(l.libNeedsContent) + ' <span class="nav-count warn" style="margin-left:6px">' + needsContent.length + '</span></h2></div>' + needsContent.map(libraryRow).join('') + '</div>' : '') +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(state.libCat === 'all' ? l.libReady : l.libRec(catLabel(state.libCat))) + '</h2></div>' +
+        (ready.length ? ready.map(libraryRow).join('') : '<div class="empty">' + esc(l.noRows) + '</div>') + '</div>' +
+        '<div class="grid g-2" style="align-items:start">' +
         '<div class="card"><div class="listhead" style="min-height:0"><h2>' + esc(l.addBlockTitle) + '</h2></div>' +
         '<label for="newblocktype" class="sr">' + esc(l.blockTypeLabel) + '</label><select id="newblocktype" ' + attr('change', e => { state.newBlockType = e.target.value; }) + '>' + typeOpts + '</select>' +
         '<label for="newblocktext" class="sr">' + esc(l.blockTextLabel) + '</label><textarea id="newblocktext" rows="2" style="min-height:44px;padding:10px 14px;border:1px solid var(--input);border-radius:6px;font:inherit;resize:vertical" placeholder="' + esc(l.blockTextPh) + '" ' + attr('input', e => { state.newBlockText = e.target.value; }) + '>' + esc(state.newBlockText) + '</textarea>' +
         '<div style="display:flex;flex-direction:column;gap:6px"><span class="s13 muted">' + esc(l.blockCatLabel) + '</span><div style="display:flex;flex-wrap:wrap;gap:6px">' + catPills + '</div></div>' +
         '<button class="btn" style="align-self:flex-start" ' + click(addBlock) + '>' + esc(l.saveBlock) + '</button>' +
         '<span class="small" style="color:' + (state.blockMsg ? 'var(--accent-strong)' : C.muted) + '">' + esc(state.blockMsg ? l.msg[state.blockMsg] : l.blockFormHint) + '</span></div>' +
-        importCard() +
-        '<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)">' + catTabs + '</div><div style="display:flex;flex-wrap:wrap;gap:6px">' + typePills + '</div></div>' +
-        (needsContent.length ? '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px;color:' + C.warn + '">' + esc(l.libNeedsContent) + ' (' + needsContent.length + ')</h2>' + needsContent.map(libraryRow).join('') + '</div>' : '') +
-        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(state.libCat === 'all' ? l.libReady : l.libRec(catLabel(state.libCat))) + '</h2>' +
-        (ready.length ? ready.map(libraryRow).join('') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></section>';
+        importCard() + '</div></section>';
     }
     // ---------- Import: suggest blocks from your own content, then review ----------
     // Text never leaves the browser: pasted, or read from a local file with
@@ -1064,7 +1069,8 @@
       if (text.length < 8) { set({ blockMsg: 'blockShort' }); return; }
       if (!state.newBlockCats.length) { set({ blockMsg: 'noCat' }); return; }
       const b = { id: 'cb' + Date.now().toString(36), type: state.newBlockType, text: text.slice(0, 600), categories: state.newBlockCats.slice(), createdAt: new Date().toISOString() };
-      set({ customBlocks: state.customBlocks.concat([b]), newBlockText: '', newBlockCats: [], blockMsg: 'blockSaved' });
+      set({ customBlocks: state.customBlocks.concat([b]), newBlockText: '', newBlockCats: [], blockMsg: '' });
+      toast(L().ui.toastBlock);
     }
 
     function viewWriteBrief(ctx) {
@@ -1162,7 +1168,7 @@
           '</div>' : '') +
         '</div></div>' +
         '<div class="col-score"><div style="padding-bottom:10px;border-bottom:1px solid var(--line)"><h2 style="font-size:15px">' + esc(l.scoreTitle) + '</h2></div>' +
-        '<div style="display:flex;align-items:baseline;gap:8px"><span class="score" style="color:' + scoreColor + '">' + sc.score + '</span><span class="muted">/ 100</span></div>' +
+        '<div style="display:flex;align-items:center;gap:14px">' + CH.ring(n === 0 ? null : sc.score, { size: 84, stroke: 9, color: scoreColor, unit: '', label: l.ui.scoreRing + ' ' + sc.score + '/100' }) + '<span class="muted s13">/ 100</span></div>' +
         '<span style="font-weight:500;color:' + scoreColor + '">' + esc(verdict) + '</span><div style="display:flex;flex-direction:column;gap:10px">' + crit + '</div>' +
         (ph ? '<span class="s13 warn">' + esc(l.ph(ph)) + '</span>' : '') + '</div></div>' +
         (n ? articlePanel(sel, draftBlocks) : '') + '</section>';
@@ -1216,7 +1222,7 @@
     function clearDrag() { drag = null; root.querySelectorAll('.over').forEach(x => x.classList.remove('over')); }
     function draftItems(blocks) { return blocks.map(b => ({ type: b.type, text: blockText(b) })); }
     function copyToClipboard(text, kind) {
-      const done = () => { set({ copied: kind }); setTimeout(() => set({ copied: null }), 1500); };
+      const done = () => { set({ copied: kind }); toast(L().ui.toastCopied); setTimeout(() => set({ copied: null }), 1500); };
       try { navigator.clipboard.writeText(text).then(done, () => {}); } catch (e) { /* clipboard unavailable */ }
     }
     function copyDraft(blocks) { copyToClipboard(blocks.map(blockText).join('\n\n'), 'text'); }
