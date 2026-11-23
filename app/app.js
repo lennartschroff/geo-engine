@@ -864,26 +864,37 @@
 
     function viewWebsite() {
       const l = L(); const A = D.audit; const P = D.pages; const meta = D.demo.audit_meta;
-      const prioCol = { high: ['var(--warn-soft)', 'var(--warn-strong)'], mid: ['var(--soft-2)', 'var(--fg2)'], low: ['var(--bg)', C.muted] };
-      const rows = A.map(a => {
+      const prioCol = { high: ['var(--warn-soft)', 'var(--warn)'], mid: ['var(--amber-soft)', 'var(--amber)'], low: ['var(--soft)', 'var(--muted)'] };
+      const order = { high: 0, mid: 1, low: 2 };
+      const rows = A.slice().sort((a, b) => (!!state.auditDone[a.id] - !!state.auditDone[b.id]) || (order[a.priority] - order[b.priority])).map(a => {
         const done = !!state.auditDone[a.id]; const t = a[state.lang];
-        return '<div class="row agrid" style="opacity:' + (done ? .5 : 1) + '">' +
-          '<input type="checkbox"' + (done ? ' checked' : '') + ' aria-label="' + esc(l.doneAria + t[0]) + '" style="margin-top:3px" ' + attr('change', () => { const m = Object.assign({}, state.auditDone); m[a.id] = !done; set({ auditDone: m }); }) + '>' +
-          '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-weight:500;text-decoration:' + (done ? 'line-through' : 'none') + '">' + esc(t[0]) + '</span><span class="s14" style="color:var(--fg2)">' + esc(t[1]) + '</span><span class="s14"><b style="font-weight:600">' + esc(l.todo) + ' </b>' + esc(t[2]) + '</span></div>' +
-          '<div class="small" style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="badge" style="background:' + prioCol[a.priority][0] + ';color:' + prioCol[a.priority][1] + '">' + esc(l.prio[a.priority]) + '</span><span class="muted">' + esc(l.effort[a.effort]) + '</span></div></div>';
+        return '<div class="row agrid" style="opacity:' + (done ? .55 : 1) + '">' +
+          '<input type="checkbox"' + (done ? ' checked' : '') + ' aria-label="' + esc(l.doneAria + t[0]) + '" style="margin-top:3px" ' + attr('change', () => { const m = Object.assign({}, state.auditDone); m[a.id] = !done; set({ auditDone: m }); if (!done) toast(L().ui.toastSaved); }) + '>' +
+          '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-weight:550;text-decoration:' + (done ? 'line-through' : 'none') + '">' + esc(t[0]) + '</span><span class="s13" style="color:var(--fg2)">' + esc(t[1]) + '</span><span class="s13"><b style="font-weight:600">' + esc(l.todo) + ' </b>' + esc(t[2]) + '</span></div>' +
+          '<div class="small" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end"><span class="badge" style="background:' + prioCol[a.priority][0] + ';color:' + prioCol[a.priority][1] + '">' + esc(l.prio[a.priority]) + '</span><span class="muted">' + esc(l.effort[a.effort]) + '</span></div></div>';
       }).join('');
-      const pages = P.map(g => {
-        const col = g.score < 50 ? C.warn : C.accent;
-        return '<div class="row pgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>' + esc(g[state.lang]) + '</span><span class="small muted" style="overflow-wrap:anywhere">' + esc(BRAND.domain + g.path) + '</span></div>' +
-          '<div style="display:flex;align-items:center;gap:10px;padding-top:4px">' + track(g.score, col) + '<span class="mono s13" style="width:26px;text-align:right;color:' + col + '">' + g.score + '</span></div>' +
-          '<span class="s13" style="color:var(--fg2)">' + esc(g.missing.map(m => l.miss[m]).join(' · ')) + '</span></div>';
+      const pages = P.slice().sort((a, b) => a.score - b.score).map(g => {
+        const col = g.score < 50 ? 'var(--st-absent)' : 'var(--viz-1)';
+        return '<div class="row pgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:500">' + esc(g[state.lang]) + '</span><span class="small muted" style="overflow-wrap:anywhere">' + esc(BRAND.domain + g.path) + '</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding-top:4px"><div class="bar-t" style="flex-grow:1"><div style="width:' + g.score + '%;background:' + col + '"></div></div><span class="mono s13" style="width:26px;text-align:right">' + g.score + '</span></div>' +
+          '<span style="display:flex;flex-wrap:wrap;gap:4px">' + g.missing.map(m => '<span class="badge" style="background:var(--soft);color:var(--fg2)">' + esc(l.miss[m]) + '</span>').join('') + '</span></div>';
       }).join('');
       const avg = P.length ? Math.round(P.reduce((x, g) => x + g.score, 0) / P.length) : 0;
-      return '<section style="gap:40px"><div class="head"><h1>' + esc(l.webTitle) + '</h1><p>' + esc(l.webSub(meta.date, meta.pages, meta.posts)) + '</p></div>' +
-        '<div class="stats">' + stat(meta.pages + meta.posts, l.webStatPages) + stat(A.filter(a => a.priority === 'high' && !state.auditDone[a.id]).length, l.webStatHigh, C.warn) + stat(avg, l.webStatAvg) + stat(A.filter(a => state.auditDone[a.id]).length + '/' + A.length, l.webStatDone, C.accent) + '</div>' +
-        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:8px">' + esc(l.webActions) + '</h2>' + (rows || (mode === 'own' ? ownHint('python scripts/audit_crawl.py --base https://yoursite.com\npython scripts/audit_findings.py', l.webHint) + loadPageScoresCard('web-audit-file') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div>' +
-        '<div style="display:flex;flex-direction:column"><h2 style="margin-bottom:4px">' + esc(l.webPages) + '</h2><p class="s13 muted" style="margin:0 0 12px">' + esc(l.webPagesSub) + '</p><div class="scroll"><div style="min-width:760px">' +
-        (pages || (mode === 'own' ? ownHint('python scripts/score_pages.py', l.webHint2) + loadPageScoresCard('web-pages-file') : '<div class="muted" style="padding:16px 0">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
+      const doneN = A.filter(a => state.auditDone[a.id]).length;
+      const panels = (P.length || A.length) ? '<div class="grid g-2">' +
+        (P.length ? '<div class="panel"><div class="panel-h"><h2>' + esc(l.ui.webDist) + '</h2><span class="sub">' + esc(l.webStatAvg) + ': ' + avg + '</span></div><div class="panel-b">' +
+          CH.histogram(P.map(g => g.score), { h: 110, tip: (lo, hi, n) => l.ui.webDistTip(lo, hi, n) }) + '</div></div>' : '') +
+        (A.length ? '<div class="panel"><div class="panel-h"><h2>' + esc(l.ui.webProgress) + '</h2></div><div class="panel-b" style="display:flex;align-items:center;gap:20px">' +
+          CH.ring(pct(doneN, A.length), { size: 96, stroke: 10, color: 'var(--good)', label: l.ui.webProgress }) +
+          '<div style="display:flex;flex-direction:column;gap:6px;font-size:13px"><span><b class="num">' + doneN + '</b> / ' + A.length + ' ' + esc(l.webStatDone) + '</span>' +
+          ['high', 'mid', 'low'].map(pr => { const n = A.filter(a => a.priority === pr && !state.auditDone[a.id]).length; return n ? '<span style="display:flex;align-items:center;gap:8px"><span class="badge" style="background:' + prioCol[pr][0] + ';color:' + prioCol[pr][1] + '">' + esc(l.prio[pr]) + '</span><span class="num">' + n + '</span></span>' : ''; }).join('') +
+          '</div></div></div>' : '') + '</div>' : '';
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.webTitle) + '</h1><p>' + esc(l.webSub(meta.date, meta.pages, meta.posts)) + '</p></div></div>' +
+        '<div class="kpis">' + stat(meta.pages + meta.posts, l.webStatPages) + stat(A.filter(a => a.priority === 'high' && !state.auditDone[a.id]).length, l.webStatHigh, 'var(--warn)') + stat(avg, l.webStatAvg) + stat(doneN + '/' + A.length, l.webStatDone, 'var(--good)') + '</div>' +
+        panels +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(l.webActions) + '</h2></div>' + (rows ? '<div>' + rows + '</div>' : '<div class="panel-b">' + (mode === 'own' ? ownHint('python scripts/audit_crawl.py --base https://yoursite.com\npython scripts/audit_findings.py', l.webHint) + loadPageScoresCard('web-audit-file') : '<div class="empty">' + esc(l.noRows) + '</div>') + '</div>') + '</div>' +
+        '<div class="panel"><div class="panel-h"><div><h2>' + esc(l.webPages) + '</h2><span class="sub">' + esc(l.webPagesSub) + '</span></div></div>' +
+        (pages ? '<div class="scroll"><div style="min-width:760px">' + pages + '</div></div>' : '<div class="panel-b">' + (mode === 'own' ? ownHint('python scripts/score_pages.py', l.webHint2) + loadPageScoresCard('web-pages-file') : '<div class="empty">' + esc(l.noRows) + '</div>') + '</div>') + '</div>' +
         '<span class="small muted">' + esc(l.webNote) + '</span></section>';
     }
 
