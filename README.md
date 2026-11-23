@@ -53,7 +53,7 @@ monitoring/   run.py                ask the engines, detect mentions, store resu
 
 Principles:
 
-- **The browser never talks to a server.** The page's Content Security Policy sets `connect-src 'none'`. Everything that calls an AI provider runs as a Python script on your machine or in your own GitHub Actions, with keys from `.env` or repository secrets.
+- **No server of its own.** Checks run straight from the browser with the visitor's own API key, which stays in their browser and goes only to the provider; the page's Content Security Policy allows exactly the three provider APIs. Scheduled runs use Python and GitHub Actions with the project's keys from `.env` or repository secrets.
 - **Nothing to install for the app.** Open `app/index.html` from disk or host the folder anywhere.
 - **Any brand.** A brand is a handful of JSON files (or the setup screen in the app).
 - **English and German.** The interface switches languages, and the tracked questions mix both because real users do.
@@ -89,7 +89,7 @@ pip install -r requirements-dev.txt   # requirements.txt plus pytest, ruff, json
 ruff check .
 python scripts/validate_data.py       # schemas and cross-file references, incl. targets/
 pytest tests/
-node --test tests/core.test.js tests/charts.test.js
+node --test tests/core.test.js tests/charts.test.js tests/monitor.test.js
 ./scripts/check.sh                    # everything CI runs, plus gitleaks if installed
 ```
 
@@ -138,11 +138,13 @@ python3 monitoring/run.py --yes          # real calls without the confirmation p
 python3 scripts/export_monitoring.py     # -> monitoring/monitoring_export.json
 ```
 
-**On GitHub:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. To start one by hand, open *Actions → Scheduled monitoring → Run workflow* (the app's *Monitor → Run* page links there) and pick `test` (the first key question once per engine, about $0.05) or `full` (the whole run list). Temporary provider errors (overload, 5xx, timeouts) are retried twice before an engine is skipped for the run. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
+**In the app (simplest):** *Monitor → Runs*, paste a key for Gemini (free), Claude or ChatGPT, click *Check now*. Answers, status, sources and trend show up in the app and stay in that browser.
 
-**Which questions:** the 15 key questions, unless the target folder holds a `run_list.json`. Save one on the app's *Monitor → Run* page (questions switched on or added there included), put it in the target folder and commit it; `run.py` then asks exactly those.
+**On GitHub:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. To start one by hand, open *Actions → Scheduled monitoring → Run workflow* (linked from the app's setup under *Automatic weekly checks*) and pick `test` (the first key question once per engine, about $0.05) or `full` (the whole run list). Temporary provider errors (overload, 5xx, timeouts) are retried twice before an engine is skipped for the run. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
 
-**Seeing the results:** download `monitoring_export.json`, open the app, choose *My brand* and load it on *Monitor → Run* (or *Load export* on the setup screen).
+**Which questions:** the 15 key questions, unless the target folder holds a `run_list.json`. Save one in the app (setup → *Automatic weekly checks* → *Save question list*; questions switched on or added there are included), put it in the target folder and commit it; `run.py` then asks exactly those.
+
+**Seeing GitHub results:** download `monitoring_export.json`, open the app, choose *My brand* and load it under setup → *Automatic weekly checks* (or *Load export* on the setup screen).
 
 ## Publishing the demo
 
@@ -150,7 +152,7 @@ In the repository settings, set *Pages → Source* to *GitHub Actions*. `.github
 
 ## Security
 
-API keys only ever live in `.env` or repository secrets and are read by local scripts or Actions, never by the web app. A gitleaks check runs on every push. Details: [SECURITY.md](SECURITY.md).
+The project's API keys only live in `.env` or repository secrets and are read by local scripts or Actions, never by the web app. Visitors who check from the app use their own keys, which stay in their browser. A gitleaks check runs on every push. Details: [SECURITY.md](SECURITY.md).
 
 ## More
 
