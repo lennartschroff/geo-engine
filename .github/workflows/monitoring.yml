@@ -15,6 +15,12 @@
 # variables -> Actions): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY.
 # An engine whose secret is missing is skipped, not an error.
 #
+# Question Radar (monitoring/radar.py collect): every Monday, even while
+# monitoring is "off", the job also collects public questions and topic
+# momentum (Hacker News, Stack Exchange, GitHub, Wikipedia). Free, no API
+# keys; uses the job's own GITHUB_TOKEN for GitHub search. Momentum and the
+# hit-rate log need weekly history, so this keeps running on its own.
+#
 # Results are NOT committed to the repo (keeps you the sole commit author and
 # keeps the database out of git, per CLAUDE.md). Each run restores the
 # previous run's database artifact, appends to it, and uploads it again as
@@ -53,16 +59,19 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "due=true" >> "$GITHUB_OUTPUT"
+            echo "radar=true" >> "$GITHUB_OUTPUT"
           else
             python monitoring/schedule.py | tee -a "$GITHUB_OUTPUT"
+            # Radar collection: free, weekly on Mondays, independent of the monitoring cadence.
+            if [ "$(date -u +%u)" = "1" ]; then echo "radar=true" >> "$GITHUB_OUTPUT"; else echo "radar=false" >> "$GITHUB_OUTPUT"; fi
           fi
 
       - name: Install dependencies
-        if: steps.due.outputs.due == 'true'
+        if: steps.due.outputs.due == 'true' || steps.due.outputs.radar == 'true'
         run: pip install -r requirements.txt
 
       - name: Restore previous results database
-        if: steps.due.outputs.due == 'true'
+        if: steps.due.outputs.due == 'true' || steps.due.outputs.radar == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -101,12 +110,20 @@ jobs:
           fi
           exit "$code"
 
+      - name: Collect Question Radar data (free)
+        if: always() && steps.due.outputs.radar == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Failed requests are logged and skipped; never fail the job over them.
+          python monitoring/radar.py collect || echo "::warning::Radar collection failed; monitoring results are unaffected."
+
       - name: Export for the app
-        if: always() && steps.due.outputs.due == 'true' && hashFiles('monitoring/runs.sqlite') != ''
+        if: always() && (steps.due.outputs.due == 'true' || steps.due.outputs.radar == 'true') && hashFiles('monitoring/runs.sqlite') != ''
         run: python scripts/export_monitoring.py
 
       - name: Upload results
-        if: always() && steps.due.outputs.due == 'true' && hashFiles('monitoring/runs.sqlite') != ''
+        if: always() && (steps.due.outputs.due == 'true' || steps.due.outputs.radar == 'true') && hashFiles('monitoring/runs.sqlite') != ''
         uses: actions/upload-artifact@v4
         with:
           name: monitoring-results
