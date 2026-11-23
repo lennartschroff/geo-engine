@@ -283,7 +283,67 @@
     ]).map(text => ({ text, topic: o }));
   }
 
+  // ---------- Radar: a horizon scan for questions that are starting to come up ----------
+  // Strategic foresight in one request: look for change (technology, market,
+  // society, regulation, environment), name the observable signal, and sort
+  // each future question into a horizon. The answer is the AI's judgement, not
+  // measured data; the app says so and lets monitoring check it later.
+  const DRIVERS = ['technology', 'market', 'society', 'regulation', 'environment'];
+  const HORIZONS = ['now', 'next', 'later'];
+  function radarScanPrompt(c, lang) {
+    const known = (c.questions || []).slice(0, 15);
+    return [
+      'You do horizon scanning (strategic foresight) for a company that wants AI assistants to recommend it.',
+      'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + (c.offer || '-') + (c.where ? ' in ' + c.where : '') + '.',
+      'Its topics: ' + ((c.topics || []).join('; ') || '-') + '.',
+      known.length ? 'Questions it already tracks (do not repeat them):\n- ' + known.join('\n- ') : '',
+      'Find questions that potential customers are starting to ask AI assistants like ChatGPT, or will likely ask soon, because something is changing.',
+      'Look at five drivers of change: technology, market, society, regulation, environment.',
+      'Sort each question into a horizon: "now" = already asked, but good answers are still rare; "next" = growing, likely common within 6 to 12 months; "later" = an early, weak signal that may or may not grow.',
+      'Reply with JSON only, no other text, in this shape:',
+      '{"signals":[{"question":"...","topic":"...","horizon":"now|next|later","driver":"technology|market|society|regulation|environment","change":"...","signal":"...","confidence":"high|medium|low"}],"trends":[{"term":"...","direction":"up|flat|down","why":"..."}]}',
+      'signals: 12 questions, about 4 per horizon. "question" as a customer would type it; do not name ' + c.name + '. "topic" is one of the company\'s topics. "change": one short sentence on what is changing. "signal": one short sentence on an observable sign that it is starting. "confidence": how sure you are that the question will matter.',
+      'trends: 3 to 6 short topic terms (2 to 4 words) that are moving in this market.',
+      'Do not invent numbers, studies, laws, dates or company names. If you are unsure, say so with a low confidence.',
+      'Write questions, changes, signals and trends in ' + (lang === 'de' ? 'German' : 'English') + '.',
+    ].filter(Boolean).join('\n');
+  }
+  // Short, stable id from the question text, so a rescan keeps what was tracked or dismissed.
+  function textId(t) {
+    let h = 2166136261;
+    for (const ch of normalize(t)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return 'ai' + (h >>> 0).toString(36);
+  }
+  function parseRadarScan(text, topicIds, when) {
+    const t = String(text || '');
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a === -1 || b <= a) return null;
+    let j;
+    try { j = JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+    const str = (x, n) => typeof x === 'string' ? x.trim().slice(0, n || 300) : '';
+    const pick = (x, list, dflt) => list.includes(String(x).toLowerCase()) ? String(x).toLowerCase() : dflt;
+    const topicOf = label => { const n = normalize(label); const hit = (topicIds || []).find(x => normalize(x.label) === n); return hit ? hit.id : null; };
+    const day = (when || new Date().toISOString()).slice(0, 10);
+    const seen = new Set();
+    const candidates = (Array.isArray(j.signals) ? j.signals : []).map(x => {
+      const query = str(x && x.question);
+      if (query.length < 8 || seen.has(normalize(query))) return null;
+      seen.add(normalize(query));
+      return {
+        id: textId(query), query, horizon: pick(x.horizon, HORIZONS, 'later'), driver: pick(x.driver, DRIVERS, null),
+        change: str(x.change, 240), signal: str(x.signal, 240), confidence: pick(x.confidence, ['high', 'medium', 'low'], 'low'),
+        category: topicOf(str(x.topic)), origins: ['ai'], score: null, new: true, first_seen: day, count: 1,
+      };
+    }).filter(Boolean).slice(0, 20);
+    const MOM = { up: 0.8, flat: 0.5, down: 0.2 };
+    const topics = (Array.isArray(j.trends) ? j.trends : []).map(x => ({ term: str(x && x.term, 60), momentum: MOM[pick(x && x.direction, Object.keys(MOM), 'flat')], growth: null, why: str(x && x.why, 200), series: [] }))
+      .filter(x => x.term).slice(0, 8);
+    if (!candidates.length) return null;
+    return { generated: day, source: 'ai', candidates, topics };
+  }
+
   return {
+    radarScanPrompt, parseRadarScan, textId, DRIVERS, HORIZONS,
     suggestPrompt, parseSuggestions, templateQuestions,
     ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,

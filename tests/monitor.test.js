@@ -129,3 +129,38 @@ describe('onboarding suggestions', () => {
     assert.match(M.suggestPrompt({ name: 'Acme', offer: 'x' }, 'en'), /Do not name Acme/);
   });
 });
+
+describe('radar scan', () => {
+  const company = { name: 'Acme', website: 'acme.example', offer: 'bike repair', where: 'Berlin', topics: ['Repair', 'E-bikes'], questions: ['Who fixes bikes fast?'] };
+  test('prompt names the company, its topics, the drivers and the language', () => {
+    const p = M.radarScanPrompt(company, 'de');
+    assert.match(p, /Acme \(acme\.example\)/);
+    assert.match(p, /Repair; E-bikes/);
+    assert.match(p, /Who fixes bikes fast\?/);
+    assert.match(p, /regulation/);
+    assert.match(p, /in German/);
+  });
+  test('parses signals into radar candidates, defensively', () => {
+    const txt = 'Here you go:\n```json\n' + JSON.stringify({
+      signals: [
+        { question: 'Can I get my e-bike battery repaired instead of replaced?', topic: 'e-bikes', horizon: 'NEXT', driver: 'regulation', change: 'Right-to-repair rules.', signal: 'Repair cafés list batteries.', confidence: 'medium' },
+        { question: 'Can I get my e-bike battery repaired instead of replaced?', topic: 'E-bikes', horizon: 'now' },
+        { question: 'short', horizon: 'now' },
+        { question: 'Which bike shop does same-day repairs near me?', topic: 'Unknown', horizon: 'soon', driver: 'vibes', confidence: 'sure' },
+      ],
+      trends: [{ term: 'battery repair', direction: 'up', why: 'x' }, { term: '', direction: 'up' }],
+    }) + '\n```';
+    const r = M.parseRadarScan(txt, [{ id: 'repair', label: 'Repair' }, { id: 'e-bikes', label: 'E-bikes' }], '2026-11-23T10:00:00Z');
+    assert.equal(r.candidates.length, 2);
+    const [a, b] = r.candidates;
+    assert.equal(a.horizon, 'next'); assert.equal(a.driver, 'regulation'); assert.equal(a.category, 'e-bikes');
+    assert.equal(a.confidence, 'medium'); assert.deepEqual(a.origins, ['ai']); assert.equal(a.score, null); assert.equal(a.first_seen, '2026-11-23');
+    assert.equal(b.horizon, 'later'); assert.equal(b.driver, null); assert.equal(b.category, null); assert.equal(b.confidence, 'low');
+    assert.equal(a.id, M.textId('can I get my e-bike battery repaired instead of replaced'));
+    assert.deepEqual(r.topics.map(t => [t.term, t.momentum]), [['battery repair', 0.8]]);
+  });
+  test('nothing usable gives null', () => {
+    assert.equal(M.parseRadarScan('sorry, no'), null);
+    assert.equal(M.parseRadarScan('{"signals":[]}'), null);
+  });
+});
