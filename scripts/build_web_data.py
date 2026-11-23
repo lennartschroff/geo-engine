@@ -58,7 +58,7 @@ def monitoring_info() -> dict:
             return json.loads((tdir / name).read_text(encoding="utf-8"))
 
         info["target"] = {"path": target, "brand": load("brand.json"), "categories": load("categories.json"),
-                          "questions": load("questions.json")}
+                          "questions": load("questions.json"), "competitors": load("competitors.json")["names"]}
     return info
 
 
