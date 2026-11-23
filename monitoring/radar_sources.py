@@ -44,10 +44,13 @@ LOOKBACK_DAYS = 180
 BASELINE_WINDOWS = (LOOKBACK_DAYS - WINDOW_DAYS) / WINDOW_DAYS  # 5 windows of 30 days
 
 QUESTION_START = re.compile(
-    r"^(how|what|why|when|where|which|who|is|are|can|could|should|does|do|did|will|would|has|have|any|"
+    r"^(what|why|when|where|which|who|is|are|can|could|should|does|do|did|will|would|has|have|any|"
     r"wie|was|warum|wann|wo|welche|welcher|welches|wer|ist|sind|kann|können|sollte|gibt)\b",
     re.I,
 )
+# "How X showed Y" is a headline; "How to/do/can/much ..." asks something.
+HOW_QUESTION = re.compile(
+    r"^how (to|do|does|did|can|could|should|would|will|is|are|much|many|well|long|often|i|we|you)\b", re.I)
 ASK_HN = re.compile(r"^(ask|tell) hn:\s*", re.I)
 
 
@@ -97,7 +100,7 @@ def is_question(title: str) -> bool:
     if ASK_HN.match(title.strip()):  # every Ask HN post asks the community something
         return True
     t = title.strip()
-    return t.endswith("?") or bool(QUESTION_START.match(t))
+    return t.endswith("?") or bool(QUESTION_START.match(t) or HOW_QUESTION.match(t))
 
 
 def clean_title(title: str) -> str:

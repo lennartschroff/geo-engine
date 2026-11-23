@@ -43,6 +43,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from monitoring.radar_sources import is_question  # noqa: E402
 from monitoring.run_list import load_run_list  # noqa: E402
 
 WEIGHTS = {"momentum": 30, "demand": 20, "open": 30, "fit": 20}
@@ -215,6 +216,8 @@ def post_sightings(conn: sqlite3.Connection, now: datetime) -> list[Sighting]:
         (since,),
     ):
         score, views, answers = score or 0, views or 0, answers or 0
+        if not source.startswith("stackexchange") and not is_question(title):  # rule may be stricter than at fetch
+            continue
         if source == "github" and score + answers == 0:
             continue
         if source == "hackernews" and score < 2 and answers == 0:

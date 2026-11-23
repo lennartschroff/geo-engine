@@ -37,11 +37,13 @@ class FakeHttp:
 
 class TestQuestions:
     @pytest.mark.parametrize("title", ["Does llms.txt replace sitemap.xml", "Ask HN: Anyone tracking AI citations",
-                                       "Is GEO just SEO?", "Wie messe ich KI-Sichtbarkeit", "Which tool for this"])
+                                       "Is GEO just SEO?", "Wie messe ich KI-Sichtbarkeit", "Which tool for this",
+                                       "How to get cited by ChatGPT", "How much does GEO cost"])
     def test_question_like(self, title):
         assert rs.is_question(title)
 
-    @pytest.mark.parametrize("title", ["Show HN: My GEO tool", "llms.txt directory", "Generative engine optimization"])
+    @pytest.mark.parametrize("title", ["Show HN: My GEO tool", "llms.txt directory", "Generative engine optimization",
+                                       "How cats.txt showed llms.txt evidence is GEO astrology"])
     def test_not_question_like(self, title):
         assert not rs.is_question(title)
 
