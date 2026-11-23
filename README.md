@@ -142,6 +142,8 @@ python3 monitoring/radar.py              # show candidates; `probe --top 5` meas
 
 **In the app (simplest):** *Monitor → Runs*, paste a key for Gemini (free), Claude or ChatGPT, click *Check now*. Answers, status, sources and trend show up in the app and stay in that browser.
 
+**Radar (looking ahead):** *Monitor → Radar → Scan now* asks the connected assistant for a horizon scan: questions customers will start asking, sorted into *act now*, *prepare* and *watch* on a trend radar, each with its driver of change and a sign that it is starting. *Track* adds one to your checks. See [docs/QUESTION_RADAR.md](docs/QUESTION_RADAR.md).
+
 **On GitHub:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. To start one by hand, open *Actions → Scheduled monitoring → Run workflow* (linked from the app's setup under *Automatic weekly checks*) and pick `test` (the first key question once per engine, about $0.05) or `full` (the whole run list). Temporary provider errors (overload, 5xx, timeouts) are retried twice before an engine is skipped for the run. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
 
 **Which questions:** the 15 key questions, unless the target folder holds a `run_list.json`. Save one in the app (setup → *Automatic weekly checks* → *Save question list*; questions switched on or added there are included), put it in the target folder and commit it; `run.py` then asks exactly those.

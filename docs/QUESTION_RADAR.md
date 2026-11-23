@@ -82,6 +82,34 @@ log exists to check it.
 - **Wikimedia rate-limits anonymous clients.** Keep the article list short;
   set `RADAR_USER_AGENT` with contact details in `.env` if you want to.
 
+## In the app: a foresight scan with your own key
+
+Anyone using the app (not only developers) can fill the Radar from
+*Monitor → Radar → Scan now*. It is one request to the first connected
+assistant (Gemini first, as it is free), sent from the browser with the
+visitor's own key, like the checks on the Runs page.
+
+The request is a small **horizon scan** in the strategic-foresight sense:
+
+- **Drivers of change (STEEP):** technology, market, society, regulation,
+  environment. Each question names its driver, what is changing, and an
+  observable sign that it is starting.
+- **Three horizons**, drawn as the rings of a trend radar:
+  *act now* (asked already, good answers are rare), *prepare* (growing,
+  likely common within 6–12 months), *watch* (an early, weak signal).
+  Slices are the brand's topics.
+- **Confidence** (likely / possible / uncertain) instead of a score, since
+  nothing is measured.
+
+Measured candidates from `radar.py` keep their score; their horizon comes
+from the parts (`app/core.js` `radarHorizon`: demand ≥ 60 → act now,
+momentum ≥ 60 → prepare, otherwise watch).
+
+The scan is the assistant's judgement, not data, and the page says so.
+The loop closes the same way as for measured candidates: *Track* adds the
+question to the brand's checks, and later checks show whether assistants
+start naming the brand for it ("Did it pay off?").
+
 ## Limits
 
 - API answers differ from the consumer apps (same as monitoring).
