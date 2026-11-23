@@ -275,6 +275,290 @@
           "type": "array"
         }
       }
+    },
+    "radar": {
+      "type": "object",
+      "description": "Question Radar (monitoring/radar.py, docs/QUESTION_RADAR.md): candidates, topic momentum, hit rate.",
+      "required": [
+        "generated",
+        "candidates",
+        "topics",
+        "hits"
+      ],
+      "properties": {
+        "generated": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "origins": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "term",
+              "sources",
+              "momentum",
+              "growth"
+            ],
+            "properties": {
+              "term": {
+                "type": "string"
+              },
+              "momentum": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1
+              },
+              "growth": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "series": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "recent",
+                    "baseline"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "recent": {
+                      "type": "number"
+                    },
+                    "baseline": {
+                      "type": "number"
+                    },
+                    "article": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "query",
+              "score",
+              "parts",
+              "origins",
+              "links",
+              "new"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string",
+                "minLength": 3
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "parts": {
+                "type": "object",
+                "required": [
+                  "momentum",
+                  "demand",
+                  "open",
+                  "fit"
+                ],
+                "properties": {
+                  "momentum": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "demand": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "open": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "fit": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "open_measured": {
+                "type": "boolean"
+              },
+              "origins": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "engines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "title",
+                    "url",
+                    "source"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "first_seen": {
+                "type": "string"
+              },
+              "last_seen": {
+                "type": "string"
+              },
+              "category": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "new": {
+                "type": "boolean"
+              },
+              "closest_question": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "overlap": {
+                "type": "number"
+              },
+              "flagged_since": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "probe": {
+                "type": "object"
+              },
+              "event_date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "unanswered": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "hits": {
+          "type": "object",
+          "required": [
+            "flagged",
+            "checkable",
+            "seen_again",
+            "tracked",
+            "mentioned_after"
+          ],
+          "properties": {
+            "flagged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "checkable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "seen_again": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tracked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mentioned_after": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "demo_note": {
+          "type": "string"
+        }
+      }
     }
   }
 }

@@ -97,6 +97,14 @@ def reference_errors() -> list[str]:
             f"demo_monitoring.json/results: missing demo result(s) for key question(s) {sorted(missing_key_results)}"
         )
 
+    for cand in demo.get("radar", {}).get("candidates", []):
+        refs = set(cand.get("questions", [])) | ({cand["closest_question"]} if cand.get("closest_question") else set())
+        unknown = refs - question_ids
+        if unknown:
+            errors.append(f"demo_monitoring.json/radar/{cand['id']}: unknown question id(s) {sorted(unknown)}")
+        if cand.get("category") and cand["category"] not in categories:
+            errors.append(f"demo_monitoring.json/radar/{cand['id']}: unknown category {cand['category']!r}")
+
     for piece in demo.get("pieces", []):
         unknown = set(piece.get("qs", [])) - question_ids
         if unknown:
