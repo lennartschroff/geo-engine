@@ -217,3 +217,21 @@ class TestExportMain:
         assert data["setup"]["brand"]["name"] == "GEO Engine"
         assert len(data["setup"]["questions"]) == 15
         assert data["results"]["q1"] == {"competitor": "Peec", "r": "c1 n n"}
+
+
+class TestBuildSetup:
+    QS = [{"id": "q1", "text": "A", "categories": ["x"], "key": True},
+          {"id": "q2", "text": "B", "categories": ["x"], "key": False}]
+
+    def test_without_run_list_setup_is_unchanged(self):
+        from export_monitoring import build_setup
+        s = build_setup({"name": "B"}, [], self.QS, None)
+        assert s["questions"] == self.QS and "run_list" not in s
+
+    def test_run_list_adds_custom_questions_and_ids(self):
+        from export_monitoring import build_setup
+        rl = [{"id": "q2", "text": "B", "categories": ["x"]}, {"id": "c1", "text": "Mine", "categories": ["x"]}]
+        s = build_setup({"name": "B"}, [], self.QS, rl)
+        assert [q["id"] for q in s["questions"]] == ["q1", "q2", "c1"]
+        assert s["questions"][2]["custom"] is True and s["questions"][2]["key"] is False
+        assert s["run_list"] == ["q2", "c1"]

@@ -38,6 +38,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from monitoring.mention_detection import detect_mention  # noqa: E402
+from monitoring.run_list import load_run_list  # noqa: E402
 
 MAX_ANSWER_CHARS = 6000
 ENGINE_ORDER = ["claude", "gpt", "gemini"]
@@ -178,6 +179,19 @@ def build_cited_sources(rows: list[sqlite3.Row]) -> list[dict]:
     return sources
 
 
+def build_setup(brand: dict, categories: list[dict], questions: list[dict], run_list: list[dict] | None) -> dict:
+    """Brand, topics and questions for the app. Custom questions from the run
+    list (added on the app's Run page) are appended, and run_list names the ids
+    a run asks, so the app shows them switched on."""
+    known = {q["id"] for q in questions}
+    extra = [{"id": q["id"], "text": q["text"], "categories": q["categories"], "key": False, "custom": True}
+             for q in run_list or [] if q["id"] not in known]
+    setup = {"brand": brand, "categories": categories, "questions": questions + extra}
+    if run_list is not None:
+        setup["run_list"] = [q["id"] for q in run_list]
+    return setup
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default=str(ROOT / "monitoring" / "runs.sqlite"))
@@ -226,7 +240,7 @@ def main() -> int:
         "competitors": competitors,
         # Brand, topics and questions the results refer to, so the app can
         # show them in own-brand mode (result ids only make sense with these).
-        "setup": {"brand": brand, "categories": load("categories.json"), "questions": load("questions.json")},
+        "setup": build_setup(brand, load("categories.json"), load("questions.json"), load_run_list(target)),
         "pieces": [],
         "audit_meta": {"date": datetime.date.today().isoformat(), "pages": 0, "posts": 0},
     }
