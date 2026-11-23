@@ -737,10 +737,9 @@
       const l = L();
       const rows = CORE.shareOfVoice(ANSWERS, QUESTIONS, CATS.map(c => c.id), BRAND_NAMES, COMPETITORS)
         .filter(r => r.answers > 0)
-        .map(r => '<div class="catbar"><span>' + esc(catLabel(r.cat)) + '<span class="small muted" style="display:block">' + esc(l.sovAnswers(r.answers)) +
-          (r.top.length ? ' · ' + esc(l.sovTop + r.top[0].name) : '') + '</span></span>' +
-          track(r.share || 0, C.accent) + '<span class="mono s13" style="text-align:right">' + (r.share === null ? '–' : r.share + '%') + '</span></div>').join('');
-      return '<div style="display:flex;flex-direction:column;gap:12px"><h2>' + esc(l.sovTitle) + '</h2><span class="s13 muted">' + esc(l.sovSub) + '</span>' + rows + '</div>';
+        .map(r => ({ label: catLabel(r.cat), sub: l.sovAnswers(r.answers) + (r.top.length ? ' · ' + l.sovTop + r.top[0].name : ''), value: r.share }));
+      return '<div class="panel"><div class="panel-h"><div><h2>' + esc(l.sovTitle) + '</h2><span class="sub">' + esc(l.sovSub) + '</span></div></div>' +
+        '<div class="panel-b" style="padding-top:6px;padding-bottom:6px">' + CH.barList(rows) + '</div></div>';
     }
 
     function toggleActive(q) { const a = Object.assign({}, state.active); a[q.id] = !isActive(q); set({ active: a }); }
@@ -785,19 +784,44 @@
     function viewSources() {
       const l = L(); const S = D.demo.cited_sources;
       const max = S.length ? Math.max.apply(null, S.map(c => c.cites)) : 0;
-      const rows = S.filter(c => state.srcFilter === 'all' || c.present === false).map(c => {
-        const col = c.present === true ? C.accent : c.present === false ? C.warn : null;
-        return '<div class="row"><div class="sgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>' + esc(c.name) + '</span><span class="small muted">' + esc(l.srcMeta(c.qs)) + '</span></div>' +
-          '<span class="s13" style="color:var(--fg2)">' + esc(l.kinds[c.kind]) + '</span>' +
-          '<div style="display:flex;align-items:center;gap:10px">' + track(pct(c.cites, max), C.fg) + '<span class="mono s13" style="width:24px;text-align:right">' + c.cites + '</span></div>' +
-          '<span class="s13" style="display:flex;align-items:center;gap:8px;color:' + (c.present === false ? C.warn : 'var(--fg2)') + '"><span class="dot" style="background:' + (col || 'var(--bg)') + ';border-color:' + (col || C.border) + '"></span>' + esc(c.present === true ? l.yes : c.present === false ? l.no : l.na) + '</span>' +
-          '<span class="s14" style="color:' + (c.present === false ? C.fg : C.muted) + ';font-weight:' + (c.present === false ? 500 : 400) + '">' + esc(l.acts[c.act]) + '</span></div></div>';
+      const words = state.srcSearch.toLowerCase().split(/\s+/).filter(Boolean);
+      let rows = S.filter(c => (state.srcFilter === 'all' || c.present === false) &&
+        words.every(w => (c.name + ' ' + (l.kinds[c.kind] || '') + ' ' + (l.acts[c.act] || '')).toLowerCase().indexOf(w) !== -1));
+      if (state.srcSort === 'name') rows = rows.slice().sort((a, b) => a.name.replace(/^\W+/, '').localeCompare(b.name.replace(/^\W+/, '')));
+      else rows = rows.slice().sort((a, b) => b.cites - a.cites);
+      const body = rows.map(c => {
+        const col = c.present === true ? 'var(--st-cited)' : c.present === false ? 'var(--st-absent)' : 'var(--st-none)';
+        return '<div class="row sgrid"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:500">' + esc(c.name) + '</span><span class="small muted">' + esc(l.srcMeta(c.qs)) + '</span></div>' +
+          '<span><span class="badge" style="background:var(--soft);color:var(--fg2)">' + esc(l.kinds[c.kind]) + '</span></span>' +
+          '<div style="display:flex;align-items:center;gap:10px" data-tt="' + esc(l.colCites + ': ' + c.cites) + '"><div class="bar-t" style="flex-grow:1"><div style="width:' + pct(c.cites, max) + '%;background:var(--viz-1)"></div></div><span class="mono s13" style="width:24px;text-align:right">' + c.cites + '</span></div>' +
+          '<span class="s13" style="display:flex;align-items:center;gap:8px;color:' + (c.present === false ? 'var(--warn)' : 'var(--fg2)') + '"><span class="swatch" style="border-radius:50%;background:' + col + '"></span>' + esc(c.present === true ? l.yes : c.present === false ? l.no : l.na) + '</span>' +
+          '<span class="s13" style="color:' + (c.present === false ? 'var(--fg)' : 'var(--muted)') + ';font-weight:' + (c.present === false ? 500 : 400) + '">' + esc(l.acts[c.act]) + '</span></div>';
       }).join('');
-      return '<section><div class="head"><h1>' + esc(l.tabs.sources) + '</h1><p>' + esc(l.srcSub) + '</p></div>' +
-        '<div class="stats">' + stat(S.length, l.srcStatTotal) + stat(S.filter(c => c.present === true).length, l.srcStatYes, C.accent) + stat(S.filter(c => c.present === false).length, l.srcStatTargets, C.warn) + '</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)">' + tabBtn(l.srcAll, state.srcFilter === 'all', () => set({ srcFilter: 'all' })) + tabBtn(l.srcOnlyTargets, state.srcFilter === 'targets', () => set({ srcFilter: 'targets' })) + '</div>' +
-        '<div class="scroll"><div style="min-width:820px"><div class="sgrid small muted" style="padding:0 0 8px"><span>' + esc(l.colSource) + '</span><span>' + esc(l.colType) + '</span><span>' + esc(l.colCites) + '</span><span>' + esc(l.colPresent) + '</span><span>' + esc(l.colNext) + '</span></div>' +
-        (S.length ? rows : mode === 'own' ? loadMonitoringCard() : '<div class="muted" style="padding:24px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
+      // Where citations come from: total cites per source type, one hue.
+      const byKind = {};
+      S.forEach(c => { byKind[c.kind] = (byKind[c.kind] || 0) + c.cites; });
+      const totalCites = S.reduce((a, c) => a + c.cites, 0);
+      const kindRows = Object.keys(byKind).sort((a, b) => byKind[b] - byKind[a]).map(k => ({ label: l.kinds[k] || k, value: pct(byKind[k], totalCites), tip: (l.kinds[k] || k) + ': ' + byKind[k] }));
+      const yes = S.filter(c => c.present === true).length, no = S.filter(c => c.present === false).length;
+      const panels = S.length ? '<div class="grid g-main">' +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(l.ui.srcKinds) + '</h2><span class="sub">' + esc(l.colCites) + '</span></div><div class="panel-b" style="padding-top:6px;padding-bottom:6px">' + CH.barList(kindRows) + '</div></div>' +
+        '<div class="panel"><div class="panel-h"><h2>' + esc(l.ui.srcPresence) + '</h2></div><div class="panel-b" style="display:flex;align-items:center;gap:20px">' +
+        CH.ring(pct(yes, S.length), { size: 96, stroke: 10, label: l.ui.srcPresence }) +
+        '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
+        '<span style="display:flex;gap:8px;align-items:center"><span class="swatch" style="background:var(--st-cited)"></span>' + esc(l.srcStatYes) + ' <b class="num">' + yes + '</b></span>' +
+        '<span style="display:flex;gap:8px;align-items:center"><span class="swatch" style="background:var(--st-absent)"></span>' + esc(l.srcStatTargets) + ' <b class="num">' + no + '</b></span>' +
+        '<button class="btn sm outline" style="align-self:flex-start;margin-top:4px" ' + click(() => set({ srcFilter: 'targets' })) + '>' + esc(l.srcOnlyTargets) + ic('arrow', 14) + '</button></div></div></div></div>' : '';
+      const empty = '<div class="empty">' + ic('search', 22) + '<b>' + esc(l.ui.noMatch) + '</b><button class="btn sm plain" ' + click(() => set({ srcSearch: '', srcFilter: 'all' })) + '>' + esc(l.ui.clear) + '</button></div>';
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.sources) + '</h1><p>' + esc(l.srcSub) + '</p></div></div>' +
+        '<div class="kpis">' + stat(S.length, l.srcStatTotal) + stat(yes, l.srcStatYes, 'var(--accent)') + stat(no, l.srcStatTargets, 'var(--warn)') + '</div>' +
+        panels +
+        (S.length ? '<div class="toolbar"><div class="search">' + ic('search', 15) + '<label for="src-filter" class="sr">' + esc(l.ui.filterSrc) + '</label><input id="src-filter" data-filter type="search" placeholder="' + esc(l.ui.filterSrc) + '" value="' + esc(state.srcSearch) + '" ' + attr('input', e => set({ srcSearch: e.target.value })) + '></div>' +
+          '<div class="seg" role="group">' + [['all', l.srcAll, S.length], ['targets', l.srcOnlyTargets, no]].map(f => '<button class="' + (state.srcFilter === f[0] ? 'on' : '') + '" aria-pressed="' + (state.srcFilter === f[0]) + '" ' + click(() => set({ srcFilter: f[0] })) + '>' + esc(f[1]) + '<span class="c">' + f[2] + '</span></button>').join('') + '</div>' +
+          '<div class="seg" role="group" aria-label="Sort">' + [['cites', l.colCites], ['name', l.colSource]].map(f => '<button class="' + (state.srcSort === f[0] ? 'on' : '') + '" aria-pressed="' + (state.srcSort === f[0]) + '" ' + click(() => set({ srcSort: f[0] })) + '>' + ic('sort', 12) + ' ' + esc(f[1]) + '</button>').join('') + '</div>' +
+          '<span class="count-note">' + esc(l.ui.shown(rows.length, S.length)) + '</span></div>' : '') +
+        (S.length ? '<div class="table-wrap"><div class="scroll"><div style="min-width:860px"><div class="sgrid h thead"><span>' + esc(l.colSource) + '</span><span>' + esc(l.colType) + '</span><span>' + esc(l.colCites) + '</span><span>' + esc(l.colPresent) + '</span><span>' + esc(l.colNext) + '</span></div>' +
+          (rows.length ? body : empty) + '</div></div></div>'
+          : mode === 'own' ? loadMonitoringCard() : '<div class="empty">' + esc(l.noRows) + '</div>') +
         sovSection() +
         '<span class="small muted">' + esc(l.srcNote) + '</span></section>';
     }
