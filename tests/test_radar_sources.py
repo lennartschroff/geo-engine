@@ -169,7 +169,7 @@ class TestCollect:
         logs = []
         cfg = {"terms": ["AI search"], "sources": {"hackernews": True, "github": True, "wikipedia": ["en:X"]}}
         summary = rs.collect(conn, cfg, NOW, FakeHttp(handler), sleep=lambda s: None, log=logs.append)
-        assert summary["posts"] == 1 and summary["counts"] == 2 and len(summary["errors"]) == 1
+        assert summary["posts"] == 1 and summary["counts"] == 2 and len(summary["errors"]) == 2  # term + platform
         assert conn.execute("SELECT title, first_fetched FROM radar_posts").fetchall() == [
             ("How to rank in AI search?", "2026-11-23")]
         sources = {r[0] for r in conn.execute("SELECT source FROM radar_counts")}
@@ -186,3 +186,12 @@ class TestCollect:
             7, "2026-11-16", "2026-11-23")
         rs.store_count(conn, rs.Count("wikipedia", "en:X", 5, 2.0, [1, 2]), "2026-11-23")
         assert json.loads(conn.execute("SELECT series FROM radar_counts").fetchone()[0]) == [1, 2]
+
+
+class TestGitHubPlatform:
+    def test_platform_count_windows(self, monkeypatch):
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        http = FakeHttp(lambda u, p: {"total_count": 900 if ">=" in p["q"] else 2500})
+        count = rs.github_all(NOW, http)
+        assert (count.term, count.recent, count.baseline) == ("*", 900, 500.0)
+        assert params(http.urls[1])["q"] == "is:issue created:2026-05-27..2026-10-23"

@@ -161,3 +161,14 @@ class TestExport:
         assert {"id", "query", "score", "parts", "links", "origins", "first_seen"} <= set(c)
         assert len(c["first_seen"]) == 10
         json.dumps(out)  # serializable
+
+
+class TestGitHubCorrection:
+    def test_term_growth_divided_by_platform_growth(self):
+        conn = sqlite3.connect(":memory:")
+        rs.ensure_tables(conn)
+        rs.store_count(conn, rs.Count("github", "llms.txt", 200, 100.0), "2026-11-23")
+        assert radar.load_topics(conn, ["llms.txt"])[0]["momentum"] > 0.7  # x2 raw growth
+        rs.store_count(conn, rs.Count("github", "*", 2000, 1000.0), "2026-11-23")  # GitHub itself grew x2
+        [t] = radar.load_topics(conn, ["llms.txt"])
+        assert t["term"] == "llms.txt" and t["sources"][0]["recent"] == 100 and t["momentum"] == 0.5

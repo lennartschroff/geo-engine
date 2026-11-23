@@ -210,13 +210,13 @@ def github(term: str, now: datetime, http=http_get_json) -> tuple[list[Post], Co
         return http(base + urllib.parse.urlencode({"q": q, "per_page": per_page, "sort": "created", "order": "desc"}),
                     headers=headers)
 
-    data = get(f'"{term}" created:>={since.date().isoformat()}', 100)
+    data = get(f'"{term}" is:issue created:>={since.date().isoformat()}', 100)
     items, total = data.get("items", []), int(data.get("total_count") or 0)
     cutoff = recent_since.date().isoformat()
     if total <= len(items):
         recent = sum(1 for i in items if (i.get("created_at") or "")[:10] >= cutoff)
     else:
-        recent = int(get(f'"{term}" created:>={cutoff}', 1).get("total_count") or 0)
+        recent = int(get(f'"{term}" is:issue created:>={cutoff}', 1).get("total_count") or 0)
     posts = [
         Post("github", str(i["id"]), term, clean_title(i.get("title") or ""), i.get("html_url") or "",
              (i.get("created_at") or "")[:10], score=int((i.get("reactions") or {}).get("total_count") or 0),
@@ -225,6 +225,30 @@ def github(term: str, now: datetime, http=http_get_json) -> tuple[list[Post], Co
         if i.get("title") and i.get("id") and is_question(i["title"])
     ]
     return posts, Count("github", term, *_split_counts(total, recent))
+
+
+GITHUB_ALL = "*"  # term name of the platform-wide control count
+
+
+def github_all(now: datetime, http=http_get_json) -> Count:
+    """All GitHub issues, same windows: the platform's own growth. GitHub
+    grows fast, so a term's raw growth there mostly reflects the platform;
+    radar.load_topics divides it out."""
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    since, recent_since = now - timedelta(days=LOOKBACK_DAYS), now - timedelta(days=WINDOW_DAYS)
+    base = "https://api.github.com/search/issues?"
+
+    def total(q):
+        data = http(base + urllib.parse.urlencode({"q": q, "per_page": 1}), headers=headers)
+        return int(data.get("total_count") or 0)
+
+    day_before = (recent_since - timedelta(days=1)).date().isoformat()
+    recent = total(f"is:issue created:>={recent_since.date().isoformat()}")
+    before = total(f"is:issue created:{since.date().isoformat()}..{day_before}")
+    return Count("github", GITHUB_ALL, recent, round(before / BASELINE_WINDOWS, 2))
 
 
 # ---------- Wikipedia page views ----------
@@ -314,6 +338,8 @@ def collect(conn: sqlite3.Connection, config: dict, now: datetime | None = None,
             run(f"stackexchange:{site} '{term}'", lambda t=term, s=site: stackexchange(t, s, now, http, sleep), 0.5)
         if src.get("github", True):
             run(f"github '{term}'", lambda t=term: github(t, now, http), gh_pause)
+    if src.get("github", True):
+        run("github platform count", lambda: github_all(now, http), gh_pause)
     for article in src.get("wikipedia") or []:
         run(f"wikipedia {article}", lambda a=article: wikipedia(a, now, http), 1.5)
     return summary

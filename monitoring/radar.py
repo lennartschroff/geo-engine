@@ -333,7 +333,15 @@ def load_topics(conn: sqlite3.Connection, terms: list[str]) -> list[dict]:
     """).fetchall()
     topics: dict[str, dict] = {}
     term_words = {t: content_words(t) for t in terms}
+    # GitHub's own growth (radar_sources.github_all): scale GitHub counts so a
+    # term only counts as rising when it grows faster than GitHub itself.
+    control = next(((r_, b_) for s_, t_, r_, b_, *_ in rows if s_ == "github" and t_ == "*"), None)
+    gh_factor = control[1] / control[0] if control and control[0] and control[1] else 1.0
     for source, term, recent, baseline, series, fetched in rows:
+        if source == "github" and term == "*":
+            continue
+        if source == "github" and gh_factor != 1.0:
+            recent = round(recent * gh_factor)
         name = term
         if source == "wikipedia":
             article = content_words(term.split(":", 1)[-1].replace("_", " "))
