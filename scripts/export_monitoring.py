@@ -18,6 +18,8 @@ Also exported (all optional in the schema, so older exports still load):
 - "competitors": the names used for highlighting and share of voice (D2).
 - "trend_ci": mention rate per ISO week with a 95% Wilson interval (D3);
   "trend" gets the same rates as plain numbers for the existing chart.
+- "radar": Question Radar candidates, topic momentum and hit rate
+  (monitoring/radar.py, TASKS.md Epic H), when there is anything on it.
 
 Usage:
     python monitoring/run.py --questions q1,q2,q3 --engines claude --runs 1 --yes
@@ -192,6 +194,23 @@ def build_setup(brand: dict, categories: list[dict], questions: list[dict], run_
     return setup
 
 
+def build_radar(db_path: Path, data_dir: str) -> dict | None:
+    """Question Radar section (monitoring/radar.py), or None when there is
+    nothing on the radar yet. A radar problem must not stop the monitoring
+    export, so errors only print a warning."""
+    from monitoring.radar import export as radar_export
+
+    conn = sqlite3.connect(db_path)
+    try:
+        section = radar_export(conn, data_dir)
+    except Exception as e:  # noqa: BLE001
+        print(f"[radar section skipped: {e}]", file=sys.stderr)
+        return None
+    finally:
+        conn.close()
+    return section if section["candidates"] or section["topics"] else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default=str(ROOT / "monitoring" / "runs.sqlite"))
@@ -244,6 +263,9 @@ def main() -> int:
         "pieces": [],
         "audit_meta": {"date": datetime.date.today().isoformat(), "pages": 0, "posts": 0},
     }
+    radar = build_radar(db_path, args.target or target_from_settings())
+    if radar:
+        export["radar"] = radar
     Path(args.out).write_text(json.dumps(export, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"Exported {len(export['results'])} question(s), {len(export['cited_sources'])} source(s) -> {args.out}")
     print("Load this file in the app: Monitor -> Sources -> 'Load monitoring results'.")
