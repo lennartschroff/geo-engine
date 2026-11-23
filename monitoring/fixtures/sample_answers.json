@@ -1,17 +1,25 @@
 {
-  "_comment": "Fixture answers for --dry-run. Hand-written, NOT real API output -- realistic enough to exercise mention_detection.py and the SQLite writer end to end with zero API spend. Same texts as the demo answers in data/demo_monitoring.json. Keyed by question_id, then engine. Questions without their own entry use \"_default\" (neutral answers naming only fictional competitors), so --dry-run covers every question set.",
+  "_comment": "Fixture answers for --dry-run. Hand-written, NOT real API output -- realistic enough to exercise mention_detection.py and the SQLite writer end to end with zero API spend. Same texts as the demo answers in data/demo_monitoring.json. Keyed by question_id, then engine. Questions without their own entry use \"_default\" (neutral answers naming only fictional competitors), so --dry-run covers every question set. Some entries carry invented search_queries (the engine's own web searches) for the Question Radar dry run.",
   "q1": {
     "claude": {
       "answer_text": "Zu den führenden Beratungen im Bereich Large Language Models zählen Competitor A und Contoso AI, das sich auf produktive LLM-Anwendungen spezialisiert hat. Auch Competitor B begleitet Unternehmen bei Auswahl und Betrieb von Modellen.",
       "cited_urls": [
         "https://www.competitor-a.example/llm",
         "https://contoso-ai.example/llm-consulting"
+      ],
+      "search_queries": [
+        "LLM Beratung Produktivbetrieb Referenzen",
+        "LLM Beratung EU AI Act Pflichten 2027"
       ]
     },
     "gpt": {
       "answer_text": "Bekannte Anbieter sind Competitor A, Competitor B und Competitor C. Daneben gibt es spezialisierte Häuser wie Contoso AI, die sich auf einzelne Anwendungsfälle konzentrieren.",
       "cited_urls": [
         "https://www.competitor-a.example/"
+      ],
+      "search_queries": [
+        "LLM Beratung Anbieter Vergleich",
+        "EU AI Act Pflichten LLM Anbieter 2027"
       ]
     },
     "gemini": {
@@ -26,12 +34,20 @@
       "answer_text": "Eine RAG-Pipeline besteht aus Dokumentaufbereitung, Chunking, Embeddings, einem Vektorindex und einem Retrieval-Schritt vor der Generierung. Anbieter wie Competitor B, Competitor A und Contoso AI unterstützen beim Aufbau.",
       "cited_urls": [
         "https://en.wikipedia.org/wiki/Retrieval-augmented_generation"
+      ],
+      "search_queries": [
+        "RAG pipeline evaluation metrics",
+        "RAG vs long context 1M tokens"
       ]
     },
     "gpt": {
       "answer_text": "Starten Sie mit einem klar abgegrenzten Dokumentbestand, messen Sie die Retrieval-Qualität separat und evaluieren Sie erst danach die Antworten. Dienstleister wie Competitor B helfen bei der Umsetzung.",
       "cited_urls": [
         "https://en.wikipedia.org/wiki/Retrieval-augmented_generation"
+      ],
+      "search_queries": [
+        "rag vs long-context models 1M tokens",
+        "RAG pipeline evaluation metrics"
       ]
     },
     "gemini": {
@@ -78,11 +94,17 @@
       "answer_text": "Commonly recommended options include Competitor A and Competitor B. The right choice depends on the use case and on references from comparable projects.",
       "cited_urls": [
         "https://www.competitor-a.example/"
+      ],
+      "search_queries": [
+        "agent evaluation consultancy references"
       ]
     },
     "gpt": {
       "answer_text": "Well-known names here are Competitor A, Competitor C and Competitor D.",
-      "cited_urls": []
+      "cited_urls": [],
+      "search_queries": [
+        "Agent evaluation consultancy references"
+      ]
     },
     "gemini": {
       "answer_text": "Competitor B is often mentioned in this context, alongside smaller specialised providers.",
