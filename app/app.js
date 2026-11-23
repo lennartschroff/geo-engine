@@ -42,6 +42,22 @@
     };
   }
   const validSetup = x => x && x.brand && Array.isArray(x.brand.aliases) && Array.isArray(x.categories) && Array.isArray(x.questions) && x.questions.length > 0;
+  // Ids a real run asked when the export was made: its run list, or the key questions.
+  const runListFromSetup = st => Array.isArray(st.run_list) ? st.run_list.slice() : st.questions.filter(q => q.key).map(q => q.id);
+  // Monitoring settings and the real target, bundled by build_web_data.py.
+  const MON = (window.GEO_DATA && window.GEO_DATA.monitoring) || null;
+  // Own brand set up from the bundled target (no export needed). Replaces any
+  // previous own setup, like loading an export does.
+  function useTarget() {
+    const T = MON && MON.target;
+    if (!T) return;
+    own = emptyOwnData(T.brand, T.categories, T.questions);
+    own.runList = T.questions.filter(q => q.key).map(q => q.id);
+    saveOwn(own);
+    try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (e) { /* storage unavailable */ }
+    mode = 'own'; saveMode('own');
+    boot();
+  }
 
   let mode = loadMode();
   let own = loadOwn();
@@ -84,6 +100,11 @@
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".7" fill="currentColor"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     sort: '<path d="M8 4v16M4 16l4 4 4-4M16 20V4M12 8l4-4 4 4"/>',
+    run: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="currentColor"/>',
+    download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
     globe2: '<path d="M4 5h8M8 3v2M5.5 5c1 3.5 3.5 6 6.5 7.5M10.5 5c-1 4-3.5 7-6.5 8.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
     swap: '<path d="M7 4L3 8l4 4"/><path d="M3 8h13"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8"/>',
   };
@@ -229,6 +250,9 @@
       '<div style="max-width:640px;margin:56px auto;padding:0 32px;display:flex;flex-direction:column;gap:24px">' +
       '<button class="link" style="align-self:flex-start" ' + click(() => { mode = 'demo'; saveMode('demo'); setupDraft = null; boot(); }) + '>← Back to the demo</button>' +
       '<div class="head"><h1>Set up your brand</h1><p>Runs entirely in your browser — nothing is sent anywhere, no API key needed for this part.</p></div>' +
+      (MON && MON.target ? '<div class="card" style="gap:10px"><span class="s14" style="font-weight:500">Use the monitoring target ' + esc(MON.target.brand.name) + '</span>' +
+        '<span class="s13 muted">Brand, topics and questions from ' + esc(MON.target.path) + ', the folder the real monitoring runs against.</span>' +
+        '<button class="btn sm" style="align-self:flex-start" ' + click(() => { setupDraft = null; useTarget(); }) + '>Use ' + esc(MON.target.brand.short) + ' →</button></div>' : '') +
       '<div class="card" style="gap:10px"><span class="s14" style="font-weight:500">Already have monitoring results?</span>' +
       '<span class="s13 muted">Load monitoring_export.json (from a monitoring run or the scheduled GitHub Action). It sets up the brand, topics, questions and results in one step.</span>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label for="su-export-file" class="btn sm plain" style="cursor:pointer">Load export…</label>' +
@@ -298,6 +322,7 @@
         const parsed = JSON.parse(reader.result);
         if (!parsed || !parsed.results || !validSetup(parsed.setup)) throw new Error('not a monitoring export with setup');
         own = emptyOwnData(parsed.setup.brand, parsed.setup.categories, parsed.setup.questions);
+        own.runList = runListFromSetup(parsed.setup);
         own.demo = demoFromExport(parsed, null);
         saveOwn(own);
         try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (err) { /* storage unavailable */ }
@@ -362,7 +387,7 @@
     // Library is reference material you dip into, not a destination -- kept
     // last/rightmost so it's still one click away without competing with the
     // two active steps.
-    const GROUPS = { monitor: ['questions', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
+    const GROUPS = { monitor: ['questions', 'run', 'sources', 'impact'], improve: ['website', 'write', 'library'] };
     const GROUP_OF = {};
     Object.keys(GROUPS).forEach(g => GROUPS[g].forEach(id => { GROUP_OF[id] = g; }));
     const TYPE_FG = { statement: 'var(--type-statement)', definition: 'var(--type-definition)', figure: 'var(--type-figure)', case: 'var(--type-case)', quote: 'var(--type-quote)', faq: 'var(--type-faq)' };
@@ -374,7 +399,7 @@
     const CATS = D.categories.map(c => ({ id: c.id, kw: c.keywords }));
     const QUESTIONS = D.questions.map(q => {
       const res = D.demo.results[q.id];
-      return { id: q.id, text: q.text, tags: q.categories, key: q.key, comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
+      return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
     });
     const BASE_BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
     // Like allQ() for questions: content blocks added in-browser (no terminal, no
@@ -437,8 +462,12 @@
     const catLabel = id => { const c = CAT_BY_ID[id]; return (c && (state.lang === 'de' ? c.label_de : c.label_en)) || id; };
     const catLabels = tags => tags.map(catLabel).join(' · ');
     const blockText = b => state.lang === 'de' ? b.de : b.en;
-    const allQ = () => QUESTIONS.concat(state.custom);
-    const isActive = q => state.active[q.id] === undefined ? (q.key || !!q.custom) : state.active[q.id];
+    // Questions added in the browser that an export already brought back
+    // (same id) are listed once.
+    const allQ = () => QUESTIONS.concat(state.custom.filter(c => !QUESTIONS.some(q => q.id === c.id)));
+    // Questions the last saved or exported run list contains start switched on.
+    const SAVED_RUN = mode === 'own' && own && Array.isArray(own.runList) ? new Set(own.runList) : null;
+    const isActive = q => state.active[q.id] === undefined ? (q.key || !!q.custom || !!(SAVED_RUN && SAVED_RUN.has(q.id))) : state.active[q.id];
 
     function status(q, eng) {
       if (!isActive(q)) return { k: 'inactive' };
@@ -711,7 +740,7 @@
         '<div class="card" style="gap:10px"><h2>' + esc(l.newQLabel) + '</h2><div class="form">' +
         '<label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(l.newQPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(); }) + '>' +
         '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + opts + '</select>' +
-        '<button class="btn" ' + click(addQuestion) + '>' + esc(l.save) + '</button></div>' +
+        '<button class="btn" ' + click(() => addQuestion()) + '>' + esc(l.save) + '</button></div>' +
         '<span class="small" style="color:' + (state.formMsg === 'short' ? 'var(--warn)' : C.muted) + '">' + esc(state.formMsg === 'short' ? l.msg.short : l.formHint) + '</span></div></section>';
     }
 
@@ -743,11 +772,11 @@
     }
 
     function toggleActive(q) { const a = Object.assign({}, state.active); a[q.id] = !isActive(q); set({ active: a }); }
-    function addQuestion() {
+    function addQuestion(stay) {
       const text = state.newQ.trim();
       if (text.length < 8) { set({ formMsg: 'short' }); return; }
       const q = { id: 'c' + Date.now().toString(36), text: text.slice(0, 300), tags: [state.newCat], key: false, custom: true, createdAt: new Date().toISOString() };
-      set({ custom: state.custom.concat([q]), newQ: '', scope: 'custom', onlyGaps: false, formMsg: '' });
+      set(Object.assign({ custom: state.custom.concat([q]), newQ: '', formMsg: '' }, stay === true ? {} : { scope: 'custom', onlyGaps: false }));
       toast(L().ui.toastQAdded);
     }
 
@@ -770,6 +799,7 @@
           // refer to those, so they replace the current ones.
           if (validSetup(parsed.setup)) {
             own.brand = parsed.setup.brand; own.categories = parsed.setup.categories; own.questions = parsed.setup.questions;
+            own.runList = runListFromSetup(parsed.setup);
           }
           own.demo = demoFromExport(parsed, own.demo);
           saveOwn(own);
@@ -1259,6 +1289,118 @@
     // whose visible design has no page title get a visually hidden one.
     const withH1 = (html, title) => html.indexOf('<h1') === -1 ? '<h1 class="sr">' + esc(title) + '</h1>' + html : html;
 
+    // ---------- Run: what the next monitoring run asks, and how to start it ----------
+    const runListNow = () => allQ().filter(isActive);
+    // Compared with the list saved last (Save button, export or target setup).
+    function runDiff() {
+      if (mode !== 'own' || !own) return { changed: false, added: 0, removed: 0, never: false };
+      const now = new Set(runListNow().map(q => q.id));
+      if (!Array.isArray(own.runList)) return { changed: true, added: now.size, removed: 0, never: true };
+      const saved = new Set(own.runList);
+      const added = [...now].filter(id => !saved.has(id)).length;
+      const removed = [...saved].filter(id => !now.has(id)).length;
+      return { changed: added + removed > 0, added, removed, never: false };
+    }
+    function saveRunList() {
+      const qs = runListNow();
+      const file = {
+        _comment: 'Questions monitoring/run.py asks, saved from the GEO Engine app (Monitor > Run). Keep it in the target folder; delete it to go back to the settings.',
+        saved: new Date().toISOString().slice(0, 10),
+        questions: qs.map(q => Object.assign({ id: q.id, text: q.text, categories: q.tags }, q.custom ? { custom: true } : {}))
+      };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = 'run_list.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      own.runList = qs.map(q => q.id);
+      saveOwn(own);
+      render();
+      toast(L().ui.run.toastSaved);
+    }
+    // Next date the daily/weekly schedule fires (the Action wakes ~06:00 Berlin).
+    function nextRun(sch) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const d = new Date();
+      d.setHours(6, 0, 0, 0);
+      if (sch.frequency === 'daily') { if (d <= new Date()) d.setDate(d.getDate() + 1); return d; }
+      if (sch.frequency !== 'weekly') return null;
+      const want = days.indexOf(sch.weekday);
+      while (d.getDay() !== want || d <= new Date()) d.setDate(d.getDate() + 1);
+      return d;
+    }
+
+    function viewRun() {
+      const l = L(); const R = l.ui.run;
+      if (!MON) return '<section><div class="head"><h1>' + esc(l.tabs.run) + '</h1></div><div class="empty">' + esc(l.noRows) + '</div></section>';
+      const T = MON.target;
+      const list = runListNow();
+      const grp = {
+        key: list.filter(q => q.key), on: list.filter(q => !q.key && !q.custom), own: list.filter(q => q.custom)
+      };
+      const engines = MON.engines.filter(e => e.enabled);
+      const wordings = 1 + MON.variants;
+      const calls = list.length * wordings * MON.runs_per_question * engines.length;
+      const usd = engines.reduce((a, e) => a + e.usd_per_call * list.length * wordings * MON.runs_per_question, 0);
+      const over = calls > MON.budget.max_calls_per_run || usd > MON.budget.max_usd_per_run;
+      const nx = nextRun(MON.schedule);
+      const diff = runDiff();
+      const off = allQ().length - list.length;
+
+      const demo = mode === 'demo' && T ? '<div class="callout"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">' + esc(R.demoTitle) + '</span>' +
+        '<span class="s13 muted">' + esc(R.demoText(T.path)) + '</span></div>' +
+        (own ? '<button class="btn" ' + click(switchToOwn) + '>' + esc(R.openOwn(own.brand.short)) + '</button>'
+          : '<button class="btn" ' + click(useTarget) + '>' + ic('run', 15) + esc(R.useTarget(T.brand.short)) + '</button>') + '</div>' : '';
+
+      const tile = (label, value, sub, extra) => '<div class="kpi-tile"><div class="top">' + esc(label) + '</div><div class="mid"><span class="n">' + value + '</span>' + (extra || '') + '</div><span class="l">' + sub + '</span></div>';
+      const kpis = '<div class="kpis">' +
+        tile(R.kQuestions, list.length, esc(R.kSplit(grp.key.length, grp.on.length, grp.own.length))) +
+        tile(R.kCalls, calls, esc(R.kCallsSub(list.length, MON.variants, engines.length))) +
+        tile(R.kCost, esc(usd.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD' })), esc(R.kCostSub)) +
+        tile(R.kNext, nx ? esc(nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short' })) : '–',
+          esc((nx ? nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { weekday: 'long' }) + ' · ' : '') + (R.every[MON.schedule.frequency] || ''))) + '</div>';
+
+      const row = q => '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px">' +
+        '<input type="checkbox" checked aria-label="' + esc(l.ariaOff + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
+        '<div style="display:flex;flex-direction:column;min-width:0"><span>' + esc(q.text) + '</span><span class="small muted">' + esc(catLabels(q.tags)) + '</span></div>' +
+        '<button class="icon" aria-label="' + esc(l.ui.answers + ': ' + q.text) + '" data-tt="' + esc(l.ui.answers) + '" ' + click(() => openQuestion(q.id)) + '>' + ic('chevron', 14) + '</button></div>';
+      const section = (title, qs) => qs.length ? '<div class="nav-group" style="padding:12px 18px 4px">' + esc(title) + ' · ' + qs.length + '</div>' + qs.map(row).join('') : '';
+      const status = mode !== 'own' ? '' : '<div class="banner" style="margin:0;border-radius:0;border-width:0 0 1px">' +
+        (diff.changed ? '<span class="swatch" style="border-radius:50%;background:var(--amber)"></span><span class="item" style="color:var(--amber)">' + esc(diff.never ? R.neverSaved : R.changed(diff.added, diff.removed)) + '</span>'
+          : '<span class="swatch" style="border-radius:50%;background:var(--good)"></span><span class="item good">' + esc(R.saved) + '</span>') + '</div>';
+      const runList = '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.listTitle) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div></div>' + status +
+        '<div>' + section(R.grpKey, grp.key) + section(R.grpOn, grp.on) + section(R.grpOwn, grp.own) + '</div>' +
+        '<div class="panel-b" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line2)">' +
+        (off ? '<span class="s13 muted">' + esc(R.more(off)) + ' · <button class="link" ' + click(() => set({ tab: 'questions', scope: 'more', onlyGaps: false })) + '>' + esc(R.showMore) + '</button></span>' : '') +
+        '<div class="form"><label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(R.addPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(true); }) + '>' +
+        '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + CATS.map(c => '<option value="' + c.id + '"' + (state.newCat === c.id ? ' selected' : '') + '>' + esc(catLabel(c.id)) + '</option>').join('') + '</select>' +
+        '<button class="btn plain" ' + click(() => addQuestion(true)) + '>' + esc(l.save) + '</button></div>' +
+        (state.formMsg === 'short' ? '<span class="small warn">' + esc(l.msg.short) + '</span>' : '') + '</div></div>';
+
+      const repo = MON.github_repo;
+      const cmd = 'python monitoring/run.py\npython scripts/export_monitoring.py';
+      const step = (n, title, text, body) => '<div style="display:flex;gap:12px;padding:14px 18px;border-top:1px solid var(--line2)">' +
+        '<span class="nba-n">' + n + '</span><div style="display:flex;flex-direction:column;gap:8px;min-width:0;flex-grow:1"><span style="font-weight:600">' + esc(title) + '</span>' +
+        '<span class="s13 muted">' + esc(text) + '</span>' + (body || '') + '</div></div>';
+      const canSave = mode === 'own' && T;
+      const start = '<div class="panel" style="position:sticky;top:68px"><div class="panel-h"><h2>' + esc(R.startTitle) + '</h2></div>' +
+        (over ? '<div class="banner" style="margin:12px 18px 0;color:var(--warn)">' + esc(R.overBudget(MON.budget.max_calls_per_run, MON.budget.max_usd_per_run)) + '</div>' : '') +
+        '<div style="padding-top:4px">' +
+        (canSave ? step(1, R.s1, R.s1Text(T.path), '<button class="btn' + (diff.changed ? '' : ' plain') + '" style="align-self:flex-start" ' + click(saveRunList) + '>' + ic('download', 15) + esc(R.s1Btn) + '</button>') : '') +
+        step(canSave ? 2 : 1, R.s2, R.s2Text, repo ? '<a class="btn" style="align-self:flex-start;text-decoration:none" target="_blank" rel="noopener noreferrer" href="https://github.com/' + esc(repo) + '/actions/workflows/monitoring.yml">' + ic('external', 15) + esc(R.s2Btn) + '</a>' : '') +
+        step(canSave ? 3 : 2, R.s3, R.s3Text, '<code class="mono s13" style="display:block;white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px">' + esc(cmd) + '</code>' +
+          '<button class="btn sm plain" style="align-self:flex-start" ' + click(() => copyToClipboard(cmd, 'runcmd')) + '>' + ic('copy', 14) + esc(state.copied === 'runcmd' ? l.copied : R.copyCmd) + '</button>') +
+        (mode === 'own' ? step(canSave ? 4 : 3, R.s4, R.s4Text, '<label for="run-results-file" class="btn sm plain" style="align-self:flex-start;cursor:pointer">' + ic('upload', 14) + esc(l.chooseFile) + '</label>' +
+          '<input id="run-results-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
+          (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '')) : '') +
+        '</div><div class="panel-b" style="border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px"><span class="small muted" style="font-weight:600;text-transform:uppercase;letter-spacing:.05em">' + esc(R.engines) + '</span>' +
+        MON.engines.map(e => { const i = ENGINES.findIndex(x => x.id === e.id); return '<div class="s13" style="display:flex;align-items:center;gap:8px;' + (e.enabled ? '' : 'opacity:.5') + '"><span class="swatch" style="background:var(--viz-' + (i + 1) + ')"></span><b style="font-weight:500">' + esc(ENGINES[i].name) + '</b><span class="mono small muted">' + esc(e.model) + '</span><span class="muted" style="margin-left:auto">' + esc(e.enabled ? R.perCall(e.usd_per_call) : R.off) + '</span></div>'; }).join('') +
+        '</div></div>';
+
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.run) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
+        demo + kpis + '<div class="grid g-main" style="align-items:start">' + runList + start + '</div></section>';
+    }
+
     // ---------- Shell helpers ----------
     const LOGO = '<svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M9 16a7 7 0 1 0 7-7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="16" cy="16" r="2.8" fill="currentColor"/></svg>';
     const MOD = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl ';
@@ -1279,6 +1421,7 @@
       const ph = allBlocksList().filter(b => b.placeholder).length;
       return {
         questions: ctx.gapQs.length ? { n: ctx.gapQs.length, warn: true, tip: l.ui.bannerGaps(ctx.gapQs.length) } : null,
+        run: runDiff().changed ? { n: '!', warn: true, tip: l.ui.run.navTip } : null,
         sources: targets ? { n: targets, tip: l.srcStatTargets + ': ' + targets } : null,
         website: high ? { n: high, warn: true, tip: l.webStatHigh + ': ' + high } : null,
         library: ph ? { n: ph, tip: l.libNeedsContent + ': ' + ph } : null,
@@ -1407,7 +1550,7 @@
     }
 
     // ---------- Keyboard ----------
-    const GO_KEYS = { o: 'overview', q: 'questions', s: 'sources', i: 'impact', w: 'website', r: 'write', l: 'library' };
+    const GO_KEYS = { o: 'overview', q: 'questions', m: 'run', s: 'sources', i: 'impact', w: 'website', r: 'write', l: 'library' };
     let gPressed = 0;
     onKey = e => {
       const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
@@ -1471,7 +1614,7 @@
 
       const isFreshOwn = mode === 'own' && allBlocksList().length === 0 && D.audit.length === 0 && D.pages.length === 0 && Object.keys(D.demo.results).length === 0;
       const views = {
-        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
+        overview: isFreshOwn ? viewGettingStarted : viewOverview, questions: viewQuestions, run: viewRun, sources: viewSources, website: viewWebsite, impact: viewImpact, library: viewLibrary,
         write: c => state.writeStep === 1 ? viewWriteBrief(c) : viewStudio(c)
       };
       document.documentElement.lang = state.lang;
