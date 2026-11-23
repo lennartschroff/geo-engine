@@ -1,123 +1,97 @@
-# Question Radar (draft concept)
+# Question Radar
 
-Status: exploring, on branch `radar`. Started 2026-11-23.
+Status: built end to end on branch `radar` (2026-11-23). Tasks: TASKS.md Epic H.
 
 ## The idea
 
-Today GEO Engine answers "are we named for the questions people ask now?".
-The Radar asks a second question: **which questions are just starting to
-appear, and is anyone answering them well yet?** If a brand publishes a
-solid, citable answer before a question becomes common, it has a head start
-in two places:
+Monitoring answers "are we named for the questions people ask now?". The
+Radar asks a second question: **which questions are just starting to come
+up, and does anyone answer them well yet?** A brand that publishes a solid,
+citable answer before a question becomes common gets a head start in two
+places:
 
-- **Search-backed answers.** When an engine searches the web for a new
-  question and finds only thin pages, it cites whatever is there. Being the
-  best page early makes you the default source.
-- **Future model versions.** Content that exists before a model's training
-  cutoff can end up in what the model knows without searching. Content
-  published after the topic peaks may miss that window.
+- **Search-backed answers.** When an engine searches for a new question and
+  finds only thin pages, it cites whatever is there. Being the best page
+  early makes you the default source.
+- **Future model versions.** Content that exists before a training cutoff
+  can end up in what a model knows without searching.
 
-We don't claim to predict the future. The Radar finds **early signals**,
-ranks them, and then **checks its own hit rate** with the monitoring that
-already runs. That last step is what makes it more than a guess.
+The Radar doesn't claim to predict anything. It finds **early signals**,
+ranks them, and **logs what it flagged**, so its hit rate can be checked
+with the monitoring that already runs.
 
-## How it fits the existing app
-
-```
-signals ──> candidate questions ──> score ──> write content ──> watch list ──> monitoring
-  │                                   │          (Write tab)      (run list)      │
-  └───────────────────────────────────┴──────── hit rate: flagged early, cited later?
-```
-
-1. **Collect** candidate questions from signals (below).
-2. **Score** each one: momentum, fit with the brand's topics, how weak
-   today's answers are, whether competitors already cover it.
-3. **Act:** send the best ones to the Write tab (block types, GEO score).
-4. **Check:** add them to the run list. Monitoring shows when engines start
-   naming and citing the brand, and whether competitors got there first.
-
-## Signal sources, cheapest first
-
-| # | Source | Cost | Status |
-|---|--------|------|--------|
-| 1 | **Search queries the engines run** while answering our questions. They break one prompt into several searches; those searches show what the engines think matters. | $0 extra: already in the responses we pay for | **Built (first draft)** for Claude and ChatGPT |
-| 2 | **Weak-answer test:** send a candidate question once per engine. Hedging, no named providers, or only weak sources mean the slot is open. | 1 call per candidate per engine | Planned (H4) |
-| 3 | **Questions from known future events:** regulation deadlines, standards, product launches in the brand's field. Entered by hand with a date. | $0 | Planned (H5) |
-| 4 | **Community and search momentum:** Reddit, GitHub issues, Stack Overflow, Google Trends, "People also ask". | Free APIs with rate limits; some need keys | Later (H6) |
-
-### What each engine exposes (checked 2026-11-23)
-
-- **Claude:** the web search tool returns a `server_tool_use` block per
-  search, with the query in `input.query`. Confirmed in the Anthropic API docs.
-- **ChatGPT (Responses API):** a `web_search_call` output item per search,
-  with the query under `action.query`. Written from the documented shape and
-  covered by tests with mocks. **Not yet checked with a real call.**
-- **Gemini:** grounding queries only exist when Google Search grounding is
-  on, which needs a billed account (see TASKS.md C4b). Our runs use plain
-  generation, so Gemini contributes no search queries for now.
-- **Follow-up suggestions** ("people also ask" in the consumer apps) are
-  not part of any of the three APIs. We'd have to generate them ourselves,
-  which measures the model, not real users. Left out on purpose.
-
-## First draft (what is built)
-
-- `monitoring/run.py` stores the search queries of every answer in a new
-  `search_queries` column (JSON list). Older databases get the column added;
-  existing rows are kept.
-- `monitoring/radar.py` reads the database and lists the search queries
-  that came up, without any API call:
-  - normalised and merged (case, spacing, punctuation)
-  - counted: how many answers, which engines, which of our questions led there
-  - first and last time seen
-  - marked as **new** when no tracked question is close in wording
-    (word overlap below a threshold). New ones are the candidates.
-- Output: a table in the terminal or JSON (`--json`), for the app later.
+## The loop
 
 ```
-python monitoring/radar.py --db monitoring/runs.sqlite
-python monitoring/radar.py --json --min-count 2 > output/radar.json
+collect (free) ─┐
+engine searches ├─> candidates ─> score ─> app: Track / Write ─> run list ─> monitoring
+events          ┘                  │                                            │
+probe (paid) ──────────────────────┘           hit-rate log: flagged → tracked → brand named
 ```
 
-## Scoring (proposal, not built)
+| Step | Command / place | Cost |
+|------|-----------------|------|
+| Collect public questions and topic momentum | `python monitoring/radar.py collect` (weekly in the scheduled Action) | free |
+| Engine searches | stored by `monitoring/run.py` in `search_queries` | already paid |
+| Show candidates | `python monitoring/radar.py` (`--json` for the app's format) | free |
+| Measure open slots | `python monitoring/radar.py probe --top 5` | 1 call per candidate and engine; estimate shown, budget caps apply |
+| Hit rate | `python monitoring/radar.py hits` | free |
+| App | `scripts/export_monitoring.py` adds a `radar` section; Monitor → Radar | – |
 
-A candidate's score, 0–100. The weights are a starting point, like the GEO
-score, and not a validated measure:
+Settings per target: `targets/<name>/radar.json` (terms, sources, events,
+`min_score`), checked by `scripts/validate_data.py`. Terms are sent to the
+public APIs, so they must never be a brand alias (enforced).
+
+## Signals
+
+| Origin | Source | What we keep |
+|--------|--------|--------------|
+| engine | Claude `server_tool_use` / ChatGPT `web_search_call` queries | the search text, engine, question it came from |
+| hackernews | hn.algolia.com search API | question-like titles, points, comments |
+| stackexchange | api.stackexchange.com (e.g. webmasters, stackoverflow) | titles, views, answers, answered or not |
+| github | GitHub issue search | question-like titles with at least one reaction or comment |
+| wikipedia | Wikimedia page views | daily views of listed articles (momentum only) |
+| event | `radar.json` events with a source URL | expected questions and date |
+
+No author names are stored. Gemini reports its searches only with grounding,
+which needs billing, so it adds no engine searches for now.
+
+## Score (0–100)
 
 | Part | Weight | Measured by |
 |------|--------|-------------|
-| Momentum | 30 | Times seen in the last 4 weeks compared with the 4 before |
-| Spread | 20 | Number of engines and tracked questions that led to it |
-| Open slot | 30 | Weak-answer test: no named providers, hedging, few or weak sources |
-| Fit | 20 | Overlap with the brand's topics and library blocks |
+| Momentum | 30 | Topic terms: last 30 days vs. the 30-day average of the 150 days before (each doubling +0.25 around a steady 0.5), plus the candidate's own recency. Events: closeness of the date. |
+| Demand | 20 | Engines and answers that ran the search; points, comments, views. |
+| Open slot | 30 | Probe: named providers (60 %), cited sources (40 %), hedging → at least 0.8, brand already named → at most 0.3. Without a probe: unanswered Stack Exchange question 0.75, answered 0.4, otherwise 0.5–0.6. |
+| Fit | 20 | Topic keywords and radar terms found as phrases; engine searches at least 0.5. Candidates with fit 0 are dropped. |
 
-## How we'll know it works
+A rule of thumb like the GEO score, not a validated measure. The hit-rate
+log exists to check it.
 
-- **Hit rate:** of the candidates flagged in a month, how many later show up
-  more often (momentum) or become tracked questions?
-- **Head start:** for candidates the brand wrote content for, weeks from
-  flag to first citation, and whether competitors were cited first.
-- Both come from data that monitoring already stores, so the Radar can be
-  judged after a few months of weekly runs. Until then, treat its ranking as
-  a reading list, not a forecast.
+## Lessons from the first real collection (2026-11-23)
 
-## Risks and limits
+- **GitHub grows on its own.** Every term looked like it was rising on GitHub
+  (about ×1.7) while all GitHub issues grew ×1.84 in the same windows.
+  The collector now stores a platform-wide count and divides it out.
+- **Search engines match loosely.** Hacker News returned unrelated posts and
+  GitHub returned SEO-agency spam. Phrase matching, an engagement minimum
+  and a stricter question test ("How X showed Y" is a headline) fixed both.
+- **Niche topics are quiet.** For GEO, Stack Exchange has almost no recent
+  questions; Hacker News and Wikipedia carry most of the signal. Expect a
+  short candidate list at first; it grows with weekly engine searches.
+- **Wikimedia rate-limits anonymous clients.** Keep the article list short;
+  set `RADAR_USER_AGENT` with contact details in `.env` if you want to.
 
-- **Little data at first.** One weekly run of 15 questions gives a few dozen
-  search queries. Patterns need several weeks.
-- **API ≠ consumer app.** The searches an API model runs may differ from
-  what ChatGPT or Gemini do in their apps (same limit as monitoring itself).
-- **Engine searches aren't user demand.** They show what the engine thinks
-  is relevant to a question we asked. They're a proxy for what people will
-  need to know, not a count of people asking.
-- **Cost.** Source 1 is free. The weak-answer test (source 2) adds calls; it
-  goes through the existing cost estimate and budget caps, and needs a yes
-  before the first real run.
-- **Privacy.** Community sources (H6) must only collect public posts and
-  store the question text, not usernames.
+## Limits
 
-## Open questions for the owner
+- API answers differ from the consumer apps (same as monitoring).
+- Engine searches show what an engine thinks is relevant, not how many
+  people ask. Community counts are a proxy for demand, not a measure.
+- Momentum needs weekly history to become meaningful; the hit rate needs
+  8+ weeks after the first flags.
+- Probes cost money (except Gemini's free tier, which is often overloaded).
 
-- Separate tab ("Radar" under Monitor), or a section on the Questions tab?
-- Should candidates go straight into the run list, or wait for a person to
-  approve them? (Proposal: a person approves; each one costs calls every week.)
-- Which future events matter for `targets/geo-engine`? `[placeholder]`
+## Open
+
+- Events for `targets/geo-engine`: none yet, each needs a source `[placeholder]`.
+- First real probe: Claude, 5 candidates ≈ $0.25, waiting for approval.
