@@ -53,6 +53,7 @@
     if (!T) return;
     own = emptyOwnData(T.brand, T.categories, T.questions);
     own.runList = T.questions.filter(q => q.key).map(q => q.id);
+    own.competitors = T.competitors || [];
     saveOwn(own);
     try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (e) { /* storage unavailable */ }
     mode = 'own'; saveMode('own');
@@ -175,6 +176,32 @@
   let onKey = null;
   document.addEventListener('keydown', e => { hideTip(); if (onKey) onKey(e); });
 
+  // ---------- The visitor's own API keys (never the project owner's) ----------
+  // Kept in this browser only: localStorage when "remember" is on, otherwise
+  // sessionStorage (gone when the tab closes). They are sent to nothing but
+  // the provider's own API; the page's CSP allows only those three hosts.
+  const KEYS_KEY = 'geo-engine:keys';
+  function loadKeys() {
+    for (const store of ['localStorage', 'sessionStorage']) {
+      try {
+        const raw = window[store].getItem(KEYS_KEY);
+        if (raw) return Object.assign({ remember: store === 'localStorage' }, JSON.parse(raw));
+      } catch (e) { /* storage unavailable or unreadable */ }
+    }
+    return { remember: true };
+  }
+  function saveKeys(k) {
+    try { window.localStorage.removeItem(KEYS_KEY); window.sessionStorage.removeItem(KEYS_KEY); } catch (e) { /* storage unavailable */ }
+    if (!k.claude && !k.gemini && !k.gpt) return;
+    const data = JSON.stringify({ claude: k.claude || '', gemini: k.gemini || '', gpt: k.gpt || '' });
+    try { (k.remember ? window.localStorage : window.sessionStorage).setItem(KEYS_KEY, data); } catch (e) { /* storage unavailable */ }
+  }
+  const KEYS = loadKeys();
+  // A running check outlives re-renders (and a switch to the demo and back).
+  const RUN = { status: 'idle', q: 0, qTotal: 0, current: '', errors: {}, hits: 0, answers: 0, cancel: false };
+  window.addEventListener('beforeunload', e => { if (RUN.status === 'running') { e.preventDefault(); e.returnValue = ''; } });
+
+  const MONITOR = window.GEO_MONITOR;
   const CH = window.GEO_CHARTS;
   const root = document.getElementById('app');
   // Views are rendered as HTML strings, so event listeners can't be attached
@@ -372,7 +399,7 @@
   }
 
   // ---------- Main app ----------
-  function boot() {
+  function boot(init) {
     const D = mode === 'own' ? own : window.GEO_DATA;
     const BRAND = D.brand;
     const ANSWERS = (D.demo && D.demo.answers) || {};
@@ -426,8 +453,8 @@
       // Redesign: overlays, filters, sorting. Not persisted.
       drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null,
       qSearch: '', qTopic: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
-      fx: 'page'
-    }, saved);
+      fx: 'page', keyDraft: {}, keyMsg: {}
+    }, saved, init || {});
     let drag = null;
 
     function load() {
@@ -1280,22 +1307,175 @@
     // whose visible design has no page title get a visually hidden one.
     const withH1 = (html, title) => html.indexOf('<h1') === -1 ? '<h1 class="sr">' + esc(title) + '</h1>' + html : html;
 
-    // ---------- Run: what the next monitoring run asks, and how to start it ----------
+    // ---------- Checking: ask the assistants from this browser ----------
+    const KEY_LINKS = { claude: 'https://console.anthropic.com/settings/keys', gemini: 'https://aistudio.google.com/apikey', gpt: 'https://platform.openai.com/api-keys' };
+    const DEFAULT_CFG = { claude: { model: 'claude-sonnet-5', max_searches: 1 }, gemini: { model: 'gemini-3.5-flash-lite', grounding: false }, gpt: { model: 'gpt-5-mini', reasoning_effort: 'low' } };
+    const engineCfg = id => Object.assign({}, DEFAULT_CFG[id], (MON && MON.engines.find(e => e.id === id)) || {});
+    const engineName = id => (ENGINES.find(e => e.id === id) || { name: id }).name;
+    const connected = () => ENGINES.filter(e => KEYS[e.id]);
+    const ownCompetitors = () => (own && (own.competitors || (own.demo && own.demo.competitors))) || [];
+    const money = v => v.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+    // Engines answer in parallel, ~10 s per question (measured 2026-11-23).
+    const checkMinutes = n => Math.max(1, Math.ceil(n * 10 / 60));
+    const checkCost = n => connected().reduce((a, e) => a + (engineCfg(e.id).usd_per_call || 0) * n, 0);
     const runListNow = () => allQ().filter(isActive);
-    // Compared with the list saved last (Save button, export or target setup).
+
+    // Connect a key: one tiny request to prove it works before it's stored.
+    async function connectKey(id) {
+      const l = L(); const R = l.ui.runs;
+      const key = String(state.keyDraft[id] || '').trim();
+      if (!key) return;
+      set({ keyMsg: Object.assign({}, state.keyMsg, { [id]: 'checking' }) });
+      let msg = 'ok';
+      try {
+        await MONITOR.callEngine(id, Object.assign({}, engineCfg(id), { max_searches: 0, grounding: false }), 'Reply with the word OK.', key, { sleep: () => Promise.resolve() });
+      } catch (err) {
+        if (err.status === 401 || err.status === 403 || err.status === 400) msg = 'bad';
+        else if (err.status === 429 || err.status === 402) msg = 'credit';
+        else msg = String(err.message || err).slice(0, 160);
+      }
+      if (msg === 'ok' || msg === 'credit') {
+        KEYS[id] = key; saveKeys(KEYS);
+        state.keyDraft = Object.assign({}, state.keyDraft, { [id]: '' });
+        if (msg === 'ok') toast(R.okKey(engineName(id)));
+      }
+      set({ keyMsg: Object.assign({}, state.keyMsg, { [id]: msg }) });
+    }
+    function removeKey(id) { delete KEYS[id]; saveKeys(KEYS); set({ keyMsg: Object.assign({}, state.keyMsg, { [id]: '' }) }); }
+
+    // Same summary the GitHub export produces, from the answers stored here.
+    function applyRows() {
+      own.demo = Object.assign({}, own.demo, MONITOR.summarize(own.runs || [], own.brand, ownCompetitors()));
+    }
+    async function startCheck() {
+      if (RUN.status === 'running' || mode !== 'own') return;
+      const engines = connected().map(e => e.id);
+      const qs = runListNow();
+      if (!engines.length || !qs.length) return;
+      const brand = own.brand;
+      const aliases = brand.aliases && brand.aliases.length ? brand.aliases : [brand.name];
+      const comps = ownCompetitors();
+      Object.assign(RUN, { status: 'running', q: 0, qTotal: qs.length, current: '', errors: {}, hits: 0, answers: 0, cancel: false, started: new Date().toISOString() });
+      own.runs = own.runs || [];
+      const dead = {};
+      set({ tab: 'runs', setup: false });
+      for (const q of qs) {
+        if (RUN.cancel || engines.every(e => dead[e])) break;
+        RUN.q++; RUN.current = q.text; render();
+        await Promise.all(engines.filter(e => !dead[e]).map(async e => {
+          try {
+            const ans = await MONITOR.callEngine(e, engineCfg(e), q.text, KEYS[e]);
+            const row = MONITOR.makeRow(q, e, engineCfg(e).model, q.text, ans, aliases, comps);
+            own.runs.push(row);
+            RUN.answers++; if (row.mentioned) RUN.hits++;
+          } catch (err) { dead[e] = true; RUN.errors[e] = err; }
+        }));
+        own.runs = own.runs.slice(-2000);  // keeps storage well under the browser's limit
+        applyRows(); saveOwn(own);
+      }
+      RUN.status = RUN.cancel ? 'stopped' : 'done';
+      boot({ tab: 'runs' });
+    }
+    function runErrors() {
+      const R = L().ui.runs;
+      return Object.keys(RUN.errors).map(e => {
+        const err = RUN.errors[e];
+        const t = err.status === 401 || err.status === 403 ? R.errKey(engineName(e)) : err.status === 429 || err.status === 402 ? R.errCredit(engineName(e)) : R.errOther(engineName(e), String(err.message || err).slice(0, 140));
+        return '<p class="s13 warn" style="margin:0">' + esc(t) + '</p>';
+      }).join('');
+    }
+
+    function connectPanel() {
+      const l = L(); const R = l.ui.runs;
+      const ext = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
+      const row = (e, i) => {
+        const on = !!KEYS[e.id]; const msg = state.keyMsg[e.id] || '';
+        return '<div class="key-row"><div class="key-top"><span class="swatch" style="background:var(--viz-' + (i + 1) + ')"></span><b>' + esc(e.name) + '</b>' +
+          '<span class="small muted">' + esc(R.price[e.id]) + '</span>' +
+          (on ? '<span class="chip cited" style="margin-left:auto">' + ic('check', 13) + esc(R.connected) + '</span><button class="link s13" ' + click(() => removeKey(e.id)) + '>' + esc(R.remove) + '</button>'
+            : '<a class="link s13" style="margin-left:auto" target="_blank" rel="noopener noreferrer" href="' + KEY_LINKS[e.id] + '">' + esc(R.getKey) + ext + '</a>') + '</div>' +
+          (on ? '' : '<div class="key-in"><label for="key-' + e.id + '" class="sr">' + esc(R.paste(e.name)) + '</label>' +
+            '<input id="key-' + e.id + '" type="password" autocomplete="off" spellcheck="false" placeholder="' + esc(R.paste(e.name)) + '" value="' + esc(state.keyDraft[e.id] || '') + '" ' +
+            attr('input', ev => { state.keyDraft = Object.assign({}, state.keyDraft, { [e.id]: ev.target.value }); }) + ' ' + attr('keydown', ev => { if (ev.key === 'Enter') connectKey(e.id); }) + '>' +
+            '<button class="btn" ' + (msg === 'checking' ? 'disabled ' : '') + click(() => connectKey(e.id)) + '>' + esc(msg === 'checking' ? R.checking : R.connect) + '</button></div>') +
+          (msg === 'bad' ? '<span class="s13 warn">' + esc(R.badKey) + '</span>' : msg === 'credit' ? '<span class="s13" style="color:var(--amber)">' + esc(R.noCredit) + '</span>'
+            : msg && msg !== 'ok' && msg !== 'checking' ? '<span class="s13 warn">' + esc(msg) + '</span>' : '') + '</div>';
+      };
+      // Gemini first: free, so the easiest way in. Colours stay tied to the engine.
+      const order = ['gemini', 'claude', 'gpt'].map(id => ENGINES.find(e => e.id === id));
+      return '<div class="keys-list">' + order.map(e => row(e, ENGINES.indexOf(e))).join('') + '</div>' +
+        '<div class="key-foot"><label class="s13" style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer"><input type="checkbox"' + (KEYS.remember ? ' checked' : '') + ' ' +
+        attr('change', () => { KEYS.remember = !KEYS.remember; saveKeys(KEYS); render(); }) + '>' + esc(R.remember) + '</label>' +
+        (connected().length ? '<button class="link s13" style="margin-left:auto" ' + click(() => { ENGINES.forEach(e => { delete KEYS[e.id]; }); saveKeys(KEYS); render(); }) + '>' + esc(R.forget) + '</button>' : '') + '</div>';
+    }
+
+    // The big "check now" card, shared by the Runs page and the setup popup.
+    function checkCard() {
+      const l = L(); const R = l.ui.runs;
+      const qs = runListNow();
+      const con = connected();
+      if (RUN.status === 'running') {
+        const pctDone = Math.round((RUN.q - 1) / Math.max(1, RUN.qTotal) * 100);
+        return '<div class="check-card"><div class="check-h"><span class="spinner" aria-hidden="true"></span><h2>' + esc(R.running) + '</h2>' +
+          '<button class="btn plain sm" style="margin-left:auto" ' + (RUN.cancel ? 'disabled ' : '') + click(() => { RUN.cancel = true; render(); }) + '>' + esc(RUN.cancel ? R.stopping : R.stop) + '</button></div>' +
+          '<div class="bar-t" style="height:10px"><div style="width:' + pctDone + '%;background:var(--accent)"></div></div>' +
+          '<span class="s13 muted" role="status">' + esc(R.progress(RUN.q, RUN.qTotal)) + ' · ' + esc(RUN.current) + '</span>' +
+          '<span class="small muted">' + esc(R.keepOpen) + '</span>' + runErrors() + '</div>';
+      }
+      const runs = (own && own.runs) || [];
+      const lastDay = runs.length ? runs[runs.length - 1].timestamp.slice(0, 10) : '';
+      const lastRows = runs.filter(r => r.timestamp.slice(0, 10) === lastDay);
+      const after = RUN.status === 'done' || RUN.status === 'stopped'
+        ? '<div class="check-done">' + ic('check', 16) + '<span>' + esc(RUN.status === 'done' ? R.doneTitle + '. ' + R.doneText(RUN.hits, RUN.answers) : R.stopped) + '</span>' +
+          '<button class="btn sm" style="margin-left:auto" ' + click(() => { RUN.status = 'idle'; set({ tab: 'overview' }); }) + '>' + esc(R.seeResults) + '</button></div>' + runErrors()
+        : lastDay ? '<span class="s13 muted">' + esc(R.last(lastDay, lastRows.filter(r => r.mentioned).length, lastRows.length)) + ' <button class="link s13" ' + click(() => set({ tab: 'overview' })) + '>' + esc(R.seeResults) + '</button></span>' : '';
+      const cost = checkCost(qs.length);
+      return '<div class="check-card"><h2 class="check-title">' + esc(R.hero(BRAND.short)) + '</h2>' +
+        (con.length ? '<span class="s14" style="color:var(--fg2)">' + esc(R.plan(qs.length, con.map(e => e.name).join(', '))) + '</span>' +
+          '<span class="s13 muted">' + esc(R.estimate(cost ? money(cost) : R.free, checkMinutes(qs.length))) + '</span>' +
+          '<button class="btn big" ' + (qs.length ? '' : 'disabled ') + click(startCheck) + '>' + ic('runs', 18) + esc(R.checkNow) + '</button>'
+          : '<span class="s14" style="color:var(--fg2)">' + esc(R.needKey) + '</span>') +
+        after + '</div>';
+    }
+
+    function viewRuns() {
+      const l = L(); const R = l.ui.runs;
+      if (mode !== 'own') {
+        return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.runs) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
+          '<div class="callout"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">' + esc(R.demoTitle) + '</span><span class="s13 muted">' + esc(R.demoText) + '</span></div>' +
+          '<button class="btn" ' + click(() => { if (own) switchToOwn(); else switchToOwn(); }) + '>' + esc(l.ui.setup.demoCta) + '</button></div></section>';
+      }
+      const list = runListNow();
+      const row = q => { const on = isActive(q); return '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px;' + (on ? '' : 'opacity:.6') + '">' +
+        '<input type="checkbox"' + (on ? ' checked' : '') + ' aria-label="' + esc((on ? l.ariaOff : l.ariaOn) + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
+        '<span>' + esc(q.text) + '</span>' +
+        '<button class="icon" aria-label="' + esc(l.ui.answers + ': ' + q.text) + '" data-tt="' + esc(l.ui.answers) + '" ' + click(() => openQuestion(q.id)) + '>' + ic('chevron', 14) + '</button></div>'; };
+      const off = allQ().filter(q => !isActive(q));
+      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.runs) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
+        '<div class="panel">' + checkCard() + '</div>' +
+        '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.assistants) + '</h2><span class="sub">' + esc(R.assistantsSub) + '</span></div></div>' + connectPanel() + '</div>' +
+        '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.listTitle(list.length)) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div></div>' +
+        '<div>' + list.map(row).join('') + off.map(row).join('') + '</div>' +
+        '<div class="panel-b" style="border-top:1px solid var(--line2)"><div class="form"><label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(l.newQPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(true); }) + '>' +
+        '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + CATS.map(c => '<option value="' + c.id + '"' + (state.newCat === c.id ? ' selected' : '') + '>' + esc(catLabel(c.id)) + '</option>').join('') + '</select>' +
+        '<button class="btn plain" ' + click(() => addQuestion(true)) + '>' + esc(l.save) + '</button></div>' +
+        (state.formMsg === 'short' ? '<span class="small warn">' + esc(l.msg.short) + '</span>' : '') + '</div></div></section>';
+    }
+
+    // ---------- Setup: three steps, shown as a popup until they're done ----------
+    const SETUP_KEY = 'geo-engine:setup-later';
+    // Ids a GitHub run asks (run_list.json), compared with the current selection.
     function runDiff() {
-      if (mode !== 'own' || !own) return { changed: false, added: 0, removed: 0, never: false };
+      if (mode !== 'own' || !own) return { changed: false, never: false };
       const now = new Set(runListNow().map(q => q.id));
-      if (!Array.isArray(own.runList)) return { changed: true, added: now.size, removed: 0, never: true };
+      if (!Array.isArray(own.runList)) return { changed: true, never: true };
       const saved = new Set(own.runList);
-      const added = [...now].filter(id => !saved.has(id)).length;
-      const removed = [...saved].filter(id => !now.has(id)).length;
-      return { changed: added + removed > 0, added, removed, never: false };
+      return { changed: [...now].some(id => !saved.has(id)) || [...saved].some(id => !now.has(id)), never: false };
     }
     function saveRunList() {
       const qs = runListNow();
       const file = {
-        _comment: 'Questions monitoring/run.py asks, saved from the GEO Engine app (Monitor > Run). Keep it in the target folder; delete it to go back to the settings.',
+        _comment: 'Questions monitoring/run.py asks, saved from the GEO Engine app. Keep it in the target folder; delete it to go back to the settings.',
         saved: new Date().toISOString().slice(0, 10),
         questions: qs.map(q => Object.assign({ id: q.id, text: q.text, categories: q.tags }, q.custom ? { custom: true } : {}))
       };
@@ -1309,87 +1489,13 @@
       render();
       toast(L().ui.setup.toastSaved);
     }
-    // ---------- Runs: start a run, load results, choose the questions ----------
-    // Plain language on purpose; the technical details live in the setup popup.
-    function viewRuns() {
-      const l = L(); const R = l.ui.runs;
-      const repo = MON && MON.github_repo ? 'https://github.com/' + MON.github_repo + '/actions/workflows/monitoring.yml' : '';
-      const list = runListNow();
-      const engines = MON ? MON.engines.filter(e => e.enabled) : [];
-      const perQ = engines.reduce((a, e) => a + e.usd_per_call, 0);
-      const fullCalls = list.length * (1 + (MON ? MON.variants : 0)) * (MON ? MON.runs_per_question : 1);
-      const money = v => v.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
-      // ~8 s per answer, measured on the first real run (60 answers, 2026-11-23).
-      const minutes = n => Math.max(2, Math.ceil(n * engines.length * 8 / 60));
-      const ext = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
-      const left = mode === 'own' ? setupLeft() : 0;
-
-      const notice = mode === 'demo'
-        ? '<div class="callout"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">' + esc(R.demoTitle) + '</span><span class="s13 muted">' + esc(R.demoText) + '</span></div>' +
-          '<button class="btn" ' + click(() => { if (own) switchToOwn(); else useTarget(); }) + '>' + esc(l.ui.setup.demoCta) + '</button></div>'
-        : left ? '<div class="banner"><span class="swatch" style="border-radius:50%;background:var(--amber)"></span><span class="item">' + esc(R.setupLeft(left)) + '</span>' +
-          '<button class="btn sm" style="margin-left:auto" ' + click(openSetup) + '>' + esc(R.setupGo) + '</button></div>' : '';
-
-      const card = (icon, title, text, cost) => '<div class="panel"><div class="panel-b" style="display:flex;flex-direction:column;gap:10px;height:100%">' +
-        '<div style="display:flex;align-items:center;gap:10px"><span class="nba-n" style="color:var(--accent)">' + ic(icon, 15) + '</span><h2 style="font-size:15px">' + esc(title) + '</h2></div>' +
-        '<p class="s14" style="margin:0;color:var(--fg2)">' + esc(text) + '</p><span class="s13 muted">' + esc(cost) + '</span>' +
-        (repo ? '<a class="btn" style="align-self:flex-start;margin-top:auto;text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + repo + '">' + esc(R.start) + ext + '</a>' : '') + '</div></div>';
-      const starts = '<div class="grid g-2">' +
-        card('check', R.testTitle, R.testText, R.cost(money(perQ), 2)) +
-        card('runs', R.fullTitle, R.fullText(list.length), R.cost(money(perQ * fullCalls), minutes(fullCalls))) + '</div>' +
-        '<p class="s13 muted" style="margin:-8px 0 0">' + esc(R.how) + '</p>';
-
-      const date = Object.keys(D.demo.results || {}).length ? dataDate() : '';
-      const results = '<div class="panel"><div class="panel-b" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">' +
-        '<div style="display:flex;flex-direction:column;gap:2px;flex:1 1 320px"><h2 style="font-size:15px">' + esc(R.resTitle) + '</h2>' +
-        '<span class="s14" style="color:' + (date ? 'var(--fg2)' : 'var(--muted)') + '">' + esc(date ? R.resLast(date) : R.resNone) + '</span><span class="s13 muted">' + esc(R.resText) + '</span></div>' +
-        (mode === 'own' ? '<label for="runs-file" class="btn' + (date ? ' plain' : '') + '" style="cursor:pointer">' + ic('upload', 15) + esc(R.resLoad) + '</label>' +
-          '<input id="runs-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' : '') +
-        (repo ? '<a class="btn plain" style="text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + repo + '">' + esc(R.resRuns) + ext + '</a>' : '') +
-        (state.monitoringMsg === 'error' ? '<span class="s13 warn" style="flex-basis:100%">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div></div>';
-
-      const diff = runDiff();
-      const off = allQ().filter(q => !isActive(q));
-      const row = q => { const on = isActive(q); return '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px;' + (on ? '' : 'opacity:.6') + '">' +
-        '<input type="checkbox"' + (on ? ' checked' : '') + ' aria-label="' + esc((on ? l.ariaOff : l.ariaOn) + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
-        '<div style="display:flex;flex-direction:column;min-width:0"><span>' + esc(q.text) + '</span><span class="small muted">' + esc((q.key ? l.keyQ + ' · ' : q.custom ? l.metaCustom + ' · ' : '') + catLabels(q.tags)) + '</span></div>' +
-        '<button class="icon" aria-label="' + esc(l.ui.answers + ': ' + q.text) + '" data-tt="' + esc(l.ui.answers) + '" ' + click(() => openQuestion(q.id)) + '>' + ic('chevron', 14) + '</button></div>'; };
-      const S = l.ui.setup;
-      const questions = '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.listTitle(list.length)) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div>' +
-        (mode === 'own' ? '<button class="btn sm' + (diff.changed ? '' : ' plain') + '" ' + click(saveRunList) + '>' + ic('download', 14) + esc(S.pickSave) + '</button>' : '') + '</div>' +
-        (mode === 'own' ? '<div class="banner" style="border-radius:0;border-width:0 0 1px">' +
-          '<span class="swatch" style="border-radius:50%;background:' + (diff.changed ? 'var(--amber)' : 'var(--good)') + '"></span><span class="item">' + esc(diff.never ? S.pickNever : diff.changed ? S.pickChanged : S.pickSaved) + '</span>' +
-          (diff.changed ? '<span class="s13 muted">' + esc(R.saveNote) + '</span><button class="link" ' + click(() => set({ setup: true, setupOpen: 'pick', fx: 'setup' })) + '>' + esc(R.saveWhy) + '</button>' : '') + '</div>' : '') +
-        '<div>' + list.map(row).join('') + off.map(row).join('') + '</div>' +
-        '<div class="panel-b" style="border-top:1px solid var(--line2)"><div class="form"><label for="newq" class="sr">' + esc(l.newQLabel) + '</label><input id="newq" type="text" maxlength="300" value="' + esc(state.newQ) + '" placeholder="' + esc(l.newQPh) + '" ' + attr('input', e => { state.newQ = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') addQuestion(true); }) + '>' +
-        '<label for="newcat" class="sr">' + esc(l.topicLabel) + '</label><select id="newcat" ' + attr('change', e => { state.newCat = e.target.value; }) + '>' + CATS.map(c => '<option value="' + c.id + '"' + (state.newCat === c.id ? ' selected' : '') + '>' + esc(catLabel(c.id)) + '</option>').join('') + '</select>' +
-        '<button class="btn plain" ' + click(() => addQuestion(true)) + '>' + esc(l.save) + '</button></div>' +
-        (state.formMsg === 'short' ? '<span class="small warn">' + esc(l.msg.short) + '</span>' : '') + '</div></div>';
-
-      return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.runs) + '</h1><p>' + esc(R.sub) + '</p></div></div>' +
-        notice + starts + results + questions + '</section>';
-    }
-
-    // ---------- Setup: one-time steps, shown as a popup until they're done ----------
-    // brand and results are detected; keys and the test run happen on GitHub,
-    // which the app can't see (no network), so the person ticks them off.
-    const SETUP_KEY = 'geo-engine:setup-later';
-    const setupMarks = () => (own && own.setupDone) || {};
-    function markSetup(id, v) { own.setupDone = Object.assign({}, setupMarks(), { [id]: v }); saveOwn(own); render(); }
     function setupSteps() {
-      const l = L(); const S = l.ui.setup;
-      const repo = MON && MON.github_repo ? 'https://github.com/' + MON.github_repo : '';
-      const hasResults = Object.keys(D.demo.results || {}).length > 0;
+      const S = L().ui.setup;
+      const checked = ((own && own.runs) || []).length > 0 || Object.keys(D.demo.results || {}).length > 0;
       return [
-        { id: 'brand', title: S.brand, text: S.brandText(BRAND.name || BRAND.short), done: true,
-          buttons: [{ label: S.brandLink, fn: () => { set({ setup: false }); initSetupDraft(); renderSetup(); } }] },
-        { id: 'keys', title: S.keys, text: S.keysText, done: !!setupMarks().keys || hasResults, manual: true,
-          links: [{ label: S.keyClaude, href: 'https://console.anthropic.com/settings/keys' }, { label: S.keyGemini, href: 'https://aistudio.google.com/apikey' }]
-            .concat(repo ? [{ label: S.keyGithub, href: repo + '/settings/secrets/actions' }] : []) },
-        { id: 'test', title: S.test, text: S.testText, done: !!setupMarks().test || hasResults, manual: true,
-          links: repo ? [{ label: S.testLink, href: repo + '/actions/workflows/monitoring.yml' }] : [] },
-        { id: 'results', title: S.results, text: S.resultsText, done: hasResults, file: true,
-          links: repo ? [{ label: S.resultsLink, href: repo + '/actions/workflows/monitoring.yml' }] : [] },
+        { id: 'brand', title: S.brand, done: true },
+        { id: 'keys', title: S.keys, done: connected().length > 0 },
+        { id: 'first', title: S.first, done: checked },
       ];
     }
     const setupLeft = () => setupSteps().filter(x => !x.done).length;
@@ -1399,39 +1505,33 @@
       const done = steps.filter(x => x.done).length;
       const openId = state.setupOpen || (steps.find(x => !x.done) || {}).id;
       const ext = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
-      const item = (x, n) => {
-        const open = x.id === openId;
-        const head = '<button class="setup-h" aria-expanded="' + open + '" ' + click(() => set({ setupOpen: open ? '-' : x.id })) + '>' +
-          '<span class="setup-n' + (x.done ? ' done' : '') + '">' + (x.done ? ic('check', 14) : n + 1) + '</span>' +
-          '<span class="t' + (x.done ? ' muted' : '') + '">' + esc(x.title) + '</span>' + ic(open ? 'up' : 'down', 14) + '</button>';
-        if (!open) return '<div class="setup-step">' + head + '</div>';
-        const links = (x.links || []).map((k, i) => '<a class="btn' + (i === (x.links.length - 1) && !x.done ? '' : ' plain') + ' sm" target="_blank" rel="noopener noreferrer" href="' + esc(k.href) + '">' + esc(k.label) + ext + '</a>').join('');
-        const btns = (x.buttons || []).map(b => '<button class="btn sm plain" ' + click(b.fn) + '>' + esc(b.label) + '</button>').join('');
-        const file = x.file ? '<label for="setup-file" class="btn sm' + (x.done ? ' plain' : '') + '" style="cursor:pointer">' + ic('upload', 14) + esc(S.choose) + '</label>' +
-          '<input id="setup-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' : '';
-        const mark = x.manual ? '<button class="btn sm ghost" ' + click(() => markSetup(x.id, !x.done)) + '>' + (x.done ? '' : ic('check', 14)) + esc(x.done ? S.undo : S.done) + '</button>' : '';
-        return '<div class="setup-step open">' + head + '<div class="setup-b"><p>' + esc(x.text) + '</p>' +
-          '<div class="setup-actions">' + links + btns + file + mark + '</div>' +
-          (x.file && state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div></div>';
+      const bodies = {
+        brand: () => '<p>' + esc(S.brandText(BRAND.name || BRAND.short)) + '</p><div class="setup-actions"><button class="btn sm plain" ' + click(() => { set({ setup: false }); initSetupDraft(); renderSetup(); }) + '>' + esc(S.brandLink) + '</button></div>',
+        keys: () => '<p>' + esc(S.keysText) + '</p><div class="setup-keys">' + connectPanel() + '</div>',
+        first: () => '<p>' + esc(S.firstText) + '</p><div class="setup-check">' + checkCard() + '</div>',
       };
-      // Optional extras: which questions are checked, and the schedule.
-      const diff = runDiff();
-      const pickOpen = openId === 'pick';
-      const pick = '<div class="setup-step' + (pickOpen ? ' open' : '') + '"><button class="setup-h" aria-expanded="' + pickOpen + '" ' + click(() => set({ setupOpen: pickOpen ? '-' : 'pick' })) + '>' +
-        '<span class="setup-n opt">' + ic('questions', 13) + '</span><span class="t">' + esc(S.pick) + '</span>' + ic(pickOpen ? 'up' : 'down', 14) + '</button>' +
-        (pickOpen ? '<div class="setup-b"><p>' + esc(S.pickText) + '</p>' +
-          '<span class="s13" style="color:' + (diff.changed ? 'var(--amber)' : 'var(--good)') + '">' + esc(diff.never ? S.pickNever : diff.changed ? S.pickChanged : S.pickSaved) + '</span>' +
-          '<div class="setup-actions"><button class="btn sm plain" ' + click(() => set({ setup: false, tab: 'questions', scope: 'all' })) + '>' + esc(S.pickGo) + '</button>' +
-          '<button class="btn sm' + (diff.changed ? '' : ' plain') + '" ' + click(saveRunList) + '>' + ic('download', 14) + esc(S.pickSave) + '</button></div></div>' : '') + '</div>';
+      const head = (id, n, title, isDone, opt) => {
+        const open = id === openId;
+        return '<button class="setup-h" aria-expanded="' + open + '" ' + click(() => set({ setupOpen: open ? '-' : id })) + '>' +
+          '<span class="setup-n' + (isDone ? ' done' : '') + (opt ? ' opt' : '') + '">' + (isDone ? ic('check', 14) : opt ? ic('impact', 13) : n) + '</span>' +
+          '<span class="t' + (isDone ? ' muted' : '') + '">' + esc(title) + '</span>' + ic(open ? 'up' : 'down', 14) + '</button>';
+      };
+      const step = (x, n) => '<div class="setup-step' + (x.id === openId ? ' open' : '') + '">' + head(x.id, n + 1, x.title, x.done) +
+        (x.id === openId ? '<div class="setup-b">' + bodies[x.id]() + '</div>' : '') + '</div>';
+      const repo = MON && MON.github_repo ? 'https://github.com/' + MON.github_repo + '/actions/workflows/monitoring.yml' : '';
       const autoOpen = openId === 'auto';
-      const auto = '<div class="setup-step' + (autoOpen ? ' open' : '') + '"><button class="setup-h" aria-expanded="' + autoOpen + '" ' + click(() => set({ setupOpen: autoOpen ? '-' : 'auto' })) + '>' +
-        '<span class="setup-n opt">' + ic('impact', 13) + '</span><span class="t">' + esc(S.auto) + '</span>' + ic(autoOpen ? 'up' : 'down', 14) + '</button>' +
-        (autoOpen ? '<div class="setup-b"><p>' + esc(S.autoText) + '</p>' +
-          '<details><summary class="s13 muted" style="cursor:pointer">' + esc(S.dev) + '</summary><code class="mono s13 setup-code">python monitoring/run.py\npython scripts/export_monitoring.py</code></details></div>' : '') + '</div>';
+      const auto = '<div class="setup-step' + (autoOpen ? ' open' : '') + '">' + head('auto', 0, S.auto, false, true) +
+        (autoOpen ? '<div class="setup-b"><p>' + esc(S.autoText) + '</p><div class="setup-actions">' +
+          (repo ? '<a class="btn sm plain" target="_blank" rel="noopener noreferrer" href="' + repo + '">' + esc(S.autoRuns) + ext + '</a>' : '') +
+          '<label for="setup-file" class="btn sm plain" style="cursor:pointer">' + ic('upload', 14) + esc(S.autoLoad) + '</label>' +
+          '<input id="setup-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
+          '<button class="btn sm plain" ' + click(saveRunList) + '>' + ic('download', 14) + esc(S.autoSave) + '</button></div>' +
+          (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') +
+          '<details><summary class="s13 muted" style="cursor:pointer">' + esc(S.dev) + '</summary><p class="s13 muted" style="margin-top:6px">' + esc(S.devText) + '</p></details></div>' : '') + '</div>';
       return '<div class="setup-prog"><span class="s13 muted">' + esc(S.progress(done, steps.length)) + '</span><div class="bar-t" style="flex-grow:1"><div style="width:' + Math.round(done / steps.length * 100) + '%;background:var(--good)"></div></div></div>' +
-        (done === steps.length ? '<p class="s14 good" style="margin:0;padding:4px 20px 12px">' + esc(S.allDone) + '</p>' : '') +
-        '<div class="setup-list">' + steps.map(item).join('') + '</div>' +
-        '<div class="nav-group" style="padding:14px 20px 2px">' + esc(S.optional) + '</div><div class="setup-list">' + pick + auto + '</div>';
+        (done === steps.length ? '<p class="s14 good" style="margin:0;padding:0 20px 12px">' + esc(S.allDone) + '</p>' : '') +
+        '<div class="setup-list">' + steps.map(step).join('') + '</div>' +
+        '<div class="nav-group" style="padding:14px 20px 2px">' + esc(S.optional) + '</div><div class="setup-list">' + auto + '</div>';
     }
     function setupHtml(enter) {
       const S = L().ui.setup;
@@ -1661,7 +1761,8 @@
       const kpis = ENGINES.map(e => { const h = keyQs.filter(q => isHit(status(q, e.id).k)).length; totalHits += h; return { name: e.name, pct: pct(h, keyQs.length) }; });
       const activeQs = allQ().filter(isActive);
       const ctx = {
-        kpis, nowPct: pct(totalHits, keyQs.length * ENGINES.length),
+        // Only engines that answered count (one never asked isn't "absent").
+        kpis, nowPct: pct(totalHits, keyQs.length * Math.max(1, ENGINES.filter(e => keyQs.some(q => q.r && q.r[e.id][0] !== 'notrun')).length)),
         gapQs: activeQs.filter(isGap), fullGapCount: activeQs.filter(q => absentCount(q) === 3).length,
         ranked: CATS.map(c => ({ c, st: catStats(c.id) })).sort((a, b) => b.st.weight - a.st.weight)
       };
