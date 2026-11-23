@@ -84,8 +84,10 @@
     const pts = scalePoints(vals, iw, ih, yMax, vals.length === 1 ? 0 : 6);
     const X = i => r1(m.l + pts[i][0]);
     const Y = v => r1(m.t + ih - (Math.max(0, Math.min(yMax, v)) / yMax) * ih);
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(yMax * f));
-    let s = '<svg class="lc" viewBox="0 0 ' + o.w + ' ' + o.h + '" preserveAspectRatio="none" role="img" aria-label="' + esc(data.alt || '') + '">';
+    const step = yMax <= 20 ? 5 : yMax <= 50 ? 10 : 20;
+    const ticks = [];
+    for (let t = 0; t <= yMax; t += step) ticks.push(t);
+    let s = '<svg class="lc" viewBox="0 0 ' + o.w + ' ' + o.h + '" role="img" aria-label="' + esc(data.alt || '') + '">';
     ticks.forEach(t => {
       s += '<line x1="' + m.l + '" x2="' + (o.w - m.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" class="' + (t === 0 ? 'axis' : 'grid') + '"/>' +
         '<text x="' + (m.l - 8) + '" y="' + Y(t) + '" dy=".32em" text-anchor="end" class="tick">' + t + o.unit + '</text>';
