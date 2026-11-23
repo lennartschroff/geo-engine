@@ -764,3 +764,40 @@ mark.m-comp { background: color-mix(in srgb, var(--viz-2) 22%, transparent); }
 .spinner { width: 18px; height: 18px; border: 2.5px solid var(--track); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .key-in { flex-direction: column; } }
+
+/* 15. Onboarding guide ------------------------------------------------------- */
+.ob { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+.ob-top { display: flex; align-items: center; gap: 10px; }
+.ob-top b { font-size: 15px; }
+.ob-steps { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 13px; }
+.ob-steps li { display: flex; align-items: center; gap: 6px; }
+.ob-steps li span { display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--border-strong); border-radius: 50%; font-size: 11px; font-weight: 600; }
+.ob-steps li.on { color: var(--fg); font-weight: 600; }
+.ob-steps li.on span { border-color: var(--accent); background: var(--accent); color: #fff; }
+.ob-steps li.done span { border-color: var(--good); background: var(--good); color: #fff; }
+.ob-hero { display: flex; flex-direction: column; gap: 16px; padding: 48px 0 0; }
+.ob-hero h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.03em; }
+.ob-hero p { margin: 0; color: var(--fg2); font-size: 16px; line-height: 1.6; }
+.ob-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.ob-card { display: flex; flex-direction: column; gap: 16px; padding: 28px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-md); }
+.ob-card h1 { font-size: 22px; }
+.ob-card > p { margin: 0; }
+.ob-form { display: flex; flex-direction: column; gap: 8px; }
+.ob-form label { margin-top: 8px; font-size: 14px; }
+.ob-form input { min-height: 44px; font-size: 15px; }
+.ob-err { margin: 0; color: var(--warn); font-size: 14px; }
+.ob-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+.ob-nav .btn.ghost:first-child { margin-right: auto; }
+.ob-dev { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.ob-key { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.ob-key.on { background: color-mix(in srgb, var(--good) 6%, var(--surface)); }
+.ob-howto { margin: 0; padding-left: 20px; color: var(--fg2); font-size: 14px; line-height: 1.7; }
+.ob-wait { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px; border-radius: 12px; background: var(--surface-2); }
+.ob-wait div { display: flex; flex-direction: column; gap: 2px; }
+.ob-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ob-q { display: flex; align-items: flex-start; gap: 12px; padding: 11px 14px; border-top: 1px solid var(--line2); font-size: 14px; font-weight: 400; cursor: pointer; }
+.ob-q:first-child { border-top: 0; }
+.ob-q:hover { background: var(--hover); }
+.ob-q input { margin-top: 2px; }
+.ob-comps { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line2); }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 6px; }

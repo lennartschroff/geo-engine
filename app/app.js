@@ -221,123 +221,208 @@
     });
   }
 
-  // ---------- Welcome screen (first visit only, always reachable again via the header toggle) ----------
-  function renderWelcome() {
-    handlers = [];
-    root.innerHTML =
-      '<div style="max-width:680px;margin:64px auto;padding:0 32px;display:flex;flex-direction:column;gap:32px">' +
-      '<div class="head" style="gap:10px">' +
-      '<span class="s13 muted" style="letter-spacing:.04em">GEO ENGINE</span>' +
-      '<h1 style="font-size:28px">See how AI assistants talk about a brand</h1>' +
-      '<p>Track mentions in ChatGPT, Claude and Gemini, find the gaps, and draft content that closes them.</p></div>' +
-      '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
-      '<div class="card" style="flex:1 1 280px;gap:16px">' +
-      '<div style="display:flex;align-items:center;gap:10px;color:' + C.accent + '">' + iconEye(22) + '<h2>See a live example</h2></div>' +
-      '<p class="s14 muted" style="margin:0">Contoso AI, a fictional AI consultancy — fully interactive demo data.</p>' +
-      '<button class="btn" style="align-self:flex-start" ' + click(chooseDemo) + '>Open the demo →</button></div>' +
-      '<div class="card" style="flex:1 1 280px;gap:16px">' +
-      '<div style="display:flex;align-items:center;gap:10px;color:' + C.fg + '">' + iconSliders(22) + '<h2>Set up your own brand</h2></div>' +
-      '<p class="s14 muted" style="margin:0">Takes about two minutes. Nothing leaves your browser.</p>' +
-      '<button class="btn outline" style="align-self:flex-start" ' + click(chooseOwn) + '>Get started →</button></div></div>' +
-      '<span class="small muted">You can switch between the two at any time from the menu.</span></div>';
+  // ---------- Engines outside the main app (onboarding needs them too) ----------
+  const ENGINE_LIST = [{ id: 'claude', name: 'Claude' }, { id: 'gpt', name: 'ChatGPT' }, { id: 'gemini', name: 'Gemini' }];
+  const KEY_LINKS = { claude: 'https://console.anthropic.com/settings/keys', gemini: 'https://aistudio.google.com/apikey', gpt: 'https://platform.openai.com/api-keys' };
+  const DEFAULT_CFG = { claude: { model: 'claude-sonnet-5', max_searches: 1 }, gemini: { model: 'gemini-3.5-flash-lite', grounding: false }, gpt: { model: 'gpt-5-mini', reasoning_effort: 'low' } };
+  const MON_INFO = (window.GEO_DATA && window.GEO_DATA.monitoring) || null;
+  const engineCfgOf = id => Object.assign({}, DEFAULT_CFG[id], (MON_INFO && MON_INFO.engines.find(e => e.id === id)) || {});
+  const uiLang = () => { try { return window.localStorage.getItem('geo-engine:lang') === 'de' ? 'de' : 'en'; } catch (e) { return 'en'; } };
+  // Prove a key works with one tiny request before storing it.
+  async function testKey(id, key) {
+    try {
+      await MONITOR.callEngine(id, Object.assign({}, engineCfgOf(id), { max_searches: 0, grounding: false }), 'Reply with the word OK.', key, { sleep: () => Promise.resolve() });
+      return 'ok';
+    } catch (err) {
+      if (err.status === 401 || err.status === 403 || err.status === 400) return 'bad';
+      if (err.status === 429 || err.status === 402) return 'credit';
+      return String(err.message || err).slice(0, 160);
+    }
   }
-  function chooseDemo() { mode = 'demo'; saveMode('demo'); boot(); }
-  function chooseOwn() { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); }
+  // Developer shortcuts (project target, results file) only show when the app
+  // runs locally, never on the public page.
+  const IS_LOCAL = location.protocol === 'file:' || ['localhost', '127.0.0.1', ''].indexOf(location.hostname) !== -1;
+  const extIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
-  // ---------- Setup wizard (first-time setup, and reopened later to edit) ----------
-  let setupDraft = null; // ephemeral — not persisted; a half-filled form doesn't survive a refresh in v1
-  function initSetupDraft() {
-    const b = (own && own.brand) || {};
-    const cats = (own && own.categories) || [];
-    setupDraft = {
-      name: b.name || '', domain: b.domain || '', aliases: (b.aliases || []).join(', '),
-      topics: cats.length ? cats.map(c => ({ label: c.label_en, keywords: c.keywords.join(', ') })) : [{ label: '', keywords: '' }, { label: '', keywords: '' }],
-      error: '', topicsMsg: ''
+  // ---------- Onboarding: welcome, company, connect, questions, first check ----------
+  let OB = null;          // guide state while it is open
+  let AUTO_CHECK = false; // start a check right after the guide hands over to the app
+  function startOnboarding(edit) {
+    const b = edit && own ? own.brand : {};
+    const about = (edit && own && own.about) || {};
+    OB = {
+      step: edit ? 1 : 0, edit: !!edit, name: b.name || '', website: about.website || b.domain || '', offer: about.offer || '', where: about.where || b.city || '',
+      err: '', sugg: null, picked: [], comps: [], newQ: '', newComp: '', busy: false, token: 0, note: '', keyDraft: {}, keyMsg: {}, more: false,
     };
+    renderOnboarding();
   }
-  // A plain-language numbered step, not a code block -- the exact command
-  // (for whoever on the team is technical enough to run it) goes behind an
-  // optional <details> disclosure passed in as `extra`, never shown by default.
-  function stepRow(n, text, extra) {
-    return '<div style="display:flex;gap:12px;align-items:flex-start">' +
-      '<span style="flex-shrink:0;width:22px;height:22px;border-radius:11px;background:var(--soft);color:' + C.fg + ';font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">' + n + '</span>' +
-      '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:1px"><span class="s14">' + esc(text) + '</span>' + (extra || '') + '</div>' +
-      '</div>';
+  const obL = () => window.makeStrings(OB && OB.name ? OB.name : '')[uiLang()];
+  const connectedIds = () => ENGINE_LIST.filter(e => KEYS[e.id]).map(e => e.id);
+  function obGo(step) {
+    const T = obL().ui.ob;
+    if (step >= 2 && OB.step === 1) {
+      if (!OB.name.trim()) { OB.err = T.errName; return renderOnboarding(); }
+      if (!OB.offer.trim()) { OB.err = T.errOffer; return renderOnboarding(); }
+    }
+    if (step === 4 && OB.step === 3 && !OB.picked.some(Boolean)) { OB.err = T.needOne; return renderOnboarding(); }
+    OB.err = '';
+    OB.step = step;
+    if (step === 3 && !OB.sugg) obSuggest();
+    renderOnboarding();
+    window.scrollTo(0, 0);
   }
-  function renderSetup() {
-    if (!setupDraft) initSetupDraft();
+  const company = () => ({ name: OB.name.trim(), website: OB.website.trim(), offer: OB.offer.trim(), where: OB.where.trim() });
+  function obUseSimple(note) {
+    OB.token++;
+    OB.busy = false;
+    OB.sugg = { topics: [{ label: company().offer, keywords: [] }], questions: MONITOR.templateQuestions(company(), uiLang()), competitors: [] };
+    OB.picked = OB.sugg.questions.map(() => true);
+    OB.note = note;
+    renderOnboarding();
+  }
+  // Ask the first connected assistant for tailored questions and competitors.
+  async function obSuggest() {
+    const T = obL().ui.ob;
+    const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
+    if (!id) return obUseSimple(T.simpleNote);
+    const token = ++OB.token;
+    OB.busy = id; OB.note = '';
+    renderOnboarding();
+    let sugg = null;
+    try {
+      const r = await MONITOR.callEngine(id, Object.assign({}, engineCfgOf(id), { max_searches: 0, grounding: false }), MONITOR.suggestPrompt(company(), uiLang()), KEYS[id]);
+      sugg = MONITOR.parseSuggestions(r.answer_text);
+    } catch (e) { /* falls back to simple questions below */ }
+    if (!OB || token !== OB.token) return; // skipped or left meanwhile
+    if (!sugg) return obUseSimple(T.aiFailed);
+    OB.busy = false;
+    OB.sugg = sugg;
+    OB.picked = sugg.questions.map(() => true);
+    OB.comps = sugg.competitors.slice();
+    renderOnboarding();
+  }
+  async function obConnect(id) {
+    const key = String(OB.keyDraft[id] || '').trim();
+    if (!key) return;
+    OB.keyMsg[id] = 'checking'; renderOnboarding();
+    const msg = await testKey(id, key);
+    if (msg === 'ok' || msg === 'credit') { KEYS[id] = key; saveKeys(KEYS); OB.keyDraft[id] = ''; }
+    OB.keyMsg[id] = msg;
+    renderOnboarding();
+  }
+  // Turn the guide's answers into the own-brand data the app works with.
+  function obFinish(check) {
+    const c = company();
+    const used = {};
+    const topics = (OB.sugg && OB.sugg.topics.length ? OB.sugg.topics : [{ label: c.offer, keywords: [] }]);
+    const cats = topics.map(t => {
+      let id = CORE.slugify(t.label) || 'topic'; let n = 2;
+      while (used[id]) id = (CORE.slugify(t.label) || 'topic') + '-' + n++;
+      used[id] = true;
+      return { id, label_en: t.label, label_de: t.label, keywords: t.keywords.length ? t.keywords : [t.label.toLowerCase()] };
+    });
+    const catFor = label => (cats.find(x => x.label_en === label) || cats[0]).id;
+    const questions = OB.sugg.questions.filter((q, i) => OB.picked[i]).map((q, i) => ({ id: 'q' + (i + 1), nr: i + 1, text: q.text, categories: [catFor(q.topic)], key: true, schedule: 'weekly' }));
+    const domain = c.website.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').toLowerCase();
+    const brand = { name: c.name, short: c.name, domain, city: c.where, aliases: [c.name] };
+    own = emptyOwnData(brand, cats, questions);
+    own.competitors = OB.comps.filter(Boolean);
+    own.about = { website: c.website, offer: c.offer, where: c.where };
+    own.runList = questions.map(q => q.id);
+    saveOwn(own);
+    try { window.localStorage.removeItem('geo-engine:v1:own'); window.sessionStorage.setItem('geo-engine:setup-later', '1'); } catch (e) { /* storage unavailable */ }
+    OB = null;
+    mode = 'own'; saveMode('own');
+    AUTO_CHECK = !!check && connectedIds().length > 0;
+    boot({ tab: AUTO_CHECK ? 'runs' : 'overview' });
+  }
+  function obSetLang(lang) { try { window.localStorage.setItem('geo-engine:lang', lang); } catch (e) { /* storage unavailable */ } renderOnboarding(); }
+
+  function renderOnboarding() {
     handlers = [];
-    const d = setupDraft;
-    const topicRows = d.topics.map((t, i) =>
-      '<div style="display:flex;gap:8px;align-items:center">' +
-      '<input type="text" style="flex:1 1 160px" aria-label="Topic ' + (i + 1) + ' name" value="' + esc(t.label) + '" placeholder="e.g. SEO services" ' + attr('input', e => { d.topics[i].label = e.target.value; }) + '>' +
-      '<input type="text" style="flex:2 1 220px" aria-label="Topic ' + (i + 1) + ' keywords" value="' + esc(t.keywords) + '" placeholder="keywords, comma, separated" ' + attr('input', e => { d.topics[i].keywords = e.target.value; }) + '>' +
-      '<button class="icon" aria-label="Remove topic ' + (i + 1) + '" ' + click(() => { d.topics.splice(i, 1); renderSetup(); }) + '>×</button></div>'
-    ).join('');
-    root.innerHTML =
-      '<div style="max-width:640px;margin:56px auto;padding:0 32px;display:flex;flex-direction:column;gap:24px">' +
-      '<button class="link" style="align-self:flex-start" ' + click(() => { mode = 'demo'; saveMode('demo'); setupDraft = null; boot(); }) + '>← Back to the demo</button>' +
-      '<div class="head"><h1>Set up your brand</h1><p>Runs entirely in your browser — nothing is sent anywhere, no API key needed for this part.</p></div>' +
-      (MON && MON.target ? '<div class="card" style="gap:10px"><span class="s14" style="font-weight:500">Use the monitoring target ' + esc(MON.target.brand.name) + '</span>' +
-        '<span class="s13 muted">Brand, topics and questions from ' + esc(MON.target.path) + ', the folder the real monitoring runs against.</span>' +
-        '<button class="btn sm" style="align-self:flex-start" ' + click(() => { setupDraft = null; useTarget(); }) + '>Use ' + esc(MON.target.brand.short) + ' →</button></div>' : '') +
-      '<div class="card" style="gap:10px"><span class="s14" style="font-weight:500">Already have monitoring results?</span>' +
-      '<span class="s13 muted">Load monitoring_export.json (from a monitoring run or the scheduled GitHub Action). It sets up the brand, topics, questions and results in one step.</span>' +
-      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label for="su-export-file" class="btn sm plain" style="cursor:pointer">Load export…</label>' +
-      '<input id="su-export-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadExportSetup) + '></div></div>' +
-      '<div class="card">' +
-      '<label for="su-name">Company name</label><input id="su-name" type="text" value="' + esc(d.name) + '" placeholder="e.g. Lighthouse Marketing" ' + attr('input', e => { d.name = e.target.value; }) + '>' +
-      '<label for="su-domain">Website domain</label><input id="su-domain" type="text" value="' + esc(d.domain) + '" placeholder="e.g. lighthouse-marketing.com" ' + attr('input', e => { d.domain = e.target.value; }) + '>' +
-      '<label for="su-aliases">Also known as (comma-separated, optional)</label><input id="su-aliases" type="text" value="' + esc(d.aliases) + '" placeholder="e.g. Lighthouse, Lighthouse Marketing Inc." ' + attr('input', e => { d.aliases = e.target.value; }) + '>' +
-      '</div>' +
-      '<div class="card">' +
-      '<div class="listhead"><h2>Topics you want to track</h2></div>' +
-      '<p class="s13 muted">What does your business cover? Each topic becomes a set of starter questions you can refine later.</p>' +
-      topicRows +
-      '<button class="btn sm plain" style="align-self:flex-start" ' + click(() => { d.topics.push({ label: '', keywords: '' }); renderSetup(); }) + '>+ Add topic</button>' +
-      '</div>' +
-      '<div class="card">' +
-      '<div class="listhead" style="min-height:0"><h2>Already have a website?</h2></div>' +
-      stepRow(1, 'Scan it on your own computer — free, takes under a minute, nothing is sent to us.',
-        '<details style="margin-top:2px"><summary class="s13" style="color:' + C.accent + ';cursor:pointer">Show me how (for a developer on your team)</summary>' +
-        '<code class="mono s13" style="display:block;white-space:pre-wrap;background:var(--bg);border:1px solid var(--input);border-radius:6px;padding:10px 12px;margin-top:8px">python scripts/audit_crawl.py --base https://yoursite.com\npython scripts/suggest_topics.py</code></details>') +
-      stepRow(2, 'Upload the file it creates.',
-        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">' +
-        '<label for="su-topics-file" class="btn sm plain" style="cursor:pointer">Choose file…</label>' +
-        '<input id="su-topics-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadTopicsFile) + '>' +
-        (d.topicsMsg ? '<span class="s13" style="color:' + C.accent + '">' + esc(d.topicsMsg) + '</span>' : '') + '</div>') +
-      '</div>' +
-      (d.error ? '<span class="s13 warn">' + esc(d.error) + '</span>' : '') +
-      '<button class="btn" style="align-self:flex-start" ' + click(submitSetup) + '>Generate my starter kit →</button>' +
-      '</div>';
-  }
-  // Reads the JSON scripts/suggest_topics.py produces -- pure client-side
-  // file read (FileReader), no network call, CSP-safe. Keeps any topic row
-  // you've already started filling in; appends the suggestions after it.
-  function loadTopicsFile(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        if (!Array.isArray(parsed) || !parsed.length) throw new Error('empty');
-        const rows = parsed
-          .filter(t => t && t.label)
-          .map(t => ({ label: String(t.label), keywords: Array.isArray(t.keywords) ? t.keywords.join(', ') : String(t.keywords || '') }));
-        if (!rows.length) throw new Error('no usable rows');
-        const kept = setupDraft.topics.filter(t => t.label.trim() || t.keywords.trim());
-        setupDraft.topics = kept.concat(rows);
-        setupDraft.error = '';
-        setupDraft.topicsMsg = 'Loaded ' + rows.length + ' topic' + (rows.length === 1 ? '' : 's') + ' — review them below before generating your starter kit.';
-      } catch (err) {
-        setupDraft.topicsMsg = '';
-        setupDraft.error = 'Could not read that file — expected the JSON scripts/suggest_topics.py produces.';
+    onKey = e => { if (e.key === 'Escape' && OB && OB.step > 0 && own && OB.edit) { OB = null; boot(); } };
+    const lang = uiLang();
+    document.documentElement.lang = lang;
+    const L = obL(); const T = L.ui.ob; const R = L.ui.runs;
+    const focused = document.activeElement && document.activeElement.id;
+    const field = (id, label, key, ph, hint) => '<label for="' + id + '">' + esc(label) + '</label>' +
+      '<input id="' + id + '" type="text" maxlength="120" value="' + esc(OB[key]) + '" placeholder="' + esc(ph) + '" ' + attr('input', e => { OB[key] = e.target.value; }) + ' ' + attr('keydown', e => { if (e.key === 'Enter') obGo(OB.step + 1); }) + '>' +
+      (hint ? '<span class="small muted" style="margin-top:-4px">' + esc(hint) + '</span>' : '');
+    const top = '<div class="ob-top"><span class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M9 16a7 7 0 1 0 7-7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="16" cy="16" r="2.8" fill="currentColor"/></svg></span><b>GEO Engine</b>' +
+      '<div class="lang" role="group" aria-label="Language" style="margin-left:auto"><button class="' + (lang === 'en' ? 'on' : '') + '" ' + click(() => obSetLang('en')) + '>EN</button><button class="' + (lang === 'de' ? 'on' : '') + '" ' + click(() => obSetLang('de')) + '>DE</button></div></div>';
+    const stepper = OB.step > 0 ? '<ol class="ob-steps">' + T.steps.map((t, i) => '<li class="' + (i + 1 < OB.step ? 'done' : i + 1 === OB.step ? 'on' : '') + '"><span>' + (i + 1 < OB.step ? ic('check', 13) : i + 1) + '</span>' + esc(t) + '</li>').join('') + '</ol>' : '';
+    const err = OB.err ? '<p class="ob-err" role="alert">' + esc(OB.err) + '</p>' : '';
+    const nav = (nextLabel, nextFn, extra) => '<div class="ob-nav">' + (OB.step > 1 || (OB.step === 1 && !OB.edit) ? '<button class="btn ghost" ' + click(() => obGo(OB.step - 1)) + '>' + esc(T.back) + '</button>' : (OB.edit ? '<button class="btn ghost" ' + click(() => { OB = null; boot(); }) + '>' + esc(T.back) + '</button>' : '')) +
+      (extra || '') + '<button class="btn big" ' + click(nextFn) + '>' + esc(nextLabel) + ic('arrow', 16) + '</button></div>';
+    let body = '';
+    if (OB.step === 0) {
+      body = '<div class="ob-hero"><h1>' + esc(T.welcomeTitle) + '</h1><p>' + esc(T.welcomeText) + '</p>' +
+        '<div class="ob-hero-actions"><button class="btn big" ' + click(() => obGo(1)) + '>' + esc(T.start) + ic('arrow', 16) + '</button>' +
+        '<button class="btn plain big" ' + click(() => { OB = null; mode = 'demo'; saveMode('demo'); boot(); }) + '>' + esc(T.example) + '</button></div>' +
+        '<span class="small muted">' + esc(T.time) + '</span></div>';
+    } else if (OB.step === 1) {
+      body = '<div class="ob-card"><h1>' + esc(T.s1Title) + '</h1><p class="muted">' + esc(T.s1Text) + '</p>' +
+        '<div class="ob-form">' + field('ob-name', T.name, 'name', T.namePh) + field('ob-web', T.website, 'website', T.websitePh) +
+        field('ob-offer', T.offer, 'offer', T.offerPh, T.offerHint) + field('ob-where', T.where, 'where', T.wherePh) + '</div>' + err +
+        (OB.edit ? '<p class="small" style="color:var(--amber);margin:0">' + esc(T.editNote) + '</p>' : '') +
+        nav(T.next, () => obGo(2)) +
+        (IS_LOCAL && !OB.edit ? '<div class="ob-dev">' + (MON_INFO && MON_INFO.target ? '<button class="link s13" ' + click(() => { OB = null; useTarget(); }) + '>' + esc(T.devTarget) + '</button>' : '') +
+          '<label for="ob-export" class="link s13" style="cursor:pointer">' + esc(T.devExport) + '</label><input id="ob-export" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadExportSetup) + '></div>' : '') + '</div>';
+    } else if (OB.step === 2) {
+      const con = connectedIds();
+      const keyBox = id => {
+        const e = ENGINE_LIST.find(x => x.id === id); const on = !!KEYS[id]; const msg = OB.keyMsg[id] || '';
+        const steps = T[id === 'gemini' ? 'gem' : id === 'claude' ? 'cla' : 'gpt'];
+        return '<div class="ob-key' + (on ? ' on' : '') + '"><div class="key-top"><span class="swatch" style="background:var(--viz-' + (ENGINE_LIST.indexOf(e) + 1) + ')"></span><b>' + esc(e.name) + '</b><span class="small muted">' + esc(R.price[id]) + '</span>' +
+          (on ? '<span class="chip cited" style="margin-left:auto">' + ic('check', 13) + esc(R.connected) + '</span>' : '') + '</div>' +
+          (on ? '' : '<ol class="ob-howto">' + steps.map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>' +
+            '<a class="btn plain sm" style="align-self:flex-start;text-decoration:none" target="_blank" rel="noopener noreferrer" href="' + KEY_LINKS[id] + '">' + esc(T.open[id]) + extIcon + '</a>' +
+            '<div class="key-in"><label for="ob-key-' + id + '" class="sr">' + esc(R.paste(e.name)) + '</label><input id="ob-key-' + id + '" type="password" autocomplete="off" spellcheck="false" placeholder="' + esc(R.paste(e.name)) + '" value="' + esc(OB.keyDraft[id] || '') + '" ' +
+            attr('input', ev => { OB.keyDraft[id] = ev.target.value; }) + ' ' + attr('keydown', ev => { if (ev.key === 'Enter') obConnect(id); }) + '>' +
+            '<button class="btn" ' + (msg === 'checking' ? 'disabled ' : '') + click(() => obConnect(id)) + '>' + esc(msg === 'checking' ? R.checking : R.connect) + '</button></div>') +
+          (msg === 'bad' ? '<span class="s13 warn">' + esc(R.badKey) + '</span>' : msg === 'credit' ? '<span class="s13" style="color:var(--amber)">' + esc(R.noCredit) + '</span>' : msg && msg !== 'ok' && msg !== 'checking' ? '<span class="s13 warn">' + esc(msg) + '</span>' : '') + '</div>';
+      };
+      body = '<div class="ob-card"><h1>' + esc(T.s2Title) + '</h1><p class="muted">' + esc(T.s2Text) + '</p>' + keyBox('gemini') +
+        (OB.more || KEYS.claude || KEYS.gpt ? keyBox('claude') + keyBox('gpt') : '<button class="link s13" style="align-self:flex-start" ' + click(() => { OB.more = true; renderOnboarding(); }) + '>+ ' + esc(T.more) + '</button>') +
+        '<p class="small muted" style="margin:0;display:flex;gap:6px;align-items:center">' + ic('check', 13) + esc(T.keySafe) + '</p>' + err +
+        nav(con.length ? T.next : T.skip, () => obGo(3)) + '</div>';
+    } else if (OB.step === 3) {
+      let inner;
+      if (OB.busy) {
+        inner = '<div class="ob-wait"><span class="spinner" aria-hidden="true"></span><div><b>' + esc(T.thinking(ENGINE_LIST.find(e => e.id === OB.busy).name)) + '</b><span class="small muted">' + esc(T.thinkingSlow) + '</span></div>' +
+          '<button class="btn sm plain" style="margin-left:auto" ' + click(() => obUseSimple('')) + '>' + esc(T.useSimple) + '</button></div>';
+      } else {
+        const qs = OB.sugg.questions;
+        inner = (OB.note ? '<p class="small" style="color:var(--amber);margin:0">' + esc(OB.note) + '</p>' : '') +
+          '<div class="ob-list">' + qs.map((q, i) => '<label class="ob-q"><input type="checkbox"' + (OB.picked[i] ? ' checked' : '') + ' ' + attr('change', () => { OB.picked[i] = !OB.picked[i]; OB.err = ''; renderOnboarding(); }) + '><span>' + esc(q.text) + '</span></label>').join('') + '</div>' +
+          '<div class="key-in"><label for="ob-newq" class="sr">' + esc(T.addPh) + '</label><input id="ob-newq" type="text" maxlength="300" placeholder="' + esc(T.addPh) + '" value="' + esc(OB.newQ) + '" ' + attr('input', e => { OB.newQ = e.target.value; }) + ' ' +
+          attr('keydown', e => { if (e.key === 'Enter') addQ(); }) + '><button class="btn plain" ' + click(addQ) + '>' + esc(T.add) + '</button></div>' +
+          '<span class="small muted">' + esc(T.picked(OB.picked.filter(Boolean).length)) + '</span>' +
+          '<div class="ob-comps"><b class="s14">' + esc(T.comps) + '</b><span class="small muted">' + esc(T.compsText) + '</span><div class="ob-chips">' +
+          OB.comps.map((c, i) => '<span class="pill on" style="display:inline-flex;align-items:center;gap:4px">' + esc(c) + '<button class="icon" style="width:18px;height:18px" aria-label="Remove ' + esc(c) + '" ' + click(() => { OB.comps.splice(i, 1); renderOnboarding(); }) + '>' + ic('x', 11) + '</button></span>').join('') + '</div>' +
+          '<div class="key-in"><label for="ob-newc" class="sr">' + esc(T.compPh) + '</label><input id="ob-newc" type="text" maxlength="60" placeholder="' + esc(T.compPh) + '" value="' + esc(OB.newComp) + '" ' + attr('input', e => { OB.newComp = e.target.value; }) + ' ' +
+          attr('keydown', e => { if (e.key === 'Enter') addC(); }) + '><button class="btn plain" ' + click(addC) + '>' + esc(T.add) + '</button></div></div>';
       }
-      renderSetup();
-    };
-    reader.readAsText(file);
+      body = '<div class="ob-card"><h1>' + esc(T.s3Title) + '</h1><p class="muted">' + esc(T.s3Text(company().name)) + '</p>' + inner + err +
+        (OB.busy ? '' : nav(T.next, () => obGo(4))) + '</div>';
+    } else {
+      const con = ENGINE_LIST.filter(e => KEYS[e.id]);
+      const n = OB.picked.filter(Boolean).length;
+      const usd = con.reduce((a, e) => a + (engineCfgOf(e.id).usd_per_call || 0) * n, 0);
+      const money = v => v.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+      body = '<div class="ob-card"><h1>' + esc(T.s4Title) + '</h1>' +
+        (con.length ? '<p>' + esc(T.s4Text(n, con.map(e => e.name).join(lang === 'de' ? ' und ' : ' and '))) + '</p><p class="muted s14" style="margin:0">' + esc(T.s4Cost(usd ? money(usd) : T.free, Math.max(1, Math.ceil(n * 10 / 60)))) + '</p>' +
+          '<div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(3)) + '>' + esc(T.back) + '</button><button class="btn plain" ' + click(() => obFinish(false)) + '>' + esc(T.s4Later) + '</button>' +
+          '<button class="btn big" ' + click(() => obFinish(true)) + '>' + ic('runs', 17) + esc(T.s4Btn) + '</button></div>'
+          : '<p>' + esc(T.s4NoKey) + '</p><div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(3)) + '>' + esc(T.back) + '</button><button class="btn big" ' + click(() => obFinish(false)) + '>' + esc(T.s4Open) + ic('arrow', 16) + '</button></div>') + '</div>';
+    }
+    function addQ() { const t = OB.newQ.trim(); if (t.length < 8) return; OB.sugg.questions.push({ text: t.slice(0, 300), topic: '' }); OB.picked.push(true); OB.newQ = ''; renderOnboarding(); }
+    function addC() { const t = OB.newComp.trim(); if (!t) return; if (OB.comps.indexOf(t) === -1) OB.comps.push(t.slice(0, 60)); OB.newComp = ''; renderOnboarding(); }
+    root.innerHTML = '<div class="ob">' + top + stepper + body + '</div>';
+    const f = (focused && document.getElementById(focused)) || root.querySelector('.ob input[type=text], .ob input[type=password]');
+    if (f && OB.step > 0) { try { f.focus({ preventScroll: true }); } catch (e) { /* not focusable */ } }
   }
+
   // Whole setup from a monitoring export (export_monitoring.py writes a
   // "setup" section: the target's brand, topics and questions). Question ids
   // come from the export, so old per-question state is cleared, as in submitSetup.
@@ -354,50 +439,14 @@
         own.demo = demoFromExport(parsed, null);
         saveOwn(own);
         try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (err) { /* storage unavailable */ }
-        setupDraft = null;
         boot();
       } catch (err) {
-        setupDraft.error = 'Could not read that file — expected monitoring_export.json from scripts/export_monitoring.py.';
-        renderSetup();
+        OB.err = 'Could not read that file. Expected monitoring_export.json from scripts/export_monitoring.py.';
+        renderOnboarding();
       }
     };
     reader.readAsText(file);
   }
-  function submitSetup() {
-    const d = setupDraft;
-    const name = d.name.trim();
-    const domain = d.domain.trim();
-    const topics = d.topics
-      .map(t => ({ label: t.label.trim(), keywords: t.keywords.split(',').map(s => s.trim()).filter(Boolean) }))
-      .filter(t => t.label);
-    if (!name) { d.error = 'Please enter a company name.'; renderSetup(); return; }
-    if (!domain) { d.error = 'Please enter a website domain.'; renderSetup(); return; }
-    if (!topics.length) { d.error = 'Add at least one topic.'; renderSetup(); return; }
-
-    const usedIds = {};
-    const categories = topics.map(t => {
-      let id = CORE.slugify(t.label);
-      let n = 2;
-      while (usedIds[id]) { id = CORE.slugify(t.label) + '-' + n++; }
-      usedIds[id] = true;
-      return { id, label_en: t.label, label_de: t.label, keywords: t.keywords.length ? t.keywords : [t.label.toLowerCase()] };
-    });
-    const questions = CORE.generateQuestions(categories, { perCategory: 6, keyCount: Math.min(15, categories.length * 6) });
-    const aliases = d.aliases.split(',').map(s => s.trim()).filter(Boolean);
-    const brand = { name, short: name.split(' ')[0], domain, city: '', aliases: aliases.length ? aliases : [name] };
-
-    own = emptyOwnData(brand, categories, questions);
-    saveOwn(own);
-    // Regenerating assigns question ids from scratch (q1, q2, ...) -- without
-    // this, a draft/activation/audit-checkmark saved against the *old* set of
-    // ids would silently reattach to whatever unrelated question happens to
-    // get the same id this time. Clearing is the honest behavior: redoing
-    // your topics means your old gap-tracking state doesn't carry over.
-    try { window.localStorage.removeItem('geo-engine:v1:own'); } catch (e) { /* storage unavailable */ }
-    setupDraft = null;
-    boot();
-  }
-
   // ---------- Main app ----------
   function boot(init) {
     const D = mode === 'own' ? own : window.GEO_DATA;
@@ -1506,7 +1555,7 @@
       const openId = state.setupOpen || (steps.find(x => !x.done) || {}).id;
       const ext = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.external + '</svg>';
       const bodies = {
-        brand: () => '<p>' + esc(S.brandText(BRAND.name || BRAND.short)) + '</p><div class="setup-actions"><button class="btn sm plain" ' + click(() => { set({ setup: false }); initSetupDraft(); renderSetup(); }) + '>' + esc(S.brandLink) + '</button></div>',
+        brand: () => '<p>' + esc(S.brandText(BRAND.name || BRAND.short)) + '</p><div class="setup-actions"><button class="btn sm plain" ' + click(() => { set({ setup: false }); startOnboarding(true); }) + '>' + esc(S.brandLink) + '</button></div>',
         keys: () => '<p>' + esc(S.keysText) + '</p><div class="setup-keys">' + connectPanel() + '</div>',
         first: () => '<p>' + esc(S.firstText) + '</p><div class="setup-check">' + checkCard() + '</div>',
       };
@@ -1550,13 +1599,13 @@
     const MOD = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl ';
     function switchToDemo() { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }
     function switchToOwn() {
-      if (mode !== 'own') { mode = 'own'; saveMode('own'); if (own) boot(); else renderSetup(); } else { initSetupDraft(); renderSetup(); }
+      if (mode !== 'own') { if (own) { mode = 'own'; saveMode('own'); boot(); } else startOnboarding(); } else startOnboarding(true);
     }
     function themeClick() { const t = toggleTheme(); render(); toast(L().ui.toastTheme(t)); }
     function openPalette() { set({ palette: true, palQuery: '', palSel: 0, help: false, navOpen: false, fx: 'palette' }); }
     function sideSetup() {
       const S = L().ui.setup;
-      if (mode === 'demo') return '<button class="side-cta" ' + click(() => { if (own) switchToOwn(); else if (MON && MON.target) useTarget(); else switchToOwn(); }) + '>' + ic('run', 16) + '<span>' + esc(S.demoCta) + '</span>' + ic('chevron', 14) + '</button>';
+      if (mode === 'demo') return '<button class="side-cta" ' + click(switchToOwn) + '>' + ic('run', 16) + '<span>' + esc(S.demoCta) + '</span>' + ic('chevron', 14) + '</button>';
       const steps = setupSteps(); const done = steps.filter(x => x.done).length;
       if (done === steps.length) return '';
       return '<button class="side-cta" ' + click(openSetup) + '>' + CH.ring(Math.round(done / steps.length * 100), { size: 22, stroke: 3, color: 'var(--good)', unit: '', label: S.progress(done, steps.length) }).replace(/<text[\s\S]*?<\/text>/, '') +
@@ -1824,10 +1873,10 @@
     try { later = window.sessionStorage.getItem(SETUP_KEY) === '1'; } catch (e) { /* storage unavailable */ }
     if (mode === 'own' && !later && setupLeft() > 0) Object.assign(state, { setup: true, fx: 'setup' });
     render();
+    if (AUTO_CHECK) { AUTO_CHECK = false; startCheck(); }
   }
 
   // ---------- Boot dispatch ----------
-  if (mode === null) { renderWelcome(); }
-  else if (mode === 'own' && !own) { renderSetup(); }
+  if (mode === null || (mode === 'own' && !own)) { startOnboarding(); }
   else { boot(); }
 })();
