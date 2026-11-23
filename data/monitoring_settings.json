@@ -1,8 +1,8 @@
 {
   "_comment": "Settings for monitoring/run.py and the scheduled GitHub Action (.github/workflows/monitoring.yml). Edit this file to change cadence, runs, variants, engines or budget; CLI flags on run.py still override it for a single manual run.",
   "schedule": {
-    "_comment": "frequency: daily | weekly | biweekly | monthly. weekday is used by weekly/biweekly/monthly (monthly = first <weekday> of the month). The Action wakes daily ~06:00 Berlin time and exits immediately (no API calls) unless a run is due.",
-    "frequency": "weekly",
+    "_comment": "frequency: off | daily | weekly | biweekly | monthly. off = no automatic runs, start them by hand (Actions -> Scheduled monitoring -> Run workflow, or the app's Run page). weekday is used by weekly/biweekly/monthly (monthly = first <weekday> of the month). The Action wakes daily ~06:00 Berlin time and exits immediately (no API calls) unless a run is due.",
+    "frequency": "off",
     "weekday": "monday"
   },
   "target": "targets/geo-engine",

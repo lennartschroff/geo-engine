@@ -22,6 +22,8 @@ WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", 
 
 def is_due(schedule: dict, today: date) -> bool:
     frequency = schedule["frequency"]
+    if frequency == "off":  # only manual runs (Actions -> Run workflow)
+        return False
     if frequency == "daily":
         return True
     on_weekday = today.weekday() == WEEKDAYS.index(schedule["weekday"])
