@@ -117,7 +117,7 @@ Blocks keep facts precise, but a stack of blocks doesn't read well. Under *Conte
 
 **Target.** The `target` setting names a folder with `brand.json`, `competitors.json`, `categories.json` and `questions.json`. It is `targets/geo-engine`: this project, with 15 English and German questions about AI visibility and GEO tools, and existing GEO tools as competitors (names only). The demo in `data/` stays fictional.
 
-**Settings** live in `data/monitoring_settings.json`: how often (default every Monday), which questions, runs per question (1), random rephrasings per question (1), engines and models, and a cost cap per run.
+**Settings** live in `data/monitoring_settings.json`: how often (`off` by default: runs start only by hand; `daily`, `weekly`, `biweekly` and `monthly` run automatically), which questions, runs per question (1), random rephrasings per question (1), engines and models, and a cost cap per run.
 
 **Keys.** Copy `.env.example` to `.env` and add only the engines you want:
 
@@ -138,9 +138,11 @@ python3 monitoring/run.py --yes          # real calls without the confirmation p
 python3 scripts/export_monitoring.py     # -> monitoring/monitoring_export.json
 ```
 
-**On a schedule:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
+**On GitHub:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. To start one by hand, open *Actions → Scheduled monitoring → Run workflow* (the app's *Monitor → Run* page links there) and pick `test` (the first key question once per engine, about $0.05) or `full` (the whole run list). Temporary provider errors (overload, 5xx, timeouts) are retried twice before an engine is skipped for the run. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
 
-**Seeing the results:** download `monitoring_export.json`, open the app, choose *My brand* and use *Load export* on the setup screen (or *Monitor → Sources* if you're already set up).
+**Which questions:** the 15 key questions, unless the target folder holds a `run_list.json`. Save one on the app's *Monitor → Run* page (questions switched on or added there included), put it in the target folder and commit it; `run.py` then asks exactly those.
+
+**Seeing the results:** download `monitoring_export.json`, open the app, choose *My brand* and load it on *Monitor → Run* (or *Load export* on the setup screen).
 
 ## Publishing the demo
 
