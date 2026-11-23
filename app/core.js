@@ -601,7 +601,30 @@
     open: c => (c.parts && c.parts.open) >= RADAR_OPEN_AT,
     community: c => (c.origins || []).some(isCommunity),
     engine: c => (c.origins || []).includes('engine'),
+    now: c => radarHorizon(c) === 'now',
+    next: c => radarHorizon(c) === 'next',
+    later: c => radarHorizon(c) === 'later',
   };
+
+  /**
+   * Foresight horizon of a candidate (the three rings of the trend radar):
+   * now = already asked a lot, answer it today; next = rising, prepare for it;
+   * later = an early, weak signal to watch. An AI scan states the horizon;
+   * measured candidates get it from their demand and momentum parts.
+   */
+  const RADAR_HORIZONS = ['now', 'next', 'later'];
+  function radarHorizon(c) {
+    if (c && RADAR_HORIZONS.includes(c.horizon)) return c.horizon;
+    const p = (c && c.parts) || {};
+    if ((p.demand || 0) >= 60) return 'now';
+    if ((p.momentum || 0) >= 60) return 'next';
+    return 'later';
+  }
+  // Best first: horizon (now before later), then score, then the scan's confidence.
+  const CONF_RANK = { high: 3, medium: 2, low: 1 };
+  const radarOrder = (a, b) => RADAR_HORIZONS.indexOf(radarHorizon(a)) - RADAR_HORIZONS.indexOf(radarHorizon(b)) ||
+    (b.score == null ? -1 : b.score) - (a.score == null ? -1 : a.score) ||
+    (CONF_RANK[b.confidence] || 0) - (CONF_RANK[a.confidence] || 0) || String(a.query).localeCompare(String(b.query));
 
   /**
    * Radar candidates for display: new ones only (tracked ones are listed
@@ -616,10 +639,10 @@
     const counts = {};
     Object.keys(RADAR_FILTERS).forEach(k => { counts[k] = fresh.filter(c => !o.hidden[c.id] && RADAR_FILTERS[k](c)).length; });
     return {
-      list: visible.filter(test).sort((a, b) => b.score - a.score || String(a.query).localeCompare(String(b.query))),
+      list: visible.filter(test).sort(radarOrder),
       counts,
       hidden: fresh.filter(c => o.hidden[c.id]).length,
-      tracked: (candidates || []).filter(c => c.new === false).sort((a, b) => b.score - a.score),
+      tracked: (candidates || []).filter(c => c.new === false).sort(radarOrder),
     };
   }
 
@@ -627,7 +650,7 @@
   const radarTrend = m => m == null ? 'none' : m >= 0.6 ? 'up' : m <= 0.4 ? 'down' : 'flat';
 
   return {
-    radarList, radarTrend, RADAR_OPEN_AT,
+    radarList, radarTrend, radarHorizon, RADAR_HORIZONS, RADAR_OPEN_AT,
     findMentions, highlightMentions, shareOfVoice, intervalsOverlap, textFromMarkdown, extractBlockCandidates,
     composeArticle, buildPolishPrompt, extractFacts, checkFacts, blockCoverage, citabilityChecks, mdToHtml, faqFromMarkdown, articleToHtml,
     parseResult, pct, overlaps, kwHit, scoreDraft, splitFaqText, toFaqJsonLd, toMarkdown, toHtml, htmlEscape,

@@ -590,7 +590,7 @@ describe('radarList', () => {
   test('filters and counts', () => {
     const r = CORE.radarList(C, { filter: 'open' });
     assert.deepEqual(r.list.map(c => c.id), ['c', 'a']);
-    assert.deepEqual(r.counts, { all: 3, open: 2, community: 2, engine: 2 });
+    assert.deepEqual(r.counts, { all: 3, open: 2, community: 2, engine: 2, now: 0, next: 0, later: 3 });
     assert.deepEqual(CORE.radarList(C, { filter: 'community' }).list.map(c => c.id), ['c', 'a']);
   });
   test('dismissed ones are hidden unless asked for, and not counted', () => {
@@ -602,6 +602,26 @@ describe('radarList', () => {
   });
   test('empty or missing input', () => {
     assert.deepEqual(CORE.radarList(undefined).list, []);
+  });
+});
+
+describe('radarHorizon', () => {
+  test('a stated horizon wins', () => assert.equal(CORE.radarHorizon({ horizon: 'next', parts: { demand: 90 } }), 'next'));
+  test('measured: demand makes it now, momentum makes it next, else later', () => {
+    assert.equal(CORE.radarHorizon({ parts: { demand: 72, momentum: 88 } }), 'now');
+    assert.equal(CORE.radarHorizon({ parts: { demand: 30, momentum: 74 } }), 'next');
+    assert.equal(CORE.radarHorizon({ parts: { demand: 40, momentum: 45 } }), 'later');
+    assert.equal(CORE.radarHorizon({}), 'later');
+  });
+  test('list sorts by horizon, then score, then confidence', () => {
+    const C = [
+      { id: 'l', query: 'L', horizon: 'later', score: 99 },
+      { id: 'n2', query: 'N2', horizon: 'now', confidence: 'low' },
+      { id: 'n1', query: 'N1', horizon: 'now', confidence: 'high' },
+      { id: 'x', query: 'X', horizon: 'next', score: 50 },
+    ];
+    assert.deepEqual(CORE.radarList(C).list.map(c => c.id), ['n1', 'n2', 'x', 'l']);
+    assert.deepEqual(CORE.radarList(C, { filter: 'now' }).list.map(c => c.id), ['n1', 'n2']);
   });
 });
 
