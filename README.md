@@ -136,6 +136,8 @@ python3 monitoring/run.py --dry-run      # free, uses recorded test answers
 python3 monitoring/run.py                # real calls: shows a cost estimate, stops above the cap
 python3 monitoring/run.py --yes          # real calls without the confirmation prompt
 python3 scripts/export_monitoring.py     # -> monitoring/monitoring_export.json
+python3 monitoring/radar.py collect      # Question Radar: public questions + topic momentum (free)
+python3 monitoring/radar.py              # show candidates; `probe --top 5` measures open slots (asks first)
 ```
 
 **On GitHub:** `.github/workflows/monitoring.yml` wakes up daily and only runs when the settings say a run is due. To start one by hand, open *Actions → Scheduled monitoring → Run workflow* (the app's *Monitor → Run* page links there) and pick `test` (the first key question once per engine, about $0.05) or `full` (the whole run list). Temporary provider errors (overload, 5xx, timeouts) are retried twice before an engine is skipped for the run. Add the keys under *Settings → Secrets and variables → Actions*. Results are kept as a workflow artifact ("monitoring-results", 90 days) that each run picks up and extends; nothing is committed. On a public repository anyone signed in to GitHub can download those artifacts. GitHub pauses scheduled workflows after 60 days without activity in the repository.
