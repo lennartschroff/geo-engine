@@ -6,6 +6,7 @@
     "weekday": "monday"
   },
   "target": "targets/geo-engine",
+  "github_repo": "lennartschroff/geo-engine",
   "questions": "key",
   "runs_per_question": 1,
   "variants": {

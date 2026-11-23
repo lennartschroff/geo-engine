@@ -28,6 +28,11 @@
     "_comment": {
       "type": "string"
     },
+    "github_repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "description": "owner/name of the repository whose Actions run the scheduled monitoring; the app's Run page links there"
+    },
     "schedule": {
       "type": "object",
       "required": [
