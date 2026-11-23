@@ -84,6 +84,16 @@ def _load_dotenv() -> None:
         os.environ.setdefault(key.strip(), value)
 
 
+def _fail(message: str) -> int:
+    """Print a fatal error and return exit code 1. On GitHub Actions, also emit
+    an ::error:: annotation so the reason appears in the run summary and the
+    failure email, not only in the job log (which needs a login to read)."""
+    print(message, file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("::error title=Monitoring run failed::" + message.replace("\n", " "))
+    return 1
+
+
 def call_claude(question_text: str, cfg: dict | None = None) -> dict:
     """One real call to Claude (default claude-sonnet-5) with web search enabled.
 
@@ -407,8 +417,7 @@ def main() -> int:
     engines = args.engines.split(",") if args.engines else [e for e in ALL_ENGINES if engine_cfgs[e]["enabled"]]
     unknown = set(engines) - set(ALL_ENGINES)
     if unknown:
-        print(f"Unknown engine(s): {sorted(unknown)}. Known: {ALL_ENGINES}", file=sys.stderr)
-        return 1
+        return _fail(f"Unknown engine(s): {sorted(unknown)}. Known: {ALL_ENGINES}")
     runs = args.runs if args.runs is not None else settings["runs_per_question"]
     if args.variants is not None:
         n_variants = args.variants
@@ -421,8 +430,7 @@ def main() -> int:
     print(f"Target: {data_dir}")
     questions = load_questions(question_ids, settings["questions"], data_dir=data_dir)
     if not questions:
-        print("No matching questions found.", file=sys.stderr)
-        return 1
+        return _fail("No matching questions found.")
 
     if not args.dry_run:
         missing = [e for e in engines if not os.environ.get(API_KEY_ENV[e])]
@@ -430,8 +438,9 @@ def main() -> int:
             print(f"[skipping {missing}: no API key set ({', '.join(API_KEY_ENV[e] for e in missing)})]")
             engines = [e for e in engines if e not in missing]
         if not engines:
-            print("No engines left to run (none enabled with an API key).", file=sys.stderr)
-            return 1
+            return _fail(f"No engines left to run: none of the enabled engines has an API key "
+                         f"({', '.join(API_KEY_ENV[e] for e in missing)} missing). On GitHub, add them under "
+                         "Settings -> Secrets and variables -> Actions.")
 
     # Variants are drawn once per question and shared by all engines, so
     # engines answer the exact same prompts and stay comparable.
@@ -456,15 +465,13 @@ def main() -> int:
     try:
         check_call_budget(estimate.num_calls, max_calls)
     except Exception as e:  # CallBudgetExceeded
-        print(f"Aborting: {e}", file=sys.stderr)
-        return 1
+        return _fail(f"Aborting: {e}")
 
     if not args.dry_run:
         max_usd = settings["budget"]["max_usd_per_run"]
         if estimate.total_usd > max_usd:
-            print(f"Aborting: estimated ${estimate.total_usd:.4f} exceeds budget.max_usd_per_run=${max_usd:.2f} "
-                  "in the settings file.", file=sys.stderr)
-            return 1
+            return _fail(f"Aborting: estimated ${estimate.total_usd:.4f} exceeds "
+                         f"budget.max_usd_per_run=${max_usd:.2f} in the settings file.")
         if needs_confirmation(estimate, args.yes_threshold_usd) and not args.yes:
             print(f"Estimated cost ${estimate.total_usd:.4f} exceeds threshold ${args.yes_threshold_usd:.2f}. "
                   f"Re-run with --yes to proceed.", file=sys.stderr)
@@ -490,6 +497,8 @@ def main() -> int:
                     # One engine failing (rate limit, outage) must not stop the others:
                     # stop calling that engine for the rest of this run, keep going.
                     print(f"[{engine} failed, skipping it for the rest of this run: {e}]", file=sys.stderr)
+                    if os.environ.get("GITHUB_ACTIONS") == "true":
+                        print(f"::warning title={engine} failed::{str(e).replace(chr(10), ' ')[:500]}")
                     failed.append(engine)
                     break
                 conn.execute(
@@ -507,8 +516,10 @@ def main() -> int:
     conn.close()
     print(f"Wrote {written} row(s) to {args.db}")
     if failed:
+        if not written:
+            return _fail(f"Every engine failed, nothing was saved: {failed}. See the warnings above for each error.")
         print(f"Engines that failed during this run: {failed}", file=sys.stderr)
-        return 2 if written else 1
+        return 2
     return 0
 
 
