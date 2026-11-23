@@ -120,8 +120,10 @@ class TestDatabase:
         conn.commit()
         conn.close()
         assert radar.main(["--db", str(db), "--target", "data", "--json"]) == 0
-        [c] = json.loads(capsys.readouterr().out)
+        out = json.loads(capsys.readouterr().out)
+        [c] = out["candidates"]
         assert c["query"] == "Contoso AI pricing 2027" and c["count"] == 1 and "spellings" not in c
+        assert set(c["parts"]) == {"momentum", "demand", "open", "fit"} and out["origins"] == {"engine": 1}
 
     def test_main_missing_db(self, tmp_path):
         assert radar.main(["--db", str(tmp_path / "nope.sqlite")]) == 1
