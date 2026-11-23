@@ -240,7 +240,51 @@
     };
   }
 
+  // ---------- Onboarding: suggested questions for a new brand ----------
+  // The prompt asks for JSON only; the answer is parsed defensively because
+  // models sometimes wrap it in prose or code fences.
+  function suggestPrompt(c, lang) {
+    const where = c.where ? (lang === 'de' ? ' in ' : ' in ') + c.where : '';
+    return [
+      'A company wants to see how AI assistants talk about it.',
+      'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + c.offer + where + '.',
+      'Reply with JSON only, no other text, in this shape:',
+      '{"topics":[{"label":"...","keywords":["..."]}],"questions":[{"text":"...","topic":"..."}],"competitors":["..."]}',
+      'topics: 2 to 4 short topic names for what the company offers, each with 3 to 6 lowercase keywords.',
+      'questions: 10 questions a potential customer would type into ChatGPT when looking for such a provider. Do not name ' + c.name + ' in them. "topic" is one of the topic labels.',
+      'competitors: up to 6 real companies that offer the same' + where + '. Names only. Leave the list empty if you are not sure they exist.',
+      'Write topics and questions in ' + (lang === 'de' ? 'German' : 'English') + '.',
+    ].join('\n');
+  }
+  function parseSuggestions(text) {
+    const t = String(text || '');
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a === -1 || b <= a) return null;
+    let j;
+    try { j = JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+    const str = x => typeof x === 'string' ? x.trim() : '';
+    const topics = (Array.isArray(j.topics) ? j.topics : []).map(x => ({ label: str(x && x.label), keywords: (Array.isArray(x && x.keywords) ? x.keywords : []).map(str).filter(Boolean).slice(0, 8) }))
+      .filter(x => x.label).slice(0, 5);
+    const questions = (Array.isArray(j.questions) ? j.questions : []).map(x => ({ text: str(x && x.text).slice(0, 300), topic: str(x && x.topic) }))
+      .filter(x => x.text.length >= 8).slice(0, 15);
+    const competitors = [...new Set((Array.isArray(j.competitors) ? j.competitors : []).map(str).filter(x => x && x.length <= 60))].slice(0, 8);
+    if (!questions.length) return null;
+    return { topics, questions, competitors };
+  }
+  // Without an AI: plain questions from what the person typed.
+  function templateQuestions(c, lang) {
+    const o = c.offer, w = c.where ? ' in ' + c.where : '';
+    return (lang === 'de' ? [
+      'Wer sind die besten Anbieter für ' + o + w + '?', 'Welchen Anbieter für ' + o + w + ' kannst du empfehlen?',
+      'Worauf sollte ich bei ' + o + ' achten?', 'Was kostet ' + o + w + '?', 'Welche Firmen sind bekannt für ' + o + '?',
+    ] : [
+      'Who are the best providers of ' + o + w + '?', 'Which ' + o + ' company would you recommend' + w + '?',
+      'What should I look for when choosing ' + o + '?', 'How much does ' + o + ' cost' + w + '?', 'Which companies are known for ' + o + '?',
+    ]).map(text => ({ text, topic: o }));
+  }
+
   return {
+    suggestPrompt, parseSuggestions, templateQuestions,
     ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };

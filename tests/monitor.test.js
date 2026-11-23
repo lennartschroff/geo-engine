@@ -104,3 +104,28 @@ describe('summarize (same as export_monitoring.py)', () => {
     assert.equal(Math.round(hi * 100), 21);
   });
 });
+
+describe('onboarding suggestions', () => {
+  test('JSON is found inside prose and code fences, junk is dropped', () => {
+    const text = 'Sure!\n```json\n{"topics":[{"label":"Shoes","keywords":["running"," trail "]},{"label":""}],' +
+      '"questions":[{"text":"Where can I buy running shoes in Munich?","topic":"Shoes"},{"text":"short"}],' +
+      '"competitors":["Sportscheck","Sportscheck",""]}\n```';
+    assert.deepEqual(M.parseSuggestions(text), {
+      topics: [{ label: 'Shoes', keywords: ['running', 'trail'] }],
+      questions: [{ text: 'Where can I buy running shoes in Munich?', topic: 'Shoes' }],
+      competitors: ['Sportscheck'],
+    });
+  });
+  test('no usable questions means no suggestion', () => {
+    assert.equal(M.parseSuggestions('{"topics":[],"questions":[]}'), null);
+    assert.equal(M.parseSuggestions('I cannot help with that.'), null);
+  });
+  test('templates use the offer and place, in both languages', () => {
+    const en = M.templateQuestions({ offer: 'tax advice', where: 'Munich' }, 'en');
+    assert.equal(en[0].text, 'Who are the best providers of tax advice in Munich?');
+    assert.ok(M.templateQuestions({ offer: 'Steuerberatung', where: '' }, 'de')[0].text.startsWith('Wer sind die besten Anbieter für Steuerberatung?'));
+  });
+  test('the prompt never asks to name the company in questions', () => {
+    assert.match(M.suggestPrompt({ name: 'Acme', offer: 'x' }, 'en'), /Do not name Acme/);
+  });
+});
