@@ -161,5 +161,58 @@
     }).join('') + '</div>';
   }
 
-  return { niceMax, scalePoints, sparkline, ring, lineChart, barList, stackBar, histogram, esc };
+  /*
+   * Trend radar (strategic foresight): three rings from the centre outwards
+   * (rings[0] = act now ... rings[2] = watch), one sector per topic. items =
+   * [{ ring, sector, n, tt, tracked, attrs }]; n is the number shown in the dot
+   * (it matches the list), attrs is raw attribute markup the caller builds.
+   * Dots in one cell spread evenly over the sector so they never overlap.
+   */
+  function radarChart(items, sectors, opts) {
+    const o = Object.assign({ rings: ['', '', ''], alt: '' }, opts);
+    const C = 200, R = 170, band = R / 3;
+    const secs = sectors && sectors.length ? sectors : [''];
+    const span = (2 * Math.PI) / secs.length;
+    const start = -Math.PI / 2;
+    const pt = (r, a) => [r1(C + r * Math.cos(a)), r1(C + r * Math.sin(a))];
+    let svg = '<svg class="tradar" viewBox="-100 4 600 392" role="img" aria-label="' + esc(o.alt) + '">';
+    [2, 1, 0].forEach(i => { svg += '<circle cx="' + C + '" cy="' + C + '" r="' + r1(band * (i + 1)) + '" fill="var(--accent)" fill-opacity="' + [0.12, 0.07, 0.035][i] + '" stroke="var(--line)"/>'; });
+    if (secs.length > 1) secs.forEach((_, k) => { const p = pt(R, start + k * span); svg += '<line x1="' + C + '" y1="' + C + '" x2="' + p[0] + '" y2="' + p[1] + '" stroke="var(--line)"/>'; });
+    secs.forEach((label, k) => {
+      if (!label) return;
+      const a = start + (k + 0.5) * span; const p = pt(R + 14, a);
+      const cos = Math.cos(a); const anchor = Math.abs(cos) < 0.2 ? 'middle' : cos > 0 ? 'start' : 'end';
+      const dy = Math.sin(a) > 0.5 ? '.9em' : Math.sin(a) < -0.5 ? '-.2em' : '.35em';
+      // Up to two short lines, so long topic names don't push the radar small.
+      const lines = []; let cur = '';
+      String(label).split(/\s+/).forEach(w => { if (cur && (cur + ' ' + w).length > 16) { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w; });
+      if (cur) lines.push(cur);
+      if (lines.length > 2) lines.splice(1, lines.length, (lines.slice(1).join(' ').slice(0, 15) + '…'));
+      const shift = Math.sin(a) < -0.5 ? -(lines.length - 1) * 1.15 : Math.abs(Math.sin(a)) <= 0.5 ? -(lines.length - 1) * 0.575 : 0;
+      svg += '<text x="' + p[0] + '" y="' + p[1] + '" dy="' + dy + '" text-anchor="' + anchor + '" class="tradar-s">' +
+        lines.map((ln, i) => '<tspan x="' + p[0] + '" dy="' + (i ? '1.15em' : (shift ? r1(shift) + 'em' : '0')) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
+    });
+    o.rings.forEach((label, i) => { if (label) svg += '<text x="' + C + '" y="' + r1(C - band * i - band / 2) + '" dy=".35em" text-anchor="middle" class="tradar-r">' + esc(label) + '</text>'; });
+    const cells = {};
+    (items || []).forEach(it => { const key = it.sector + '|' + it.ring; (cells[key] = cells[key] || []).push(it); });
+    Object.keys(cells).forEach(key => {
+      const list = cells[key];
+      list.forEach((it, j) => {
+        const ring = Math.max(0, Math.min(2, it.ring | 0));
+        const a0 = start + (it.sector | 0) * span;
+        const a = a0 + ((j + 1) * span) / (list.length + 1);
+        const inner = ring === 0 ? band * 0.42 : band * ring + band * 0.22;
+        const outer = band * (ring + 1) - band * 0.22;
+        const r = list.length > 2 && j % 2 ? outer : list.length > 1 ? (inner + outer) / 2 + (j % 2 ? band * 0.18 : -band * 0.1) : (inner + outer) / 2;
+        const p = pt(Math.min(r, outer), a);
+        svg += '<g class="tradar-d"' + (it.tt ? ' data-tt="' + esc(it.tt) + '"' : '') + (it.attrs ? ' ' + it.attrs : '') + '>' +
+          '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="16" fill="transparent"/>' +
+          '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="10" fill="' + (it.tracked ? 'var(--good)' : 'var(--viz-1)') + '" stroke="var(--surface)" stroke-width="2"/>' +
+          '<text x="' + p[0] + '" y="' + p[1] + '" dy=".35em" text-anchor="middle" class="tradar-n">' + esc(it.n) + '</text></g>';
+      });
+    });
+    return svg + '</svg>';
+  }
+
+  return { niceMax, scalePoints, sparkline, ring, lineChart, barList, stackBar, histogram, radarChart, esc };
 });

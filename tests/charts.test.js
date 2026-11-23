@@ -61,3 +61,31 @@ describe('ring / sparkline / bars', () => {
     assert.match(html, /80-100=2/);
   });
 });
+
+describe('radarChart', () => {
+  const items = [
+    { ring: 0, sector: 0, n: 1, tt: 'A <b>', tracked: true, attrs: 'data-x="1"' },
+    { ring: 0, sector: 0, n: 2 },
+    { ring: 2, sector: 1, n: 3 },
+  ];
+  const svg = CH.radarChart(items, ['Repair', 'E-bikes'], { rings: ['Now', 'Next', 'Later'], alt: 'Trend radar' });
+  test('three rings, one dot per item, labels escaped', () => {
+    assert.equal((svg.match(/class="tradar-d"/g) || []).length, 3);
+    assert.match(svg, /aria-label="Trend radar"/);
+    assert.match(svg, />Repair</); assert.match(svg, />Later</);
+    assert.match(svg, /data-tt="A &lt;b&gt;"/);
+    assert.match(svg, /data-x="1"/);
+    assert.match(svg, /var\(--good\)/);
+  });
+  test('dots in the same cell do not share a position', () => {
+    const pos = [...svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="10"/g)].map(m => m[1] + ',' + m[2]);
+    assert.equal(new Set(pos).size, 3);
+  });
+  test('inner ring dots sit closer to the centre than outer ones', () => {
+    const d = [...svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="10"/g)].map(m => Math.hypot(m[1] - 200, m[2] - 200));
+    assert.ok(d[0] < 50 && d[1] < 50 && d[2] > 100);
+  });
+  test('no items, no sectors: still a valid empty radar', () => {
+    assert.match(CH.radarChart([], []), /^<svg[\s\S]*<\/svg>$/);
+  });
+});
