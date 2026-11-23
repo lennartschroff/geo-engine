@@ -1357,7 +1357,7 @@
         tile(R.kQuestions, list.length, esc(R.kSplit(grp.key.length, grp.on.length, grp.own.length))) +
         tile(R.kCalls, calls, esc(R.kCallsSub(list.length, MON.variants, engines.length))) +
         tile(R.kCost, esc(usd.toLocaleString(state.lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD' })), esc(R.kCostSub)) +
-        tile(R.kNext, nx ? esc(nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short' })) : '–',
+        tile(R.kNext, nx ? esc(nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short' })) : esc(MON.schedule.frequency === 'off' ? R.offShort : '–'),
           esc((nx ? nx.toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { weekday: 'long' }) + ' · ' : '') + (R.every[MON.schedule.frequency] || ''))) + '</div>';
 
       const row = q => '<div class="row" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 18px">' +

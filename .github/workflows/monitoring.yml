@@ -3,8 +3,13 @@
 # Cadence, runs, variants, engines and budget all live in
 # data/monitoring_settings.json -- edit that file, not this one. GitHub's
 # cron can't read a file, so this wakes up daily and monitoring/schedule.py
-# decides whether a run is due; on other days the job ends after a few
-# seconds without installing anything or calling any API.
+# decides whether a run is due; on other days (and always while the
+# frequency is "off") the job ends after a few seconds without installing
+# anything or calling any API.
+#
+# Started by hand (Run workflow), "size" picks what to ask:
+#   test = the first key question once per engine, no variants (~$0.05)
+#   full = the whole run list, like a scheduled run
 #
 # API keys come from encrypted repository secrets (Settings -> Secrets and
 # variables -> Actions): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY.
@@ -22,10 +27,11 @@ on:
     - cron: "0 5 * * *" # daily 05:00 UTC = 06:00 Berlin (07:00 in summer)
   workflow_dispatch:
     inputs:
-      force:
-        description: "Run now even if the schedule says it isn't due"
-        type: boolean
-        default: true
+      size:
+        description: "test = 1 question per engine (~$0.05), full = every question in the run list"
+        type: choice
+        options: [test, full]
+        default: test
 permissions:
   contents: read
   actions: read # to download the previous run's database artifact
@@ -45,7 +51,7 @@ jobs:
       - name: Is a run due?
         id: due
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "due=true" >> "$GITHUB_OUTPUT"
           else
             python monitoring/schedule.py | tee -a "$GITHUB_OUTPUT"
@@ -82,7 +88,12 @@ jobs:
           # Budget caps from the settings file still apply; --yes only skips
           # the interactive confirmation, which a scheduled job can't answer.
           set +e
-          python monitoring/run.py --yes
+          extra=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.size }}" != "full" ]; then
+            extra="--questions q1 --variants 0"
+            echo "Test run: one question per engine."
+          fi
+          python monitoring/run.py --yes $extra
           code=$?
           if [ "$code" = "2" ]; then
             echo "::warning::Some engines failed this run; results from the others were saved."
