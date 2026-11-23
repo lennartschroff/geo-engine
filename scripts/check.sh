@@ -25,7 +25,7 @@ step() {
 step "ruff" ruff check .
 step "validate data/*.json" python3 scripts/validate_data.py
 step "pytest" pytest tests/ -q
-step "node --test" node --test tests/core.test.js
+step "node --test" node --test tests/core.test.js tests/charts.test.js tests/monitor.test.js
 step "rebuild app/data.js" python3 scripts/build_web_data.py
 if ! git diff --quiet -- app/data.js; then
   echo "FAILED: app/data.js is stale — rebuild changed it. Review and commit the rebuilt file."

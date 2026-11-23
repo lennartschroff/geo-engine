@@ -52,5 +52,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: node --test (app/core.js, app/charts.js)
-        run: node --test tests/core.test.js tests/charts.test.js
+      - name: node --test (app/core.js, app/charts.js, app/monitor.js)
+        run: node --test tests/core.test.js tests/charts.test.js tests/monitor.test.js
