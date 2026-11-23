@@ -1,0 +1,21 @@
+{
+  "_comment": "Question Radar settings for this target (docs/QUESTION_RADAR.md). terms are searched on the public sources below and counted for momentum; keep them generic, never the brand name. Wikipedia articles were checked to exist on 2026-11-23. events must each cite a source; empty until there is one.",
+  "terms": [
+    "generative engine optimization",
+    "answer engine optimization",
+    "llms.txt",
+    "AI Overviews",
+    "AI search visibility",
+    "LLM SEO",
+    "ChatGPT citations",
+    "AI search ranking"
+  ],
+  "sources": {
+    "hackernews": true,
+    "stackexchange": ["webmasters", "stackoverflow"],
+    "github": true,
+    "wikipedia": ["en:Generative_engine_optimization", "en:AI_Overviews"]
+  },
+  "events": [],
+  "min_score": 60
+}

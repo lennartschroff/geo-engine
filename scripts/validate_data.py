@@ -145,6 +145,25 @@ def target_errors() -> list[str]:
         overlap = {n for n in loaded["competitors"]["names"] if n.lower() in aliases}
         if overlap:
             errors.append(f"{rel}/competitors.json: {sorted(overlap)} are also brand aliases")
+        errors += radar_errors(tdir, rel, aliases)
+    return errors
+
+
+def radar_errors(tdir: Path, rel: Path, aliases: set[str]) -> list[str]:
+    """Optional Question Radar settings (radar.json). Terms are sent to public
+    search APIs, so the brand's own name must not be among them."""
+    path = tdir / "radar.json"
+    if not path.exists():
+        return []
+    radar = json.loads(path.read_text(encoding="utf-8"))
+    schema = json.loads((SCHEMAS / "radar.schema.json").read_text(encoding="utf-8"))
+    errors = []
+    for err in Draft7Validator(schema).iter_errors(radar):
+        where = "/".join(str(x) for x in err.absolute_path)
+        errors.append(f"{rel}/radar.json{'/' + where if where else ''}: {err.message}")
+    brand_terms = sorted(t for t in radar.get("terms", []) if isinstance(t, str) and t.lower() in aliases)
+    if brand_terms:
+        errors.append(f"{rel}/radar.json/terms: {brand_terms} are brand aliases; use topic terms instead")
     return errors
 
 
