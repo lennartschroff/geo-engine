@@ -815,3 +815,26 @@ mark.m-comp { background: color-mix(in srgb, var(--viz-2) 22%, transparent); }
 .ob-q input { margin-top: 2px; }
 .ob-comps { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line2); }
 .ob-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- 16. Radar: trend radar and horizons ---------- */
+/* Horizons are ordinal (sooner -> later), so one hue from strong to faint. */
+.hz-dot { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; border: 1.5px solid transparent; flex-shrink: 0; }
+.hz-dot.sm { min-width: 10px; width: 10px; height: 10px; padding: 0; margin-right: 6px; vertical-align: -1px; }
+.hz-now { background: var(--viz-1); color: #fff; }
+.hz-next { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+.hz-later { background: transparent; color: var(--muted); border-color: var(--border-strong, var(--line)); border-style: dashed; }
+.hz-steps { display: flex; flex-direction: column; gap: 12px; margin: 4px 0; }
+.hz-step { display: flex; gap: 12px; align-items: flex-start; }
+.hz-step > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hz-step b { font-weight: 600; font-size: 14px; }
+.tradar-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tradar { width: 100%; max-width: 620px; height: auto; overflow: visible; }
+.tradar-s { font-size: 12px; fill: var(--fg2); font-weight: 500; }
+.tradar-r { font-size: 10.5px; fill: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.tradar-n { font-size: 10px; font-weight: 700; fill: #fff; pointer-events: none; }
+.tradar-d { cursor: pointer; }
+.tradar-d:hover circle[r="10"] { stroke: var(--fg); }
+.row.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 30% { background: var(--accent-soft); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .row.flash { animation: none; outline: 2px solid var(--accent); } }
+@media (max-width: 640px) { .tradar-s { font-size: 17px; } .tradar-n { font-size: 11px; } }

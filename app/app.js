@@ -202,6 +202,8 @@
   const KEYS = loadKeys();
   // A running check outlives re-renders (and a switch to the demo and back).
   const RUN = { status: 'idle', q: 0, qTotal: 0, current: '', errors: {}, hits: 0, answers: 0, cancel: false };
+  // Radar scan in progress (busy = engine id) and its last error; token drops stale answers.
+  const RADAR_SCAN = { busy: null, error: null, token: 0 };
   window.addEventListener('beforeunload', e => { if (RUN.status === 'running') { e.preventDefault(); e.returnValue = ''; } });
 
   const MONITOR = window.GEO_MONITOR;
@@ -1384,7 +1386,7 @@
     function radarStrong() {
       const RD = radarData();
       if (!RD) return 0;
-      return CORE.radarList(RD.candidates, { hidden: state.radarHidden }).list.filter(c => c.score >= RADAR_STRONG && !radarTrackedQ(c)).length;
+      return CORE.radarList(RD.candidates, { hidden: state.radarHidden }).list.filter(c => (c.score != null ? c.score >= RADAR_STRONG : CORE.radarHorizon(c) === 'now') && !radarTrackedQ(c)).length;
     }
     function trackRadar(c) {
       const have = radarTrackedQ(c);
@@ -1399,35 +1401,120 @@
     function writeRadar(c) { openDraft(trackRadar(c)); }
     function hideRadar(c, hide) { const h = Object.assign({}, state.radarHidden); if (hide) h[c.id] = true; else delete h[c.id]; set({ radarHidden: h }); }
 
+    // Scan with the visitor's own key: one request, the AI's foresight
+    // judgement (not measured data). Measured candidates from radar.py and
+    // tracked ones survive a rescan; the rest is replaced.
+    async function scanRadar() {
+      if (mode !== 'own' || RADAR_SCAN.busy) return;
+      const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
+      if (!id) { openSetup(); return; }
+      const token = ++RADAR_SCAN.token;
+      Object.assign(RADAR_SCAN, { busy: id, error: null });
+      render();
+      const about = own.about || {};
+      const company = { name: own.brand.name, website: about.website || own.brand.domain || '', offer: about.offer || CATS.map(c => catLabel(c.id)).join(', '), where: about.where || own.brand.city || '',
+        topics: CATS.map(c => catLabel(c.id)), questions: allQ().map(q => q.text) };
+      let parsed = null, err = null;
+      try {
+        const r = await MONITOR.callEngine(id, engineCfg(id), MONITOR.radarScanPrompt(company, state.lang), KEYS[id]);
+        parsed = MONITOR.parseRadarScan(r.answer_text, CATS.map(c => ({ id: c.id, label: catLabel(c.id) })));
+      } catch (e) { err = e; }
+      if (token !== RADAR_SCAN.token) return;
+      RADAR_SCAN.busy = null;
+      if (!parsed) { RADAR_SCAN.error = err ? runErrorText(id, err) : L().ui.radar.scanFailed; render(); return; }
+      const prev = (own.demo && own.demo.radar) || {};
+      const keep = (prev.candidates || []).filter(c => !(c.origins || []).includes('ai') || state.radarTracked[c.id]);
+      const ids = new Set(keep.map(c => c.id));
+      const measuredTopics = (prev.topics || []).filter(t => t.series && t.series.length > 1);
+      const seen = Object.assign({}, own.radarSeen);
+      parsed.candidates.forEach(c => { if (!seen[c.id]) seen[c.id] = parsed.generated; });
+      own.radarSeen = seen;
+      own.demo = Object.assign({}, own.demo, { radar: Object.assign({}, prev, { generated: parsed.generated, source: 'ai', engine: id,
+        candidates: keep.concat(parsed.candidates.filter(c => !ids.has(c.id))), topics: measuredTopics.length ? measuredTopics : parsed.topics }) });
+      saveOwn(own);
+      boot({ tab: 'radar' });
+      toast(L().ui.radar.toastScanned(parsed.candidates.length));
+    }
+    function jumpToRadar(id) {
+      const el = document.getElementById('rc-' + id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    }
+
     function viewRadar() {
       const l = L(); const R = l.ui.radar; const RD = radarData();
+      const isAi = !!RD && RD.source === 'ai';
+      const keyId = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
       const head = '<div class="page-head"><div class="head"><h1>' + esc(l.tabs.radar) + '</h1><p>' + esc(R.sub) + '</p></div></div>';
+      const scanNote = keyId ? R.scanCost(engineName(keyId)) : '';
+      const scanBtn = (cls, label) => '<button class="btn' + (cls ? ' ' + cls : '') + '" ' + click(scanRadar) + (RADAR_SCAN.busy ? ' disabled' : '') + '>' + ic('radar', 15) + esc(label) + '</button>';
+      const scanning = RADAR_SCAN.busy ? '<div class="panel"><div class="check-card"><div class="check-h"><span class="spinner" aria-hidden="true"></span><h2>' + esc(R.scanning) + '</h2></div><p class="s13 muted" style="margin:0">' + esc(R.scanningText(engineName(RADAR_SCAN.busy))) + '</p></div></div>' : '';
+      const scanErr = RADAR_SCAN.error ? '<p class="s13 warn" style="margin:0">' + esc(RADAR_SCAN.error) + '</p>' : '';
+      const devBox = IS_LOCAL && mode === 'own' ? '<details class="s13 muted"><summary style="cursor:pointer">' + esc(R.devTitle) + '</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">' +
+        '<span>' + esc(R.devText) + '</span><code class="mono small" style="display:block;white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px">' + esc(R.cmds) + '</code>' +
+        '<label for="radar-file" class="btn sm plain" style="align-self:flex-start;cursor:pointer">' + ic('upload', 14) + esc(R.devLoad) + '</label>' +
+        '<input id="radar-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
+        (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div></details>' : '';
+
       if (!RD) {
-        const body = mode === 'own'
-          ? ownHint(R.emptyCmd, R.emptyText) + '<div class="card" style="gap:10px;margin-top:12px"><span class="s13 muted">' + esc(R.emptyLoad) + '</span>' +
-            '<label for="radar-file" class="btn sm plain" style="align-self:flex-start;cursor:pointer">' + ic('upload', 14) + esc(l.chooseFile) + '</label>' +
-            '<input id="radar-file" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadMonitoringFile) + '>' +
-            (state.monitoringMsg === 'error' ? '<span class="s13 warn">' + esc(l.loadMonitoringError) + '</span>' : '') + '</div>'
-          : '<div class="empty"><b>' + esc(R.emptyTitle) + '</b></div>';
-        return '<section>' + head + '<div class="panel"><div class="panel-b">' + body + '</div></div></section>';
+        if (mode !== 'own') return '<section>' + head + '<div class="panel"><div class="panel-b"><div class="empty"><b>' + esc(R.emptyTitle) + '</b></div></div></div></section>';
+        const hz = CORE.RADAR_HORIZONS.map((h, i) => '<div class="hz-step"><span class="hz-dot hz-' + h + '">' + (i + 1) + '</span><div><b>' + esc(R.hz[h]) + '</b><span class="s13 muted">' + esc(R.hzDo[h]) + '</span></div></div>').join('');
+        const body = RADAR_SCAN.busy ? scanning : '<div class="panel"><div class="check-card"><div class="check-h">' + ic('radar', 18) + '<h2>' + esc(R.startTitle) + '</h2></div>' +
+          '<p class="s14" style="margin:0">' + esc(R.startText(own.brand.short || own.brand.name)) + '</p>' +
+          '<div class="hz-steps">' + hz + '</div>' +
+          (keyId ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' + scanBtn('', R.scan) + '<span class="s13 muted">' + esc(scanNote) + '</span></div>'
+            : '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn" ' + click(openSetup) + '>' + esc(R.connectFirst) + '</button><span class="s13 muted">' + esc(R.connectWhy) + '</span></div>') +
+          scanErr + devBox + '</div></div>';
+        return '<section>' + head + body + '</section>';
       }
+
       const r = CORE.radarList(RD.candidates, { filter: state.radarFilter, hidden: state.radarHidden, showHidden: state.radarShowHidden });
       const all = CORE.radarList(RD.candidates, { hidden: state.radarHidden }).list;
+      const num = {}; all.forEach((c, i) => { num[c.id] = i + 1; });
       const topics = RD.topics || [];
-      const rising = topics.filter(t => CORE.radarTrend(t.momentum) === 'up').length;
-      const H = RD.hits || { flagged: 0, checkable: 0, seen_again: 0, tracked: 0, mentioned_after: 0 };
       const date = d => d ? new Date(d + 'T00:00:00').toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      const by = h => all.filter(c => CORE.radarHorizon(c) === h);
+      const trackedQs = Object.keys(state.radarTracked).map(cid => allQ().find(q => q.id === state.radarTracked[cid])).filter(Boolean);
+      const RES = (D.demo && D.demo.results) || {};
+      const namedFor = trackedQs.filter(q => RES[q.id] && /(^| )[cm]/.test(RES[q.id].r)).length;
+      const H = RD.hits || { flagged: Object.keys(own && own.radarSeen || {}).length || all.length, tracked: trackedQs.length, mentioned_after: namedFor };
 
-      const tile = (label, value, sub) => '<div class="kpi-tile"><div class="top">' + esc(label) + '</div><div class="mid"><span class="n">' + value + '</span></div><span class="l">' + esc(sub) + '</span></div>';
-      const kpis = '<div class="kpis">' +
-        tile(R.kNew, all.length, R.kNewSub(all.filter(c => c.score >= RADAR_STRONG).length)) +
-        tile(R.kOpen, r.counts.open, R.kOpenSub) +
-        tile(R.kRising, rising, R.kRisingSub(topics.length)) +
-        tile(R.kHits, H.flagged ? H.tracked + '/' + H.flagged : '–', R.kHitsSub(H.mentioned_after)) + '</div>';
+      const tile = (h, label, value, sub) => '<div class="kpi-tile"><div class="top"><span>' + (h ? '<span class="hz-dot sm hz-' + h + '"></span>' : '') + esc(label) + '</span></div><div class="mid"><span class="n">' + value + '</span></div><span class="l">' + esc(sub) + '</span></div>';
+      const kpis = '<div class="kpis">' + CORE.RADAR_HORIZONS.map(h => tile(h, R.hz[h], by(h).length, R.hzShort[h])).join('') +
+        tile('', R.kTracked, H.tracked, R.kTrackedSub(H.mentioned_after)) + '</div>';
 
-      const scoreCol = n => n >= RADAR_STRONG ? 'var(--accent-strong)' : n >= 50 ? 'var(--fg)' : 'var(--muted)';
+      // The radar picture: rings = horizons, slices = topics.
+      const secIds = [];
+      all.forEach(c => { const k = c.category && CAT_BY_ID[c.category] ? c.category : '_'; if (!secIds.includes(k)) secIds.push(k); });
+      const items = all.map(c => ({ ring: CORE.RADAR_HORIZONS.indexOf(CORE.radarHorizon(c)), sector: secIds.indexOf(c.category && CAT_BY_ID[c.category] ? c.category : '_'), n: num[c.id],
+        tracked: !!radarTrackedQ(c), tt: num[c.id] + '. ' + c.query + ' · ' + R.hz[CORE.radarHorizon(c)], attrs: click(() => jumpToRadar(c.id)) }));
+      const chart = '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.chartTitle) + '</h2><span class="sub">' + esc(R.chartSub) + '</span></div></div>' +
+        '<div class="panel-b tradar-wrap">' + CH.radarChart(items, secIds.map(k => k === '_' ? R.otherTopic : catLabel(k)), { alt: R.chartAlt(all.length) }) +
+        '<div class="legend s13">' + CORE.RADAR_HORIZONS.map(h => '<span><span class="hz-dot sm hz-' + h + '"></span>' + esc(R.ringKey[h]) + '</span>').join('') + '</div><div class="legend s13"><span><span class="swatch" style="border-radius:50%;background:var(--viz-1)"></span>' + esc(R.legNew) + '</span><span><span class="swatch" style="border-radius:50%;background:var(--good)"></span>' + esc(R.legTracked) + '</span></div></div></div>';
+
+      const how = '<div class="panel"><div class="panel-h"><h2>' + esc(R.hzTitle) + '</h2></div><div class="panel-b hz-steps" style="margin:0">' +
+        CORE.RADAR_HORIZONS.map((h, i) => '<div class="hz-step"><span class="hz-dot hz-' + h + '">' + (i + 1) + '</span><div><b>' + esc(R.hz[h]) + ' · ' + by(h).length + '</b><span class="s13 muted">' + esc(R.hzDo[h]) + '</span></div></div>').join('') +
+        '<span class="small muted">' + esc(R.howNote) + '</span></div></div>';
+
+      const trendCol = { up: 'var(--good)', flat: 'var(--muted)', down: 'var(--warn)', none: 'var(--muted)' };
       const originLabel = o => R.origins[o.split(':')[0]] || o;
-      const partsHtml = c => '<div class="rparts">' + ['momentum', 'demand', 'open', 'fit'].map(k => {
+      const topicRow = t => {
+        const tr = CORE.radarTrend(t.momentum);
+        const tip = t.why || (t.sources || []).map(x => originLabel(x.source) + ' ' + x.recent + ' / ' + (Math.round(x.baseline * 10) / 10)).join(' · ');
+        return '<div class="row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 18px"' + (tip ? ' data-tt="' + esc(tip) + '"' : '') + '>' +
+          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:500">' + esc(t.term) + '</span>' +
+          '<span class="small" style="color:' + trendCol[tr] + '">' + esc(R.trend[tr]) + (t.growth != null ? ' · ' + esc(R.growth(t.growth)) : '') + '</span></div>' +
+          (t.series && t.series.length > 1 ? CH.sparkline(t.series, { w: 84, h: 26, color: tr === 'down' ? 'var(--warn)' : 'var(--viz-1)' }) : '<span></span>') + '</div>';
+      };
+      const trendsPanel = topics.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.topicsTitle) + '</h2><span class="sub">' + esc(isAi ? R.topicsSubAi : R.topicsSub) + '</span></div></div><div>' + topics.map(topicRow).join('') + '</div></div>' : '';
+      const hits = '<div class="panel"><div class="panel-h"><h2>' + esc(R.hitsTitle) + '</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
+        (RD.hits ? [[R.hFlagged, H.flagged], [R.hCheckable, H.checkable], [R.hSeenAgain, H.seen_again], [R.hTracked, H.tracked], [R.hNamed, H.mentioned_after]]
+          : [[R.hFlaggedAi, H.flagged], [R.hTracked, H.tracked], [R.hNamed, H.mentioned_after]]).map(x =>
+          '<span style="display:flex;justify-content:space-between;gap:12px"><span class="muted">' + esc(x[0]) + '</span><b class="num" style="font-weight:600">' + x[1] + '</b></span>').join('') +
+        '<span class="small muted" style="margin-top:4px">' + esc(RD.hits ? R.hitsNote : R.hitsNoteAi) + '</span></div></div>';
+
+      const partsHtml = c => !c.parts ? '' : '<div class="rparts">' + ['momentum', 'demand', 'open', 'fit'].map(k => {
         const v = c.parts[k];
         const note = k === 'open' ? ' ' + (c.open_measured ? R.measuredTip : R.estimatedTip) : '';
         return '<div data-tt="' + esc(R.partTips[k] + note) + '"><div class="rpart-l"><span>' + esc(R.parts[k]) + (k === 'open' && c.open_measured ? ' ' + ic('check', 11) : '') + '</span><span class="num">' + v + '</span></div>' +
@@ -1443,15 +1530,19 @@
         }).join(' · ') + '</span>';
       };
       const row = c => {
-        const tq = radarTrackedQ(c); const hidden = !!state.radarHidden[c.id];
-        const meta = [c.origins.map(originLabel).join(' · '), c.category ? catLabel(c.category) : '', R.seen(c.count || 1, date((c.first_seen || '').slice(0, 10)))]
-          .concat(c.questions && c.questions.length ? [R.fromQs(c.questions.length)] : []).concat(c.unanswered ? [R.unanswered(c.unanswered)] : []).filter(Boolean);
+        const tq = radarTrackedQ(c); const hidden = !!state.radarHidden[c.id]; const h = CORE.radarHorizon(c);
+        const meta = [c.driver ? R.drivers[c.driver] : '', c.category && CAT_BY_ID[c.category] ? catLabel(c.category) : '',
+          c.origins && !c.origins.includes('ai') ? c.origins.map(originLabel).join(' · ') : '', c.confidence ? R.conf[c.confidence] : '',
+          c.origins && c.origins.includes('ai') ? '' : R.seen(c.count || 1, date((c.first_seen || '').slice(0, 10)))].filter(Boolean);
         const links = (c.links || []).slice(0, 2).map(k => '<a class="link s13" style="display:inline-flex;gap:4px;align-items:center;max-width:100%" target="_blank" rel="noopener noreferrer" href="' + esc(k.url) + '">' +
           ic('external', 13) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(k.title) + '</span></a>').join('');
-        return '<div class="row rgrid" style="' + (hidden ? 'opacity:.55' : '') + '">' +
-          '<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><span class="rscore" style="color:' + scoreCol(c.score) + '">' + c.score + '</span><span class="small muted">' + esc(R.scoreLabel) + '</span></div>' +
+        const why = (c.change ? '<span class="s13"><b style="font-weight:600">' + esc(R.changeL) + '</b> ' + esc(c.change) + '</span>' : '') +
+          (c.signal ? '<span class="s13"><b style="font-weight:600">' + esc(R.signalL) + '</b> ' + esc(c.signal) + '</span>' : '');
+        return '<div class="row rgrid" id="rc-' + esc(c.id) + '" style="' + (hidden ? 'opacity:.55' : '') + '">' +
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span class="hz-dot hz-' + h + '" data-tt="' + esc(R.hz[h]) + '">' + (num[c.id] || '·') + '</span>' +
+          (c.score != null ? '<span class="small muted num">' + c.score + '</span>' : '') + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px;min-width:0"><span style="font-weight:550">' + esc(c.query) + '</span>' +
-          '<span class="small muted">' + esc(meta.join(' · ')) + '</span>' +
+          '<span class="small muted">' + esc(meta.join(' · ')) + '</span>' + why +
           (c.variants && c.variants.length ? '<span class="small muted">~ ' + esc(c.variants.slice(0, 2).join(' · ')) + '</span>' : '') +
           partsHtml(c) + probeHtml(c) + (links ? '<div style="display:flex;flex-direction:column;gap:2px;min-width:0">' + links + '</div>' : '') + '</div>' +
           '<div class="ractions">' +
@@ -1460,36 +1551,21 @@
           '<button class="btn sm plain" ' + click(() => writeRadar(c)) + '>' + ic('write', 14) + esc(R.write) + '</button>' +
           '<button class="btn sm plain" ' + click(() => hideRadar(c, !hidden)) + '>' + esc(hidden ? R.restore : R.dismiss) + '</button></div></div>';
       };
-      const filters = '<div class="seg" role="group" aria-label="' + esc(R.listTitle) + '">' + ['all', 'open', 'community', 'engine'].map(f =>
-        '<button class="' + (state.radarFilter === f ? 'on' : '') + '" aria-pressed="' + (state.radarFilter === f) + '" ' + click(() => set({ radarFilter: f })) + '>' + esc(R.filters[f]) + '<span class="c">' + r.counts[f] + '</span></button>').join('') + '</div>';
+      const fkeys = ['all', 'now', 'next', 'later'];
+      const filter = fkeys.includes(state.radarFilter) ? state.radarFilter : 'all';
+      const shown = filter === state.radarFilter ? r : CORE.radarList(RD.candidates, { filter, hidden: state.radarHidden, showHidden: state.radarShowHidden });
+      const filters = '<div class="seg" role="group" aria-label="' + esc(R.listTitle) + '">' + fkeys.map(f =>
+        '<button class="' + (filter === f ? 'on' : '') + '" aria-pressed="' + (filter === f) + '" ' + click(() => set({ radarFilter: f })) + '>' + esc(f === 'all' ? R.all : R.hz[f]) + '<span class="c">' + shown.counts[f] + '</span></button>').join('') + '</div>';
       const list = '<div class="panel"><div class="panel-h" style="flex-wrap:wrap;gap:10px"><div><h2>' + esc(R.listTitle) + '</h2><span class="sub">' + esc(R.listSub) + '</span></div>' + filters + '</div>' +
-        (r.list.length ? '<div>' + r.list.map(row).join('') + '</div>' : '<div class="empty">' + esc(R.noneInFilter) + '</div>') +
-        (r.hidden ? '<div class="panel-b" style="border-top:1px solid var(--line2)"><button class="link s13" ' + click(() => set({ radarShowHidden: !state.radarShowHidden })) + '>' + esc(state.radarShowHidden ? R.hideHidden : R.showHidden(r.hidden)) + '</button></div>' : '') + '</div>';
+        (shown.list.length ? '<div>' + shown.list.map(row).join('') + '</div>' : '<div class="empty">' + esc(R.noneInFilter) + '</div>') +
+        (shown.hidden ? '<div class="panel-b" style="border-top:1px solid var(--line2)"><button class="link s13" ' + click(() => set({ radarShowHidden: !state.radarShowHidden })) + '>' + esc(state.radarShowHidden ? R.hideHidden : R.showHidden(shown.hidden)) + '</button></div>' : '') + '</div>';
 
-      const trendCol = { up: 'var(--good)', flat: 'var(--muted)', down: 'var(--warn)', none: 'var(--muted)' };
-      const topicRow = t => {
-        const tr = CORE.radarTrend(t.momentum);
-        const src = (t.sources || []).map(x => originLabel(x.source) + ' ' + x.recent + ' / ' + (Math.round(x.baseline * 10) / 10)).join(' · ');
-        return '<div class="row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 18px" data-tt="' + esc(src) + '">' +
-          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:500">' + esc(t.term) + '</span>' +
-          '<span class="small" style="color:' + trendCol[tr] + '">' + esc(R.trend[tr]) + (t.growth != null ? ' · ' + esc(R.growth(t.growth)) : '') + '</span></div>' +
-          (t.series && t.series.length > 1 ? CH.sparkline(t.series, { w: 84, h: 26, color: tr === 'down' ? 'var(--warn)' : 'var(--viz-1)' }) : '<span></span>') + '</div>';
-      };
-      const side = '<div style="display:flex;flex-direction:column;gap:16px">' +
-        '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.topicsTitle) + '</h2><span class="sub">' + esc(R.topicsSub) + '</span></div></div>' +
-        (topics.length ? '<div>' + topics.map(topicRow).join('') + '</div>' : '<div class="panel-b s13 muted">' + esc(R.noTopics) + '</div>') + '</div>' +
-        '<div class="panel"><div class="panel-h"><h2>' + esc(R.hitsTitle) + '</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
-        [[R.hFlagged, H.flagged], [R.hCheckable, H.checkable], [R.hSeenAgain, H.seen_again], [R.hTracked, H.tracked], [R.hNamed, H.mentioned_after]].map(x =>
-          '<span style="display:flex;justify-content:space-between;gap:12px"><span class="muted">' + esc(x[0]) + '</span><b class="num" style="font-weight:600">' + x[1] + '</b></span>').join('') +
-        '<span class="small muted" style="margin-top:4px">' + esc(R.hitsNote) + '</span></div></div>' +
-        (r.tracked.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(R.trackedTitle) + '</h2><span class="sub">' + esc(R.trackedSub) + '</span></div></div><div>' +
-          r.tracked.map(c => '<div class="row" style="display:flex;flex-direction:column;gap:2px;padding:10px 18px"><span class="s13" style="font-weight:500">' + esc(c.query) + '</span>' +
-            '<span class="small muted">' + esc(c.flagged_since ? R.flaggedSince(date(c.flagged_since)) : '') + '</span></div>').join('') + '</div></div>' : '') +
-        '<div class="panel"><div class="panel-h"><h2>' + esc(R.howTitle) + '</h2></div><div class="panel-b s13 muted" style="display:flex;flex-direction:column;gap:8px"><span>' + esc(R.howText) + '</span>' +
-        (mode === 'own' ? '<code class="mono small" style="display:block;white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px">' + esc(R.cmds) + '</code>' : '') + '</div></div></div>';
-
-      const note = RD.demo_note ? '<div class="banner">' + ic('info', 15) + '<span class="item">' + esc(R.demoNote) + '</span></div>' : '';
-      return '<section>' + head + note + kpis + '<div class="grid g-main" style="align-items:start">' + list + side + '</div>' +
+      const note = RD.demo_note ? '<div class="banner">' + ic('info', 15) + '<span class="item">' + esc(R.demoNote) + '</span></div>'
+        : isAi ? '<div class="banner" style="flex-wrap:wrap">' + ic('info', 15) + '<span class="item" style="flex:1 1 320px">' + esc(R.aiNote(engineName(RD.engine), date(RD.generated))) + '</span>' +
+          (mode === 'own' ? scanBtn('sm plain', R.rescan) : '') + '</div>' : '';
+      return '<section>' + head + note + (RADAR_SCAN.busy ? scanning : '') + scanErr + kpis +
+        '<div class="grid g-main" style="align-items:start">' + chart + '<div style="display:flex;flex-direction:column;gap:16px">' + how + trendsPanel + '</div></div>' +
+        '<div class="grid g-main" style="align-items:start">' + list + '<div style="display:flex;flex-direction:column;gap:16px">' + hits + devBox + '</div></div>' +
         '<span class="small muted">' + esc(R.generated(date(RD.generated))) + '</span></section>';
     }
 
@@ -1551,13 +1627,12 @@
       RUN.status = RUN.cancel ? 'stopped' : 'done';
       boot({ tab: 'runs' });
     }
-    function runErrors() {
+    function runErrorText(e, err) {
       const R = L().ui.runs;
-      return Object.keys(RUN.errors).map(e => {
-        const err = RUN.errors[e];
-        const t = err.status === 401 || err.status === 403 ? R.errKey(engineName(e)) : err.status === 429 || err.status === 402 ? R.errCredit(engineName(e)) : R.errOther(engineName(e), String(err.message || err).slice(0, 140));
-        return '<p class="s13 warn" style="margin:0">' + esc(t) + '</p>';
-      }).join('');
+      return err.status === 401 || err.status === 403 ? R.errKey(engineName(e)) : err.status === 429 || err.status === 402 ? R.errCredit(engineName(e)) : R.errOther(engineName(e), String(err.message || err).slice(0, 140));
+    }
+    function runErrors() {
+      return Object.keys(RUN.errors).map(e => '<p class="s13 warn" style="margin:0">' + esc(runErrorText(e, RUN.errors[e])) + '</p>').join('');
     }
 
     function connectPanel() {
