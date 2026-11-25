@@ -215,6 +215,86 @@
   const KEYS = loadKeys();
   // A running check outlives re-renders (and a switch to the demo and back).
   const RUN = { status: 'idle', q: 0, qTotal: 0, current: '', errors: {}, hits: 0, answers: 0, cancel: false };
+
+  // ---------- Several companies (TASKS.md I6) and backups (I11) ----------
+  // The active company stays exactly where a single company always lived
+  // (OWN_KEY + its view state), so nothing existing has to be migrated. Other
+  // companies are "parked" next to it, each with its own view state.
+  const OWN_STATE_KEY = 'geo-engine:v1:own';
+  const PARK_INDEX = 'geo-engine:companies:v1';
+  const PARK_PREFIX = 'geo-engine:parked:';
+  const lsGet = k => { try { return window.localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+  const lsDel = k => { try { window.localStorage.removeItem(k); } catch (e) { /* storage unavailable */ } };
+  function parkedList() { try { const l = JSON.parse(lsGet(PARK_INDEX) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+  const newCompanyId = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function parkCurrent() {
+    if (!own) return true;
+    if (!own.id || parkedList().some(x => x.id === own.id)) own.id = newCompanyId();
+    if (!lsSet(PARK_PREFIX + own.id, JSON.stringify({ own, state: lsGet(OWN_STATE_KEY) }))) { toast(window.makeStrings('')[uiLang()].ui.companies.full); return false; }
+    lsSet(PARK_INDEX, JSON.stringify(parkedList().filter(x => x.id !== own.id).concat([{ id: own.id, name: own.brand.short || own.brand.name }])));
+    lsDel(OWN_KEY); lsDel(OWN_STATE_KEY);
+    own = null;
+    return true;
+  }
+  function unpark(id) {
+    let b = null;
+    try { b = JSON.parse(lsGet(PARK_PREFIX + id) || 'null'); } catch (e) { b = null; }
+    if (!b || !b.own) return false;
+    own = b.own; own.id = id;
+    saveOwn(own);
+    if (b.state) lsSet(OWN_STATE_KEY, b.state); else lsDel(OWN_STATE_KEY);
+    lsDel(PARK_PREFIX + id);
+    lsSet(PARK_INDEX, JSON.stringify(parkedList().filter(x => x.id !== id)));
+    return true;
+  }
+  function resetVolatile() {
+    Object.assign(RUN, { status: 'idle', errors: {} });
+    Object.assign(RADAR_SCAN, { busy: null, error: null });
+  }
+  function switchCompany(id) {
+    if (RUN.status === 'running' || !parkCurrent() || !unpark(id)) return;
+    resetVolatile();
+    mode = 'own'; saveMode('own');
+    boot();
+  }
+  function addCompany() {
+    if (RUN.status === 'running' || !parkCurrent()) return;
+    resetVolatile();
+    mode = 'own'; saveMode('own');
+    startOnboarding();
+  }
+  // A backup is one company with its view state; never the keys.
+  function saveBackup() {
+    if (!own) return;
+    let st = null; try { st = JSON.parse(lsGet(OWN_STATE_KEY) || 'null'); } catch (e) { st = null; }
+    const file = { kind: 'geo-engine-backup', version: 1, saved: new Date().toISOString(), company: own, state: st };
+    const name = 'geo-engine-' + (CORE.slugify(own.brand.short || own.brand.name) || 'company') + '-' + new Date().toISOString().slice(0, 10) + '.json';
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file) + '\n'], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function loadBackup(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const C = window.makeStrings('')[uiLang()].ui.companies;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let j = null; try { j = JSON.parse(reader.result); } catch (err) { j = null; }
+      const c = j && j.kind === 'geo-engine-backup' && j.company;
+      if (!c || !c.brand || !c.brand.name || !Array.isArray(c.questions) || !Array.isArray(c.categories)) { toast(C.badFile); return; }
+      if (RUN.status === 'running' || !parkCurrent()) return;
+      if (!c.id || parkedList().some(x => x.id === c.id)) c.id = newCompanyId();
+      own = c; saveOwn(own);
+      if (j.state) lsSet(OWN_STATE_KEY, JSON.stringify(j.state)); else lsDel(OWN_STATE_KEY);
+      resetVolatile();
+      mode = 'own'; saveMode('own');
+      boot();
+      toast(C.loaded(c.brand.short || c.brand.name));
+    };
+    reader.readAsText(file);
+  }
   // Radar scan in progress (busy = engine id) and its last error; token drops stale answers.
   const RADAR_SCAN = { busy: null, error: null, token: 0 };
   window.addEventListener('beforeunload', e => { if (RUN.status === 'running') { e.preventDefault(); e.returnValue = ''; } });
@@ -431,7 +511,8 @@
       body = '<div class="ob-hero"><h1>' + esc(T.welcomeTitle) + '</h1><p>' + esc(T.welcomeText) + '</p>' +
         '<div class="ob-hero-actions"><button class="btn big" ' + click(() => obGo(1)) + '>' + esc(T.start) + ic('arrow', 16) + '</button>' +
         '<button class="btn plain big" ' + click(() => { OB = null; mode = 'demo'; saveMode('demo'); boot(); }) + '>' + esc(T.example) + '</button></div>' +
-        '<span class="small muted">' + esc(T.time) + '</span></div>';
+        '<span class="small muted">' + esc(T.time) + '</span>' +
+        (parkedList().length ? '<div class="ob-back">' + parkedList().map(x => '<button class="link s13" ' + click(() => { OB = null; switchCompany(x.id); }) + '>' + esc(T.backTo(x.name)) + '</button>').join('') + '</div>' : '') + '</div>';
     } else if (OB.step === 1) {
       body = '<div class="ob-card"><h1>' + esc(T.s1Title) + '</h1><p class="muted">' + esc(T.s1Text) + '</p>' +
         '<div class="ob-form">' + field('ob-name', T.name, 'name', T.namePh) + field('ob-web', T.website, 'website', T.websitePh) +
@@ -1942,7 +2023,7 @@
         '<div class="modal setup-modal' + (enter ? ' enter' : '') + '" role="dialog" aria-modal="true" aria-labelledby="setup-title">' +
         '<div class="setup-top"><div><h2 id="setup-title" style="font-size:18px">' + esc(allSet ? S.titleDone : S.title) + '</h2><p class="s13 muted" style="margin:4px 0 0">' + esc(allSet ? S.subDone : S.sub) + '</p></div>' +
         '<button class="icon-btn" data-autofocus aria-label="' + esc(L().ui.close) + '" ' + click(close) + '>' + ic('x', 16) + '</button></div>' +
-        setupBody() +
+        setupBody() + companiesSection() +
         (mode === 'own' && own ? (state.resetAsk
           ? '<div class="setup-reset" role="alert"><b>' + esc(S.resetTitle(BRAND.name || BRAND.short)) + '</b><span class="s13">' + esc(S.resetText) + '</span>' +
             '<div class="setup-actions"><button class="btn plain" ' + click(() => set({ resetAsk: false })) + '>' + esc(S.resetCancel) + '</button>' +
@@ -1961,10 +2042,22 @@
         window.sessionStorage.removeItem('geo-engine:setup-later');
       } catch (e) { /* storage unavailable */ }
       own = null;
-      Object.assign(RUN, { status: 'idle', errors: {} });
-      Object.assign(RADAR_SCAN, { busy: null, error: null });
+      resetVolatile();
       mode = 'own'; saveMode('own');
-      startOnboarding();
+      const next = parkedList()[0];
+      if (next && unpark(next.id)) boot(); else startOnboarding();
+    }
+    function companiesSection() {
+      const C = L().ui.companies;
+      const parked = parkedList();
+      const row = (name, on, act) => '<div class="co-row"><span class="co-name">' + (on ? ic('check', 14) : '<span style="width:14px"></span>') + '<b>' + esc(name) + '</b>' + (on ? '<span class="small muted">' + esc(C.active) + '</span>' : '') + '</span>' + (act || '') + '</div>';
+      return '<div class="nav-group" style="padding:14px 20px 2px">' + esc(C.title) + '</div><div class="co-list">' +
+        (own ? row(own.brand.short || own.brand.name, mode === 'own') : '') +
+        parked.map(x => row(x.name, false, '<button class="btn sm plain" ' + click(() => switchCompany(x.id)) + '>' + esc(C.open) + '</button>')).join('') +
+        '<div class="setup-actions" style="padding:6px 0 0"><button class="btn sm plain" ' + click(addCompany) + '>+ ' + esc(C.add) + '</button>' +
+        (own ? '<button class="btn sm plain" ' + click(saveBackup) + '>' + ic('download', 14) + esc(C.save) + '</button>' : '') +
+        '<label for="co-load" class="btn sm plain" style="cursor:pointer">' + ic('upload', 14) + esc(C.load) + '</label><input id="co-load" type="file" accept="application/json,.json" class="sr" ' + attr('change', loadBackup) + '></div>' +
+        '<span class="small muted">' + esc(C.note) + '</span></div>';
     }
     function openSetup() { set({ setup: true, setupOpen: null, resetAsk: false, palette: false, navOpen: false, fx: 'setup' }); }
 
@@ -1973,7 +2066,16 @@
     const MOD = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl ';
     function switchToDemo() { if (mode !== 'demo') { mode = 'demo'; saveMode('demo'); boot(); } }
     function switchToOwn() {
-      if (mode !== 'own') { if (own) { mode = 'own'; saveMode('own'); boot(); } else startOnboarding(); } else startOnboarding(true);
+      if (mode !== 'own') { if (own) { mode = 'own'; saveMode('own'); boot(); } else if (parkedList().length) switchCompany(parkedList()[0].id); else startOnboarding(); } else startOnboarding(true);
+    }
+    function companySwitch() {
+      const parked = parkedList();
+      if (!parked.length) return '';
+      const C = L().ui.companies;
+      const cur = own ? [{ id: '', name: own.brand.short || own.brand.name }] : [];
+      return '<label for="co-switch" class="sr">' + esc(C.switchLabel) + '</label><select id="co-switch" class="co-switch" ' + attr('change', e => { if (e.target.value === '+') addCompany(); else if (e.target.value) switchCompany(e.target.value); }) + '>' +
+        cur.concat(parked).map(x => '<option value="' + esc(x.id) + '"' + (x.id === '' && mode === 'own' ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') +
+        '<option value="+">+ ' + esc(C.add) + '</option></select>';
     }
     function themeClick() { const t = toggleTheme(); render(); toast(L().ui.toastTheme(t)); }
     function openPalette() { set({ palette: true, palQuery: '', palSel: 0, help: false, navOpen: false, fx: 'palette' }); }
@@ -2219,7 +2321,7 @@
         '<div class="side-brand"><span class="logo" aria-hidden="true">' + LOGO + '</span><div><b>' + esc(BRAND.short) + '</b><span>GEO Engine</span></div></div>' +
         '<button class="search-btn" ' + click(openPalette) + '>' + ic('search', 15) + '<span>' + esc(l.ui.search) + '</span><span class="kbd">' + MOD + 'K</span></button>' +
         '<nav class="nav">' + nav + '</nav>' +
-        '<div class="side-foot">' + sideSetup() + modeSwitch +
+        '<div class="side-foot">' + sideSetup() + companySwitch() + modeSwitch +
         '<button class="side-hint" ' + click(() => set({ help: true, fx: 'help' })) + '>' + ic('keyboard', 15) + '<span>' + esc(l.ui.shortcuts) + '</span><span class="kbd" style="margin-left:auto">?</span></button></div></aside>';
       const topbar = '<header class="topbar">' +
         '<button class="icon-btn menu-btn" aria-label="' + esc(l.ui.menu) + '" aria-controls="sidenav" aria-expanded="' + state.navOpen + '" ' + click(() => set({ navOpen: !state.navOpen })) + '>' + ic('menu', 18) + '</button>' +
@@ -2252,6 +2354,7 @@
   }
 
   // ---------- Boot dispatch ----------
+  if (mode === 'own' && !own && parkedList().length) unpark(parkedList()[0].id);
   if (mode === null || (mode === 'own' && !own)) { startOnboarding(); }
   else { boot(); }
 })();

@@ -861,3 +861,11 @@ button.ins-row:hover { background: var(--hover); }
 .ins-bar { height: 6px; display: block; }
 .ins-bar > span { display: block; height: 100%; border-radius: 3px; }
 @media (max-width: 640px) { .ins-row { grid-template-columns: minmax(0, 1fr) auto; } .ins-bar { display: none; } }
+
+/* ---------- 19. Companies in Settings and the sidebar ---------- */
+.co-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 20px 8px; }
+.co-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line2); }
+.co-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.co-name b { font-weight: 550; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-switch { width: 100%; margin-bottom: 8px; }
+.ob-back { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; margin-top: 4px; }
