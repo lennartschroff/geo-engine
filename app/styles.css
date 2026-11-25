@@ -838,3 +838,16 @@ mark.m-comp { background: color-mix(in srgb, var(--viz-2) 22%, transparent); }
 @keyframes flash { 0%, 30% { background: var(--accent-soft); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .row.flash { animation: none; outline: 2px solid var(--accent); } }
 @media (max-width: 640px) { .tradar-s { font-size: 17px; } .tradar-n { font-size: 11px; } }
+
+/* ---------- 17. Guide personas, grouped questions, start over ---------- */
+.ob-p { align-items: flex-start; cursor: default; }
+.ob-p-body { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.ob-p-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ob-p-row input { flex: 1 1 180px; min-width: 0; }
+.ob-p-row select { flex: 0 0 auto; }
+.ob-group { display: flex; flex-direction: column; gap: 8px; }
+.ob-group-h { display: flex; align-items: center; gap: 8px; }
+.ob-group-h b { font-size: 14px; font-weight: 600; }
+.btn.danger { background: var(--bad, #b42318); border-color: transparent; color: #fff; }
+.btn.danger:hover { filter: brightness(1.08); }
+.setup-reset { display: flex; flex-direction: column; gap: 8px; margin: 12px 20px 0; padding: 14px 16px; border: 1px solid var(--bad, #b42318); border-radius: 10px; background: var(--surface-2); }

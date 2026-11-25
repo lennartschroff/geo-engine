@@ -98,6 +98,7 @@
     up: '<path d="M18 15l-6-6-6 6"/>',
     down: '<path d="M6 9l6 6 6-6"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".7" fill="currentColor"/>',
@@ -257,8 +258,20 @@
     const about = (edit && own && own.about) || {};
     OB = {
       step: edit ? 1 : 0, edit: !!edit, name: b.name || '', website: about.website || b.domain || '', offer: about.offer || '', where: about.where || b.city || '',
-      err: '', sugg: null, picked: [], comps: [], newQ: '', newComp: '', busy: false, token: 0, note: '', keyDraft: {}, keyMsg: {}, more: false,
+      err: '', sugg: null, picked: [], comps: [], newQ: {}, newComp: '', busy: false, token: 0, note: '', keyDraft: {}, keyMsg: {}, more: false,
+      personas: null, pOn: [], topics: [], qFor: '',
     };
+    // Editing keeps the personas, topics and questions, so nothing is asked again unless changed.
+    if (edit && own && Array.isArray(own.personas) && own.personas.length) {
+      OB.personas = own.personas.map(p => Object.assign({}, p));
+      OB.pOn = OB.personas.map(() => true);
+      OB.topics = (own.categories || []).map(c => ({ label: c.label_en, keywords: c.keywords || [] }));
+      OB.comps = (own.competitors || []).slice();
+      const catName = id => { const c = (own.categories || []).find(x => x.id === id); return c ? c.label_en : ''; };
+      OB.sugg = { questions: (own.questions || []).map(q => ({ text: q.text, topic: catName((q.categories || [])[0]), persona: q.persona || OB.personas[0].id, lang: q.lang || OB.personas[0].lang })) };
+      OB.picked = OB.sugg.questions.map(() => true);
+      OB.qFor = personaSig();
+    }
     renderOnboarding();
   }
   const obL = () => window.makeStrings(OB && OB.name ? OB.name : '')[uiLang()];
@@ -269,41 +282,81 @@
       if (!OB.name.trim()) { OB.err = T.errName; return renderOnboarding(); }
       if (!OB.offer.trim()) { OB.err = T.errOffer; return renderOnboarding(); }
     }
-    if (step === 4 && OB.step === 3 && !OB.picked.some(Boolean)) { OB.err = T.needOne; return renderOnboarding(); }
+    if (step === 4 && OB.step === 3 && !activePersonas().length) { OB.err = T.needPersona; return renderOnboarding(); }
+    if (step === 5 && OB.step === 4 && !OB.picked.some(Boolean)) { OB.err = T.needOne; return renderOnboarding(); }
     OB.err = '';
     OB.step = step;
-    if (step === 3 && !OB.sugg) obSuggest();
+    if (step === 3 && !OB.personas) obPersonas();
+    if (step === 4 && OB.qFor !== personaSig()) obQuestions();
     renderOnboarding();
     window.scrollTo(0, 0);
   }
+  const activePersonas = () => (OB.personas || []).filter((p, i) => OB.pOn[i] && p.name.trim());
+  // Questions are made again only when the chosen personas or their languages change.
+  const personaSig = () => JSON.stringify(activePersonas().map(p => [p.id, p.name.trim(), p.lang]));
+  const firstKey = () => ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
   const company = () => ({ name: OB.name.trim(), website: OB.website.trim(), offer: OB.offer.trim(), where: OB.where.trim() });
-  function obUseSimple(note) {
+  function obSimplePersonas(note) {
     OB.token++;
     OB.busy = false;
-    OB.sugg = { topics: [{ label: company().offer, keywords: [] }], questions: MONITOR.templateQuestions(company(), uiLang()), competitors: [] };
-    OB.picked = OB.sugg.questions.map(() => true);
+    OB.personas = MONITOR.templatePersonas(uiLang());
+    OB.pOn = [true];
+    OB.topics = [{ label: company().offer, keywords: [] }];
     OB.note = note;
     renderOnboarding();
   }
-  // Ask the first connected assistant for tailored questions and competitors.
-  async function obSuggest() {
+  function obSimpleQuestions(note) {
+    OB.token++;
+    OB.busy = false;
+    const qs = [];
+    activePersonas().forEach(p => MONITOR.templateQuestions(company(), p.lang === 'de' ? 'de' : 'en').forEach(q => qs.push({ text: q.text, topic: OB.topics[0] ? OB.topics[0].label : '', persona: p.id, lang: p.lang })));
+    OB.sugg = { questions: qs };
+    OB.picked = qs.map(() => true);
+    OB.qFor = personaSig();
+    OB.note = note;
+    renderOnboarding();
+  }
+  // One request each: who asks (personas, topics, competitors), then what they ask.
+  async function obPersonas() {
     const T = obL().ui.ob;
-    const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
-    if (!id) return obUseSimple(T.simpleNote);
+    const id = firstKey();
+    if (!id) return obSimplePersonas(T.simpleNoteP);
     const token = ++OB.token;
     OB.busy = id; OB.note = '';
     renderOnboarding();
-    let sugg = null;
+    let res = null;
     try {
-      const r = await MONITOR.callEngine(id, Object.assign({}, engineCfgOf(id), { max_searches: 0, grounding: false }), MONITOR.suggestPrompt(company(), uiLang()), KEYS[id]);
-      sugg = MONITOR.parseSuggestions(r.answer_text);
-    } catch (e) { /* falls back to simple questions below */ }
+      const r = await MONITOR.callEngine(id, Object.assign({}, engineCfgOf(id), { max_searches: 0, grounding: false, max_tokens: 2000 }), MONITOR.personaPrompt(company(), uiLang()), KEYS[id]);
+      res = MONITOR.parsePersonas(r.answer_text);
+    } catch (e) { /* falls back to one simple persona below */ }
     if (!OB || token !== OB.token) return; // skipped or left meanwhile
-    if (!sugg) return obUseSimple(T.aiFailed);
+    if (!res) return obSimplePersonas(T.aiFailedP);
     OB.busy = false;
-    OB.sugg = sugg;
-    OB.picked = sugg.questions.map(() => true);
-    OB.comps = sugg.competitors.slice();
+    OB.personas = res.personas;
+    OB.pOn = res.personas.map(() => true);
+    OB.topics = res.topics.length ? res.topics : [{ label: company().offer, keywords: [] }];
+    OB.comps = res.competitors.slice();
+    renderOnboarding();
+  }
+  async function obQuestions() {
+    const T = obL().ui.ob;
+    const id = firstKey();
+    if (!id) return obSimpleQuestions(T.simpleNote);
+    const token = ++OB.token;
+    OB.busy = id; OB.note = '';
+    renderOnboarding();
+    let qs = null;
+    const ps = activePersonas();
+    try {
+      const r = await MONITOR.callEngine(id, Object.assign({}, engineCfgOf(id), { max_searches: 0, grounding: false, max_tokens: 3000 }), MONITOR.questionsPrompt(company(), ps, OB.topics), KEYS[id]);
+      qs = MONITOR.parseQuestions(r.answer_text, ps);
+    } catch (e) { /* falls back to simple questions below */ }
+    if (!OB || token !== OB.token) return;
+    if (!qs) return obSimpleQuestions(T.aiFailed);
+    OB.busy = false;
+    OB.sugg = { questions: qs };
+    OB.picked = qs.map(() => true);
+    OB.qFor = personaSig();
     renderOnboarding();
   }
   async function obConnect(id) {
@@ -319,7 +372,7 @@
   function obFinish(check) {
     const c = company();
     const used = {};
-    const topics = (OB.sugg && OB.sugg.topics.length ? OB.sugg.topics : [{ label: c.offer, keywords: [] }]);
+    const topics = (OB.topics && OB.topics.length ? OB.topics : [{ label: c.offer, keywords: [] }]);
     const cats = topics.map(t => {
       let id = CORE.slugify(t.label) || 'topic'; let n = 2;
       while (used[id]) id = (CORE.slugify(t.label) || 'topic') + '-' + n++;
@@ -327,12 +380,14 @@
       return { id, label_en: t.label, label_de: t.label, keywords: t.keywords.length ? t.keywords : [t.label.toLowerCase()] };
     });
     const catFor = label => (cats.find(x => x.label_en === label) || cats[0]).id;
-    const questions = OB.sugg.questions.filter((q, i) => OB.picked[i]).map((q, i) => ({ id: 'q' + (i + 1), nr: i + 1, text: q.text, categories: [catFor(q.topic)], key: true, schedule: 'weekly' }));
+    const questions = OB.sugg.questions.filter((q, i) => OB.picked[i]).map((q, i) => ({ id: 'q' + (i + 1), nr: i + 1, text: q.text, categories: [catFor(q.topic)], key: true, schedule: 'weekly', persona: q.persona || null, lang: q.lang || '' }));
+    const personas = activePersonas().map(p => ({ id: p.id, name: p.name.trim(), who: p.who || '', lang: p.lang }));
     const domain = c.website.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').toLowerCase();
     const brand = { name: c.name, short: c.name, domain, city: c.where, aliases: [c.name] };
     own = emptyOwnData(brand, cats, questions);
     own.competitors = OB.comps.filter(Boolean);
     own.about = { website: c.website, offer: c.offer, where: c.where };
+    own.personas = personas;
     own.runList = questions.map(q => q.id);
     saveOwn(own);
     try { window.localStorage.removeItem('geo-engine:v1:own'); window.sessionStorage.setItem('geo-engine:setup-later', '1'); } catch (e) { /* storage unavailable */ }
@@ -393,15 +448,38 @@
         nav(con.length ? T.next : T.skip, () => obGo(3)) + '</div>';
     } else if (OB.step === 3) {
       let inner;
+      const langOpts = cur => { const codes = Object.keys(T.langs); if (codes.indexOf(cur) === -1) codes.push(cur); return codes.map(c => '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(T.langs[c] || c) + '</option>').join(''); };
+      if (OB.busy) {
+        inner = '<div class="ob-wait"><span class="spinner" aria-hidden="true"></span><div><b>' + esc(T.thinkingP(ENGINE_LIST.find(e => e.id === OB.busy).name)) + '</b><span class="small muted">' + esc(T.thinkingSlow) + '</span></div>' +
+          '<button class="btn sm plain" style="margin-left:auto" ' + click(() => obSimplePersonas('')) + '>' + esc(T.useSimpleP) + '</button></div>';
+      } else {
+        inner = (OB.note ? '<p class="small" style="color:var(--amber);margin:0">' + esc(OB.note) + '</p>' : '') +
+          '<div class="ob-list">' + OB.personas.map((p, i) => '<div class="ob-q ob-p">' +
+            '<input type="checkbox" aria-label="' + esc(T.usePersona(p.name)) + '"' + (OB.pOn[i] ? ' checked' : '') + ' ' + attr('change', () => { OB.pOn[i] = !OB.pOn[i]; OB.err = ''; renderOnboarding(); }) + '>' +
+            '<div class="ob-p-body"><div class="ob-p-row"><label for="ob-pn-' + i + '" class="sr">' + esc(T.personaName) + '</label>' +
+            '<input id="ob-pn-' + i + '" type="text" maxlength="60" value="' + esc(p.name) + '" placeholder="' + esc(T.personaPh) + '" ' + attr('input', e => { p.name = e.target.value; }) + '>' +
+            '<label for="ob-pl-' + i + '" class="sr">' + esc(T.personaLang) + '</label><select id="ob-pl-' + i + '" ' + attr('change', e => { p.lang = e.target.value; }) + '>' + langOpts(p.lang) + '</select></div>' +
+            (p.who ? '<span class="small muted">' + esc(p.who) + '</span>' : '') + '</div></div>').join('') + '</div>' +
+          '<button class="link s13" style="align-self:flex-start" ' + click(() => { const n = OB.personas.length + 1; OB.personas.push({ id: 'p' + Date.now().toString(36), name: '', who: '', lang: uiLang() }); OB.pOn.push(true); renderOnboarding(); const el = document.getElementById('ob-pn-' + (n - 1)); if (el) el.focus(); }) + '>+ ' + esc(T.addPersona) + '</button>';
+      }
+      body = '<div class="ob-card"><h1>' + esc(T.s3pTitle) + '</h1><p class="muted">' + esc(T.s3pText(company().name)) + '</p>' + inner + err +
+        (OB.busy ? '' : nav(T.next, () => obGo(4))) + '</div>';
+    } else if (OB.step === 4) {
+      let inner;
       if (OB.busy) {
         inner = '<div class="ob-wait"><span class="spinner" aria-hidden="true"></span><div><b>' + esc(T.thinking(ENGINE_LIST.find(e => e.id === OB.busy).name)) + '</b><span class="small muted">' + esc(T.thinkingSlow) + '</span></div>' +
-          '<button class="btn sm plain" style="margin-left:auto" ' + click(() => obUseSimple('')) + '>' + esc(T.useSimple) + '</button></div>';
+          '<button class="btn sm plain" style="margin-left:auto" ' + click(() => obSimpleQuestions('')) + '>' + esc(T.useSimple) + '</button></div>';
       } else {
         const qs = OB.sugg.questions;
+        const group = p => {
+          const idx = qs.map((q, i) => i).filter(i => qs[i].persona === p.id);
+          return '<div class="ob-group"><div class="ob-group-h"><b>' + esc(p.name) + '</b><span class="chip">' + esc(T.langs[p.lang] || p.lang) + '</span></div>' +
+            '<div class="ob-list">' + idx.map(i => '<label class="ob-q"><input type="checkbox"' + (OB.picked[i] ? ' checked' : '') + ' ' + attr('change', () => { OB.picked[i] = !OB.picked[i]; OB.err = ''; renderOnboarding(); }) + '><span lang="' + esc(qs[i].lang || '') + '">' + esc(qs[i].text) + '</span></label>').join('') + '</div>' +
+            '<div class="key-in"><label for="ob-newq-' + esc(p.id) + '" class="sr">' + esc(T.addPh) + '</label><input id="ob-newq-' + esc(p.id) + '" type="text" maxlength="300" placeholder="' + esc(T.addFor(p.name)) + '" value="' + esc(OB.newQ[p.id] || '') + '" ' + attr('input', e => { OB.newQ[p.id] = e.target.value; }) + ' ' +
+            attr('keydown', e => { if (e.key === 'Enter') addQ(p); }) + '><button class="btn plain" ' + click(() => addQ(p)) + '>' + esc(T.add) + '</button></div></div>';
+        };
         inner = (OB.note ? '<p class="small" style="color:var(--amber);margin:0">' + esc(OB.note) + '</p>' : '') +
-          '<div class="ob-list">' + qs.map((q, i) => '<label class="ob-q"><input type="checkbox"' + (OB.picked[i] ? ' checked' : '') + ' ' + attr('change', () => { OB.picked[i] = !OB.picked[i]; OB.err = ''; renderOnboarding(); }) + '><span>' + esc(q.text) + '</span></label>').join('') + '</div>' +
-          '<div class="key-in"><label for="ob-newq" class="sr">' + esc(T.addPh) + '</label><input id="ob-newq" type="text" maxlength="300" placeholder="' + esc(T.addPh) + '" value="' + esc(OB.newQ) + '" ' + attr('input', e => { OB.newQ = e.target.value; }) + ' ' +
-          attr('keydown', e => { if (e.key === 'Enter') addQ(); }) + '><button class="btn plain" ' + click(addQ) + '>' + esc(T.add) + '</button></div>' +
+          activePersonas().map(group).join('') +
           '<span class="small muted">' + esc(T.picked(OB.picked.filter(Boolean).length)) + '</span>' +
           '<div class="ob-comps"><b class="s14">' + esc(T.comps) + '</b><span class="small muted">' + esc(T.compsText) + '</span><div class="ob-chips">' +
           OB.comps.map((c, i) => '<span class="pill on" style="display:inline-flex;align-items:center;gap:4px">' + esc(c) + '<button class="icon" style="width:18px;height:18px" aria-label="Remove ' + esc(c) + '" ' + click(() => { OB.comps.splice(i, 1); renderOnboarding(); }) + '>' + ic('x', 11) + '</button></span>').join('') + '</div>' +
@@ -409,7 +487,7 @@
           attr('keydown', e => { if (e.key === 'Enter') addC(); }) + '><button class="btn plain" ' + click(addC) + '>' + esc(T.add) + '</button></div></div>';
       }
       body = '<div class="ob-card"><h1>' + esc(T.s3Title) + '</h1><p class="muted">' + esc(T.s3Text(company().name)) + '</p>' + inner + err +
-        (OB.busy ? '' : nav(T.next, () => obGo(4))) + '</div>';
+        (OB.busy ? '' : nav(T.next, () => obGo(5))) + '</div>';
     } else {
       const con = ENGINE_LIST.filter(e => KEYS[e.id]);
       const n = OB.picked.filter(Boolean).length;
@@ -417,11 +495,11 @@
       const money = v => v.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
       body = '<div class="ob-card"><h1>' + esc(T.s4Title) + '</h1>' +
         (con.length ? '<p>' + esc(T.s4Text(n, con.map(e => e.name).join(lang === 'de' ? ' und ' : ' and '))) + '</p><p class="muted s14" style="margin:0">' + esc(T.s4Cost(usd ? money(usd) : T.free, Math.max(1, Math.ceil(n * 10 / 60)))) + '</p>' +
-          '<div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(3)) + '>' + esc(T.back) + '</button><button class="btn plain" ' + click(() => obFinish(false)) + '>' + esc(T.s4Later) + '</button>' +
+          '<div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(4)) + '>' + esc(T.back) + '</button><button class="btn plain" ' + click(() => obFinish(false)) + '>' + esc(T.s4Later) + '</button>' +
           '<button class="btn big" ' + click(() => obFinish(true)) + '>' + ic('runs', 17) + esc(T.s4Btn) + '</button></div>'
-          : '<p>' + esc(T.s4NoKey) + '</p><div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(3)) + '>' + esc(T.back) + '</button><button class="btn big" ' + click(() => obFinish(false)) + '>' + esc(T.s4Open) + ic('arrow', 16) + '</button></div>') + '</div>';
+          : '<p>' + esc(T.s4NoKey) + '</p><div class="ob-nav"><button class="btn ghost" ' + click(() => obGo(4)) + '>' + esc(T.back) + '</button><button class="btn big" ' + click(() => obFinish(false)) + '>' + esc(T.s4Open) + ic('arrow', 16) + '</button></div>') + '</div>';
     }
-    function addQ() { const t = OB.newQ.trim(); if (t.length < 8) return; OB.sugg.questions.push({ text: t.slice(0, 300), topic: '' }); OB.picked.push(true); OB.newQ = ''; renderOnboarding(); }
+    function addQ(p) { const t = String(OB.newQ[p.id] || '').trim(); if (t.length < 8) return; OB.sugg.questions.push({ text: t.slice(0, 300), topic: '', persona: p.id, lang: p.lang }); OB.picked.push(true); OB.newQ[p.id] = ''; renderOnboarding(); }
     function addC() { const t = OB.newComp.trim(); if (!t) return; if (OB.comps.indexOf(t) === -1) OB.comps.push(t.slice(0, 60)); OB.newComp = ''; renderOnboarding(); }
     root.innerHTML = '<div class="ob">' + top + stepper + body + '</div>';
     const f = (focused && document.getElementById(focused)) || root.querySelector('.ob input[type=text], .ob input[type=password]');
@@ -507,7 +585,7 @@
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}, radarHidden: {}, radarTracked: {},
       radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
-      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null,
+      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false,
       qSearch: '', qTopic: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page', keyDraft: {}, keyMsg: {}
     }, saved, init || {});
@@ -1418,7 +1496,7 @@
       render();
       const about = own.about || {};
       const company = { name: own.brand.name, website: about.website || own.brand.domain || '', offer: about.offer || CATS.map(c => catLabel(c.id)).join(', '), where: about.where || own.brand.city || '',
-        topics: CATS.map(c => catLabel(c.id)), questions: allQ().map(q => q.text) };
+        topics: CATS.map(c => catLabel(c.id)), questions: allQ().map(q => q.text), personas: own.personas || [] };
       let parsed = null, err = null;
       try {
         const r = await MONITOR.callEngine(id, Object.assign({}, engineCfg(id), { max_tokens: MONITOR.RADAR_SCAN_TOKENS }), MONITOR.radarScanPrompt(company, state.lang), KEYS[id]);
@@ -1791,14 +1869,36 @@
     function setupHtml(enter) {
       const S = L().ui.setup;
       const close = () => { try { window.sessionStorage.setItem(SETUP_KEY, '1'); } catch (e) { /* storage unavailable */ } set({ setup: false }); };
+      const allSet = mode === 'own' && setupSteps().every(x => x.done);
       return '<div class="scrim' + (enter ? ' enter' : '') + '" ' + click(close) + '></div>' +
         '<div class="modal setup-modal' + (enter ? ' enter' : '') + '" role="dialog" aria-modal="true" aria-labelledby="setup-title">' +
-        '<div class="setup-top"><div><h2 id="setup-title" style="font-size:18px">' + esc(S.title) + '</h2><p class="s13 muted" style="margin:4px 0 0">' + esc(S.sub) + '</p></div>' +
+        '<div class="setup-top"><div><h2 id="setup-title" style="font-size:18px">' + esc(allSet ? S.titleDone : S.title) + '</h2><p class="s13 muted" style="margin:4px 0 0">' + esc(allSet ? S.subDone : S.sub) + '</p></div>' +
         '<button class="icon-btn" data-autofocus aria-label="' + esc(L().ui.close) + '" ' + click(close) + '>' + ic('x', 16) + '</button></div>' +
         setupBody() +
-        '<div class="setup-foot"><button class="btn plain" ' + click(close) + '>' + esc(S.later) + '</button></div></div>';
+        (mode === 'own' && own ? (state.resetAsk
+          ? '<div class="setup-reset" role="alert"><b>' + esc(S.resetTitle(BRAND.name || BRAND.short)) + '</b><span class="s13">' + esc(S.resetText) + '</span>' +
+            '<div class="setup-actions"><button class="btn plain" ' + click(() => set({ resetAsk: false })) + '>' + esc(S.resetCancel) + '</button>' +
+            '<button class="btn danger" ' + click(resetOwn) + '>' + esc(S.resetYes) + '</button></div></div>'
+          : '') : '') +
+        '<div class="setup-foot">' + (mode === 'own' && own && !state.resetAsk ? '<button class="link s13 warn" style="margin-right:auto" ' + click(() => set({ resetAsk: true })) + '>' + esc(S.reset) + '</button>' : '') +
+        '<button class="btn plain" ' + click(close) + '>' + esc(S.later) + '</button></div></div>';
     }
-    function openSetup() { set({ setup: true, setupOpen: null, palette: false, navOpen: false, fx: 'setup' }); }
+    // Start over: this brand's questions, results and radar leave this
+    // browser. Keys stay, so the next company can be checked right away.
+    function resetOwn() {
+      if (RUN.status === 'running') return;
+      try {
+        window.localStorage.removeItem(OWN_KEY);
+        window.localStorage.removeItem('geo-engine:v1:own');
+        window.sessionStorage.removeItem('geo-engine:setup-later');
+      } catch (e) { /* storage unavailable */ }
+      own = null;
+      Object.assign(RUN, { status: 'idle', errors: {} });
+      Object.assign(RADAR_SCAN, { busy: null, error: null });
+      mode = 'own'; saveMode('own');
+      startOnboarding();
+    }
+    function openSetup() { set({ setup: true, setupOpen: null, resetAsk: false, palette: false, navOpen: false, fx: 'setup' }); }
 
     // ---------- Shell helpers ----------
     const LOGO = '<svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M9 16a7 7 0 1 0 7-7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="16" cy="16" r="2.8" fill="currentColor"/></svg>';
@@ -1813,7 +1913,7 @@
       const S = L().ui.setup;
       if (mode === 'demo') return '<button class="side-cta" ' + click(switchToOwn) + '>' + ic('run', 16) + '<span>' + esc(S.demoCta) + '</span>' + ic('chevron', 14) + '</button>';
       const steps = setupSteps(); const done = steps.filter(x => x.done).length;
-      if (done === steps.length) return '';
+      if (done === steps.length) return '<button class="side-hint" ' + click(openSetup) + '>' + ic('settings', 15) + '<span>' + esc(S.settings) + '</span></button>';
       return '<button class="side-cta" ' + click(openSetup) + '>' + CH.ring(Math.round(done / steps.length * 100), { size: 22, stroke: 3, color: 'var(--good)', unit: '', label: S.progress(done, steps.length) }).replace(/<text[\s\S]*?<\/text>/, '') +
         '<span>' + esc(S.nav) + '</span><span class="nav-count">' + done + '/' + steps.length + '</span></button>';
     }
