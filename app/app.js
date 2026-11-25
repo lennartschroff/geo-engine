@@ -661,6 +661,14 @@
       missed: MONITOR.missedCompetitors(own.runs, BRAND_NAMES, COMPETITORS,
         { exclude: D.categories.reduce((a, c) => a.concat([c.label_en, c.label_de], c.keywords || []), []) }),
     } : null;
+    if (INS) {
+      const last = own.runs.reduce((m, r) => r.timestamp > m ? r.timestamp : m, '');
+      INS.counts = MONITOR.nameCounts(own.runs, BRAND_NAMES, COMPETITORS);
+      INS.sources = MONITOR.topSources(own.runs, BRAND.domain);
+      INS.enginesRan = [...new Set(own.runs.map(r => r.engine))];
+      INS.findings = MONITOR.findings({ personas: INS.personas, site: INS.site, missed: INS.missed, counts: INS.counts, sources: INS.sources,
+        daysSinceCheck: last ? Math.floor((Date.now() - Date.parse(last)) / 86400000) : null, enginesRan: INS.enginesRan });
+    }
     // Latest stored answer per question and engine, for the "site used, brand not named" note.
     const LATEST_ROW = {};
     if (HAS_RUNS) own.runs.forEach(r => { if (r.variant) return; const k = r.question_id + '|' + r.engine; if (!LATEST_ROW[k] || r.timestamp > LATEST_ROW[k].timestamp) LATEST_ROW[k] = r; });
@@ -933,10 +941,31 @@
 
       return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.overview) + ' · ' + esc(BRAND.short) + '</h1><p>' + esc(l.ui.overviewSub) + '</p></div>' +
         '<div class="actions"><button class="btn" ' + click(() => set({ tab: 'write', writeStep: 1, brief: '' })) + '>' + ic('write', 15) + esc(l.ui.actWrite) + '</button></div></div>' +
-        banner + kpis + insights() +
+        banner + standsOut() + kpis + insights() +
         '<div class="grid g-main">' + trend + engines + '</div>' +
         '<div class="grid g-main">' + nba + topics + '</div>' +
         heat + callout + '</section>';
+    }
+
+    // ---------- What stands out (TASKS.md I4, I9, I10) ----------
+    function standsOut() {
+      if (!INS || !INS.findings.length) return '';
+      const l = L(); const F = l.ui.find; const b = BRAND.short;
+      const engName = id => (ENGINES.find(e => e.id === id) || { name: id }).name;
+      const act = (label, fn, primary) => '<button class="btn sm' + (primary ? '' : ' plain') + '" ' + click(fn) + '>' + esc(label) + '</button>';
+      const item = f => {
+        let text = '', acts = '';
+        if (f.kind === 'stale') { text = F.stale(f.days); acts = act(F.recheck, () => { if (connected().length) startCheck(); else set({ tab: 'runs' }); }, true); }
+        if (f.kind === 'personaZero') { text = F.personaZero(f.name, f.asked, b); acts = (f.question ? act(F.write, () => openDraft(f.question), true) : '') + act(F.seeQuestions, () => set({ tab: 'questions', qPersona: f.persona, scope: 'all', qSel: -1 })); }
+        if (f.kind === 'siteUnnamed') { text = F.siteUnnamed(f.cited, f.named, BRAND.domain, b); acts = f.question ? act(F.seeAnswer, () => openQuestion(f.question)) : ''; }
+        if (f.kind === 'competitorAhead') { text = F.competitorAhead(f.name, f.answers, f.brand, b); acts = act(F.seeQuestions, () => set({ tab: 'questions', scope: 'all', qSel: -1 })); }
+        if (f.kind === 'topSource') { text = F.topSource(f.domain, f.answers, f.of); acts = act(F.seeSources, () => set({ tab: 'sources' })); }
+        if (f.kind === 'missed') { text = F.missed(f.name, f.answers); acts = act(F.add, () => addCompetitor(f.name)); }
+        if (f.kind === 'oneEngine') { text = F.oneEngine(engName(f.engine)); acts = act(F.connect, () => set({ tab: 'runs' })); }
+        return '<li class="find"><span class="find-dot find-' + f.kind + '" aria-hidden="true"></span><span class="find-t">' + esc(text) + '</span><span class="find-a">' + acts + '</span></li>';
+      };
+      return '<div class="panel find-panel"><div class="panel-h"><div><h2>' + esc(F.title) + '</h2><span class="sub">' + esc(F.sub) + '</span></div></div>' +
+        '<ul class="find-list">' + INS.findings.slice(0, 5).map(item).join('') + '</ul></div>';
     }
 
     // ---------- Findings on the Overview (TASKS.md I1-I3) ----------
@@ -1423,6 +1452,29 @@
         '<button class="btn" style="align-self:flex-start" ' + click(() => openDraft(firstQ ? firstQ.id : state.selectedQ)) + '>' + esc(l.startDraft) + '</button></div></section>';
     }
 
+    // What the assistants answer to this question today (TASKS.md I5): who
+    // they name, which sources they read, so the draft closes the real gap.
+    function todayAnswers(q) {
+      if (!HAS_RUNS) return '';
+      const W = L().ui.today;
+      const rows = ENGINES.map(e => LATEST_ROW[q.id + '|' + e.id]).filter(Boolean);
+      if (!rows.length) return '';
+      const item = r => {
+        const e = ENGINES.find(x => x.id === r.engine);
+        const m = MONITOR.detectMention(r.answer_text, BRAND_NAMES, COMPETITORS);
+        const others = m.providers.filter(p => p !== '(brand)');
+        const src = (r.cited_urls || []).slice(0, 5);
+        const plain = CORE.textFromMarkdown ? CORE.textFromMarkdown(r.answer_text) : r.answer_text;
+        return '<div class="today-item"><div class="small" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-weight:600">' + esc(e ? e.name : r.engine) + '</b>' +
+          '<span class="' + (m.mentioned ? 'good' : 'warn') + '">' + esc(m.mentioned ? W.named(BRAND.short) : W.notNamed(BRAND.short)) + '</span></div>' +
+          (others.length ? '<span class="s13">' + esc(W.instead(others.join(', '))) + '</span>' : '') +
+          (src.length ? '<span class="s13 muted">' + esc(W.sources(src.join(', '))) + '</span>' : '') +
+          '<span class="s13 muted today-ex">' + esc(String(plain).replace(/\s+/g, ' ').slice(0, 260)) + '…</span></div>';
+      };
+      return '<details class="panel today"' + (rows.some(r => !r.mentioned) ? ' open' : '') + '><summary class="panel-h" style="cursor:pointer"><div><h2>' + esc(W.title) + '</h2><span class="sub">' + esc(W.sub(BRAND.short)) + '</span></div></summary>' +
+        '<div class="panel-b" style="display:flex;flex-direction:column;gap:12px">' + rows.map(item).join('') + '</div></details>';
+    }
+
     function viewStudio() {
       const l = L();
       const sel = allQ().find(q => q.id === state.selectedQ) || QUESTIONS[0];
@@ -1483,6 +1535,7 @@
 
       return '<section><div class="head"><button class="link" style="align-self:flex-start" ' + click(() => set({ writeStep: 1 })) + '>' + esc(l.changeTopic) + '</button>' +
         '<span class="s13 muted">' + esc(l.targetQ) + '</span><h1 style="font-size:26px">' + esc(sel.text) + '</h1><span class="s13 muted">' + esc(statusLine) + '</span></div>' +
+        todayAnswers(sel) +
         '<div class="studio"><div class="col-lib"><div class="listhead" style="min-height:0;padding-bottom:10px"><h2 style="font-size:15px">' + esc(l.matchingBlocks) + '</h2><button class="link s13" ' + click(() => set({ allBlocks: !state.allBlocks })) + '>' + esc(state.allBlocks ? l.onlyMatching : l.showAll) + '</button></div><div class="libscroll">' + (sugg || '<div class="muted s13" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
         '<div class="col-draft"><div class="listhead" style="min-height:0;padding-bottom:10px"><h2 style="font-size:15px">' + esc(l.draftTitle) + '</h2><span class="s13 muted">' + esc(l.blocksN(n)) + '</span></div>' +
         '<div style="display:flex;flex-direction:column;padding-top:8px">' + draft +
