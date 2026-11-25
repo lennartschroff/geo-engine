@@ -450,6 +450,39 @@
     }).filter(x => x.text.length >= 8 && !seen.has(normalize(x.text)) && seen.add(normalize(x.text))).slice(0, 25);
     return questions.length ? questions : null;
   }
+  // ---------- First draft for a gap (TASKS.md I13) ----------
+  // Asks for citable blocks (the same six types the GEO score checks), not
+  // free prose, so the draft lands in the studio and gets scored. Facts the
+  // model can't know about the company become [placeholder: ...] markers.
+  const BLOCK_TYPES = ['statement', 'definition', 'figure', 'case', 'quote', 'faq'];
+  function draftPrompt(d) {
+    const c = d.company || {};
+    const t = d.today || {};
+    const lang = langName(d.lang || 'en');
+    const ph = d.lang === 'de' ? '[Platzhalter: ...]' : '[placeholder: ...]';
+    return [
+      'Write the first draft of a web page that answers one question, for the website of ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + (c.offer || '-') + (c.where ? ' in ' + c.where : '') + '.',
+      'The question: "' + d.question + '"' + (d.persona ? ' — asked by: ' + d.persona : '') + '.',
+      t.competitors && t.competitors.length ? 'AI assistants currently name these providers instead: ' + t.competitors.join(', ') + '. Do not mention them.' : '',
+      t.sources && t.sources.length ? 'They currently read these sites: ' + t.sources.join(', ') + '.' : '',
+      'Goal: an AI assistant that reads the page can quote it and name ' + c.name + ' as the provider behind the answer.',
+      'Reply with JSON only, no other text, in this shape:',
+      '{"blocks":[{"type":"statement|definition|figure|case|quote|faq","text":"..."}]}',
+      'Write 5 to 7 blocks in this order: a "statement" that answers the question directly in 40 to 60 words and names ' + c.name + '; a "definition" of the key term; a "figure"; a "case"; a "quote"; then one or two "faq" blocks written as "Question? Answer".',
+      'Facts: about ' + c.name + ' you only know the description above. Never invent numbers, prices, dates, customer names, project names, quotes, or services, steps and methods the description does not mention. Where the page needs such a fact, write ' + ph + ' saying what belongs there, e.g. ' + (d.lang === 'de' ? '[Platzhalter: Anzahl umgesetzter Projekte]' : '[placeholder: number of completed projects]') + '. The "quote" is always a placeholder for a real person at ' + c.name + '. General facts about the topic are fine if they are well established; no statistics without a named source.',
+      'Each block stands on its own: name the subject instead of starting with "it" or "this". No advertising language, no emojis. At most 80 words per block.',
+      'Write everything in ' + lang + '.',
+    ].filter(Boolean).join('\n');
+  }
+  function parseDraftBlocks(text) {
+    const j = jsonFrom(text);
+    const raw = j && Array.isArray(j.blocks) ? j.blocks : [];
+    const blocks = raw.map(b => ({ type: BLOCK_TYPES.includes(String(b && b.type).toLowerCase()) ? String(b.type).toLowerCase() : null, text: str(b && b.text, 700) }))
+      .filter(b => b.type && b.text.length >= 15).slice(0, 8);
+    return blocks.length >= 2 ? blocks : null;
+  }
+  const hasPlaceholder = t => /\[(placeholder|platzhalter)\b/i.test(String(t || ''));
+
   // Without an AI: one plain persona in the interface language.
   function templatePersonas(lang) {
     return [{ id: 'p1', name: lang === 'de' ? 'Kunden' : 'Customers', who: '', lang: lang === 'de' ? 'de' : 'en' }];
@@ -548,7 +581,7 @@
 
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
-    personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
+    draftPrompt, parseDraftBlocks, hasPlaceholder, BLOCK_TYPES, personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
     personaStats, ownSiteUse, missedCompetitors, nameCounts, topSources, findings, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };

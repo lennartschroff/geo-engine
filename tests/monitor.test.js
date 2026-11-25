@@ -300,3 +300,27 @@ describe('what stands out', () => {
       counts: { answers: 10, brand: 6, competitors: [{ name: 'X', answers: 3 }] }, sources: [{ domain: 'a.de', answers: 2 }], missed: [], enginesRan: ['claude', 'gemini'] }), []);
   });
 });
+
+describe('first draft for a gap', () => {
+  test('prompt: question, persona, language, no competitors, placeholders instead of invented facts', () => {
+    const p = M.draftPrompt({ company: { name: 'DoppelErnte', website: 'doppelernte.de', offer: 'Agri-PV', where: 'Bayern' }, question: 'Lohnt sich Agri-PV?', persona: 'Landwirt mit Flächen', lang: 'de',
+      today: { competitors: ['Next2Sun'], sources: ['feldwerke.de'] } });
+    assert.match(p, /"Lohnt sich Agri-PV\?" — asked by: Landwirt mit Flächen/);
+    assert.match(p, /instead: Next2Sun\. Do not mention them\./);
+    assert.match(p, /\[Platzhalter: Anzahl umgesetzter Projekte\]/);
+    assert.match(p, /Write everything in German\.$/);
+  });
+  test('parse: known block types only, short ones dropped, placeholders recognised', () => {
+    const t = '```json\n' + JSON.stringify({ blocks: [
+      { type: 'Statement', text: 'DoppelErnte plant Agri-PV-Anlagen für Landwirte in Bayern.' },
+      { type: 'figure', text: 'DoppelErnte hat [Platzhalter: Anzahl Projekte] Projekte umgesetzt.' },
+      { type: 'poem', text: 'Nicht erlaubt, aber lang genug als Text.' },
+      { type: 'faq', text: 'Kurz?' },
+    ] }) + '\n```';
+    assert.deepEqual(M.parseDraftBlocks(t).map(b => b.type), ['statement', 'figure']);
+    assert.equal(M.hasPlaceholder('x [Platzhalter: y]'), true);
+    assert.equal(M.hasPlaceholder('[placeholder: y]'), true);
+    assert.equal(M.hasPlaceholder('kein Platzhalter'), false);
+    assert.equal(M.parseDraftBlocks('{"blocks":[{"type":"faq","text":"Nur ein einziger Block hier."}]}'), null);
+  });
+});
