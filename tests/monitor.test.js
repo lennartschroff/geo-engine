@@ -224,3 +224,19 @@ describe('radar scan: cut-off answers', () => {
     assert.equal(JSON.parse(M.request('claude', { model: 'm' }, 'p', 'k').init.body).max_tokens, 1024);
   });
 });
+
+describe('brand aliases', () => {
+  test('the legal form is dropped as a second name', () => {
+    assert.deepEqual(M.brandAliases('DoppelErnte GmbH'), ['DoppelErnte GmbH', 'DoppelErnte']);
+    assert.deepEqual(M.brandAliases('Muster GmbH & Co. KG'), ['Muster GmbH & Co. KG', 'Muster']);
+    assert.deepEqual(M.brandAliases('Acme Inc.'), ['Acme Inc.', 'Acme']);
+    assert.deepEqual(M.brandAliases('Laufwerk'), ['Laufwerk']);
+    assert.deepEqual(M.brandAliases('AG'), []);
+    assert.deepEqual(M.brandAliases('Agrar AG', ['agrar', 'Agrar-Tech']), ['Agrar AG', 'Agrar', 'Agrar-Tech']);
+  });
+  test('redetect counts answers that use the short name', () => {
+    const rows = [{ answer_text: '## 3. **DoppelErnte**\nDoppelErnte wird als Experte beschrieben. Next2Sun auch.', mentioned: 0, position: null }];
+    const r = M.redetect(rows, M.brandAliases('DoppelErnte GmbH'), ['Next2Sun']);
+    assert.equal(r[0].mentioned, 1); assert.equal(r[0].position, 1);
+  });
+});

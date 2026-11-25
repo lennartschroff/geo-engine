@@ -64,6 +64,18 @@
 
   let mode = loadMode();
   let own = loadOwn();
+  // Brands set up before short names existed: add "DoppelErnte" next to
+  // "DoppelErnte GmbH" and count the stored answers again, once.
+  if (own && own.brand && Array.isArray(own.runs) && own.runs.length && window.GEO_MONITOR) {
+    const want = window.GEO_MONITOR.brandAliases(own.brand.name, own.brand.aliases);
+    if (want.length > (own.brand.aliases || []).length) {
+      const comps = own.competitors || (own.demo && own.demo.competitors) || [];
+      own.brand.aliases = want;
+      own.runs = window.GEO_MONITOR.redetect(own.runs, want, comps);
+      own.demo = Object.assign({}, own.demo, window.GEO_MONITOR.summarize(own.runs, own.brand, comps));
+      saveOwn(own);
+    }
+  }
 
   // ---------- Shared helpers & event wiring (used by every screen) ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -383,7 +395,7 @@
     const questions = OB.sugg.questions.filter((q, i) => OB.picked[i]).map((q, i) => ({ id: 'q' + (i + 1), nr: i + 1, text: q.text, categories: [catFor(q.topic)], key: true, schedule: 'weekly', persona: q.persona || null, lang: q.lang || '' }));
     const personas = activePersonas().map(p => ({ id: p.id, name: p.name.trim(), who: p.who || '', lang: p.lang }));
     const domain = c.website.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').toLowerCase();
-    const brand = { name: c.name, short: c.name, domain, city: c.where, aliases: [c.name] };
+    const brand = { name: c.name, short: c.name, domain, city: c.where, aliases: MONITOR.brandAliases(c.name) };
     own = emptyOwnData(brand, cats, questions);
     own.competitors = OB.comps.filter(Boolean);
     own.about = { website: c.website, offer: c.offer, where: c.where };

@@ -153,6 +153,23 @@
   }
 
   // One stored answer, in the same shape as a runs.sqlite row.
+  // Names an assistant may use for the brand: as typed, and without the
+  // legal form ("DoppelErnte GmbH" is often just "DoppelErnte" in answers).
+  const LEGAL_FORM = /[\s,]+(gmbh\s*&\s*co\.?\s*kg|gmbh|ag|ug(\s*\(haftungsbeschr\u00e4nkt\))?|kgaa|kg|ohg|gbr|se|e\.\s?v\.|ev|ltd\.?|limited|inc\.?|llc|corp\.?|plc|sas|sarl|s\.?a\.?|b\.v\.|bv|n\.v\.|nv|srl|s\.r\.l\.|spa|s\.p\.a\.|oy|ab|aps|a\/s)\s*$/i;
+  function brandAliases(name, extra) {
+    const out = [];
+    const add = x => { const t = String(x || '').trim(); if (t.length >= 3 && !out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); };
+    add(name);
+    let short = String(name || '').trim();
+    for (let i = 0; i < 3 && LEGAL_FORM.test(short); i++) short = short.replace(LEGAL_FORM, '').trim();
+    add(short);
+    (extra || []).forEach(add);
+    return out;
+  }
+  // Mentions counted again with the current names, e.g. after an alias was added.
+  function redetect(rows, aliases, competitors) {
+    return (rows || []).map(r => { const m = detectMention(r.answer_text, aliases, competitors); return Object.assign({}, r, { mentioned: m.mentioned ? 1 : 0, position: m.position }); });
+  }
   function makeRow(question, engine, model, prompt, answer, brandAliases, competitors, when) {
     const m = detectMention(answer.answer_text, brandAliases, competitors);
     return {
@@ -419,7 +436,7 @@
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
     personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
-    ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
+    brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };
 });
