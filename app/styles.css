@@ -914,3 +914,4 @@ button.ins-row:hover { background: var(--hover); }
 }
 .eb-text { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: 14px; line-height: 1.5; padding: 8px 10px; border: 1px solid var(--input, var(--line)); border-radius: 8px; background: var(--surface); color: var(--fg); resize: vertical; }
 .ph-mark { background: var(--amber-soft, rgba(217, 119, 6, .16)); color: inherit; border-radius: 3px; padding: 0 2px; }
+@media (max-width: 640px) { .rp-bar > .muted { display: none; } }

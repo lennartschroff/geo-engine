@@ -657,23 +657,34 @@
     const PERSONAS = (mode === 'own' && own && own.personas) || [];
     const personaName = id => { const p = PERSONAS.find(x => x.id === id); return p ? p.name : ''; };
     const HAS_RUNS = mode === 'own' && own && Array.isArray(own.runs) && own.runs.length > 0;
-    const INS = HAS_RUNS ? {
+    // The demo has stored answers but no rows; rebuild rows from them so the
+    // findings, the report and the studio's "today" panel show in the demo too.
+    const ENG_CODE_ORDER = ['claude', 'gpt', 'gemini'];
+    const RUN_ROWS = HAS_RUNS ? own.runs : mode === 'demo' ? Object.keys(ANSWERS).reduce((acc, qid) => acc.concat((ANSWERS[qid] || []).filter(a => !a.variant).map(a => {
+      const code = ((D.demo.results[qid] || {}).r || '').split(' ')[ENG_CODE_ORDER.indexOf(a.engine)] || '';
+      return { question_id: qid, engine: a.engine, timestamp: (a.date || '2026-01-01') + 'T00:00:00Z', answer_text: a.text || '', mentioned: /^[cm]/.test(code) ? 1 : 0, cited_urls: [], variant: 0 };
+    })), []) : [];
+    const INS = RUN_ROWS.length ? {
       personas: MONITOR.personaStats(D.questions, D.demo.results || {}, PERSONAS),
-      site: MONITOR.ownSiteUse(own.runs, BRAND.domain),
-      missed: MONITOR.missedCompetitors(own.runs, BRAND_NAMES, COMPETITORS,
-        { exclude: D.categories.reduce((a, c) => a.concat([c.label_en, c.label_de], c.keywords || []), []) }),
+      site: MONITOR.ownSiteUse(RUN_ROWS, BRAND.domain),
+      missed: HAS_RUNS ? MONITOR.missedCompetitors(RUN_ROWS, BRAND_NAMES, COMPETITORS,
+        { exclude: D.categories.reduce((a, c) => a.concat([c.label_en, c.label_de], c.keywords || []), []) }) : [],
     } : null;
     if (INS) {
-      const last = own.runs.reduce((m, r) => r.timestamp > m ? r.timestamp : m, '');
-      INS.counts = MONITOR.nameCounts(own.runs, BRAND_NAMES, COMPETITORS);
-      INS.sources = MONITOR.topSources(own.runs, BRAND.domain);
-      INS.enginesRan = [...new Set(own.runs.map(r => r.engine))];
+      const last = RUN_ROWS.reduce((m, r) => r.timestamp > m ? r.timestamp : m, '');
+      INS.last = last;
+      INS.counts = MONITOR.nameCounts(RUN_ROWS, BRAND_NAMES, COMPETITORS);
+      INS.sources = HAS_RUNS ? MONITOR.topSources(RUN_ROWS, BRAND.domain) : [];
+      INS.enginesRan = [...new Set(RUN_ROWS.map(r => r.engine))];
       INS.findings = MONITOR.findings({ personas: INS.personas, site: INS.site, missed: INS.missed, counts: INS.counts, sources: INS.sources,
-        daysSinceCheck: last ? Math.floor((Date.now() - Date.parse(last)) / 86400000) : null, enginesRan: INS.enginesRan });
+        daysSinceCheck: HAS_RUNS && last ? Math.floor((Date.now() - Date.parse(last)) / 86400000) : null, enginesRan: INS.enginesRan })
+        // The demo keeps answer texts for a few questions only, so counts from them
+        // would contradict the totals; show only what is based on every question.
+        .filter(f => HAS_RUNS || f.kind !== 'competitorAhead');
     }
     // Latest stored answer per question and engine, for the "site used, brand not named" note.
     const LATEST_ROW = {};
-    if (HAS_RUNS) own.runs.forEach(r => { if (r.variant) return; const k = r.question_id + '|' + r.engine; if (!LATEST_ROW[k] || r.timestamp > LATEST_ROW[k].timestamp) LATEST_ROW[k] = r; });
+    RUN_ROWS.forEach(r => { if (r.variant) return; const k = r.question_id + '|' + r.engine; if (!LATEST_ROW[k] || r.timestamp > LATEST_ROW[k].timestamp) LATEST_ROW[k] = r; });
     const QUESTIONS = D.questions.map(q => {
       const res = D.demo.results[q.id];
       return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, persona: q.persona || null, lang: q.lang || '', comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
@@ -955,10 +966,12 @@
     function reportHtml() {
       const l = L(); const R = l.ui.report; const b = BRAND.short;
       const day = d => new Date(d).toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-      const last = own.runs.reduce((m, r) => r.timestamp > m ? r.timestamp : m, '');
+      const last = INS.last;
       const ran = ENGINES.filter(e => INS.enginesRan.includes(e.id));
       const qs = QUESTIONS.filter(q => q.key);
-      const named = INS.counts.brand, total = INS.counts.answers;
+      // Same basis as the table below: every key question and assistant that answered.
+      let named = 0, total = 0;
+      qs.forEach(q => ran.forEach(e => { const k = status(q, e.id).k; if (k === 'cited' || k === 'mentioned') { named++; total++; } else if (k === 'absent') total++; }));
       const stat = (v, t) => '<div class="rp-stat"><b>' + esc(v) + '</b><span>' + esc(t) + '</span></div>';
       const P = INS.personas.filter(p => p.asked);
       const cell = (q, e) => { const k = status(q, e.id).k; return '<td class="rp-' + k + '">' + esc(l.dot[k] || '–') + '</td>'; };
@@ -966,8 +979,8 @@
         '<span class="s13 muted">' + esc(R.hint) + '</span><button class="btn" ' + click(() => window.print()) + '>' + ic('download', 15) + esc(R.print) + '</button></div>' +
         '<article class="rp-page"><header><span class="rp-kicker">' + esc(R.kicker) + '</span><h1>' + esc(R.title(b)) + '</h1>' +
         '<p class="rp-meta">' + esc(R.meta(last ? day(last) : '–', ran.map(e => e.name).join(', '), qs.length)) + '</p></header>' +
-        '<section><div class="rp-stats">' + stat(pct(named, total) + ' %', R.sVis(named, total)) + stat(String(INS.site.cited), R.sSite(BRAND.domain, INS.site.named)) +
-        (INS.counts.competitors[0] && INS.counts.competitors[0].answers ? stat(INS.counts.competitors[0].name, R.sComp(INS.counts.competitors[0].answers)) : '') + '</div></section>' +
+        '<section><div class="rp-stats">' + stat(pct(named, total) + ' %', R.sVis(named, total)) + (INS.site.cited ? stat(String(INS.site.cited), R.sSite(BRAND.domain, INS.site.named)) : '') +
+        (HAS_RUNS && INS.counts.competitors[0] && INS.counts.competitors[0].answers ? stat(INS.counts.competitors[0].name, R.sComp(INS.counts.competitors[0].answers)) : '') + '</div></section>' +
         (INS.findings.length ? '<section><h2>' + esc(R.hFind) + '</h2><ol>' + INS.findings.filter(f => ['stale', 'missed', 'oneEngine'].indexOf(f.kind) === -1).map(f => '<li>' + esc(findText(f)) + '</li>').join('') + '</ol></section>' : '') +
         (P.length ? '<section><h2>' + esc(R.hPersona) + '</h2><table><thead><tr><th>' + esc(R.colGroup) + '</th><th>' + esc(R.colNamed) + '</th></tr></thead><tbody>' +
           P.map(p => '<tr><td>' + esc(p.name || l.ui.insNoPersona) + '</td><td>' + esc(l.ui.insOf(p.named, p.asked)) + '</td></tr>').join('') + '</tbody></table></section>' : '') +
@@ -1490,7 +1503,7 @@
     // What the assistants answer to this question today (TASKS.md I5): who
     // they name, which sources they read, so the draft closes the real gap.
     function todayAnswers(q) {
-      if (!HAS_RUNS) return '';
+      if (!RUN_ROWS.length) return '';
       const W = L().ui.today;
       const rows = ENGINES.map(e => LATEST_ROW[q.id + '|' + e.id]).filter(Boolean);
       if (!rows.length) return '';
