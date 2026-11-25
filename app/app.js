@@ -564,6 +564,10 @@
       return { k: 'notrun' };
     }
     const absentCount = q => ENGINES.filter(e => status(q, e.id).k === 'absent').length;
+    // No engine that answered names the brand. Counts only engines that ran,
+    // so a brand checked with one assistant is not measured against three.
+    const answeredCount = q => ENGINES.filter(e => ['cited', 'mentioned', 'absent'].includes(status(q, e.id).k)).length;
+    const isFullGap = q => answeredCount(q) > 0 && absentCount(q) === answeredCount(q);
     const isGap = q => absentCount(q) > 0;
     const isHit = k => k === 'cited' || k === 'mentioned';
 
@@ -677,18 +681,18 @@
       const perEngine = ENGINES.map((e, i) => {
         const c = { cited: 0, mentioned: 0, absent: 0, other: 0 };
         keyQs.forEach(q => { const k = status(q, e.id).k; if (c[k] !== undefined) c[k]++; else c.other++; });
-        return { e, i, c, pct: pct(c.cited + c.mentioned, keyQs.length) };
+        return { e, i, c, ran: c.cited + c.mentioned + c.absent > 0, pct: pct(c.cited + c.mentioned, keyQs.length) };
       });
       const citedTotal = perEngine.reduce((a, x) => a + x.c.cited, 0);
-      const citedPct = pct(citedTotal, keyQs.length * ENGINES.length);
-      const best = perEngine.slice().sort((a, b) => b.pct - a.pct)[0];
+      const citedPct = pct(citedTotal, keyQs.length * Math.max(1, perEngine.filter(x => x.ran).length));
+      const best = perEngine.filter(x => x.ran && x.pct > 0).sort((a, b) => b.pct - a.pct)[0] || null;
       const date = dataDate();
 
       const banner = '<div class="banner"><span class="pulse" aria-hidden="true"></span>' +
         (date ? '<span class="item"><b style="font-weight:600;color:var(--fg)">' + esc(l.ui.lastData(date)) + '</b></span><span class="sep"></span>' : '') +
         '<span class="item">' + esc(l.ui.kpiVis) + ' ' + deltaBadge(delta, l) + '<span class="muted">' + esc(l.ui.vsPrev) + '</span></span><span class="sep"></span>' +
         '<span class="item">' + esc(l.ui.bannerGaps(ctx.gapQs.length)) + '</span>' +
-        (ctx.fullGapCount ? '<span class="sep"></span><span class="item warn">' + esc(l.ui.bannerKeyFull(keyQs.filter(q => absentCount(q) === 3).length)) + '</span>' : '') + '</div>';
+        (ctx.fullGapCount ? '<span class="sep"></span><span class="item warn">' + esc(l.ui.bannerKeyFull(keyQs.filter(isFullGap).length)) + '</span>' : '') + '</div>';
 
       const tile = (label, tip, value, sub, side) => '<div class="kpi-tile"><div class="top"><span>' + esc(label) + ' ' + infoTip(tip) + '</span></div>' +
         '<div class="mid"><span class="n">' + value + '</span>' + (side || '') + '</div><span class="l">' + sub + '</span></div>';
@@ -697,8 +701,9 @@
         tile(l.ui.kpiCited, l.ui.kpiCitedTip, citedPct + '<span style="font-size:18px;color:var(--muted)">%</span>', esc(l.ui.kpiCitedSub), '<div style="width:110px">' + CH.stackBar([{ value: citedTotal, color: 'var(--st-cited)', label: l.dot.cited }, { value: perEngine.reduce((a, x) => a + x.c.mentioned, 0), color: 'var(--st-mentioned)', label: l.dot.mentioned }, { value: perEngine.reduce((a, x) => a + x.c.absent, 0), color: 'var(--st-absent)', label: l.dot.absent }]) + '</div>') +
         tile(l.ui.kpiGaps, l.ui.kpiGapsTip, '<span class="warn">' + ctx.gapQs.length + '</span>', esc(l.fullGap(ctx.fullGapCount)),
           '<span class="small muted" style="white-space:nowrap">' + esc(l.ui.gapSplit(ctx.gapQs.filter(q => q.key).length, ctx.gapQs.filter(q => !q.key).length)) + '</span>') +
-        tile(l.ui.kpiBest, l.ui.kpiVisTip, '<span style="display:inline-flex;align-items:center;gap:8px"><span class="swatch" style="width:12px;height:12px;border-radius:3px;background:var(--viz-' + (best.i + 1) + ')"></span>' + esc(best.e.name) + '</span>',
-          esc(l.ui.kpiBestSub(best.e.name, best.pct))) +
+        (best ? tile(l.ui.kpiBest, l.ui.kpiVisTip, '<span style="display:inline-flex;align-items:center;gap:8px"><span class="swatch" style="width:12px;height:12px;border-radius:3px;background:var(--viz-' + (best.i + 1) + ')"></span>' + esc(best.e.name) + '</span>',
+          esc(l.ui.kpiBestSub(best.e.name, best.pct)))
+          : tile(l.ui.kpiBest, l.ui.kpiVisTip, '<span class="muted">–</span>', esc(l.ui.kpiBestNone))) +
         '</div>';
 
       const trend = '<div class="panel"><div class="panel-h"><div><h2>' + esc(l.ui.trendTitle) + '</h2><span class="sub">' + esc(l.ui.trendSub) + '</span></div>' +
@@ -708,8 +713,8 @@
 
       const engines = '<div class="panel"><div class="panel-h"><div><h2>' + esc(l.ui.enginesTitle) + '</h2><span class="sub">' + esc(l.ui.enginesSub) + '</span></div></div>' +
         '<div class="panel-b" style="display:flex;flex-direction:column;gap:18px"><div class="engines">' + perEngine.map(x =>
-          '<div class="engine">' + CH.ring(x.pct, { size: 76, stroke: 8, color: 'var(--viz-' + (x.i + 1) + ')', label: x.e.name + ' ' + x.pct + '%' }) +
-          '<span class="name"><span class="swatch" style="background:var(--viz-' + (x.i + 1) + ')"></span>' + esc(x.e.name) + '</span></div>').join('') + '</div>' +
+          '<div class="engine"' + (x.ran ? '' : ' style="opacity:.6"') + '>' + CH.ring(x.ran ? x.pct : null, { size: 76, stroke: 8, color: 'var(--viz-' + (x.i + 1) + ')', label: x.e.name + ' ' + (x.ran ? x.pct + '%' : l.ui.notChecked) }) +
+          '<span class="name"><span class="swatch" style="background:var(--viz-' + (x.i + 1) + ')"></span>' + esc(x.e.name) + '</span>' + (x.ran ? '' : '<span class="small muted">' + esc(l.ui.notChecked) + '</span>') + '</div>').join('') + '</div>' +
         perEngine.map(x => '<div style="display:flex;flex-direction:column;gap:5px"><div class="small" style="display:flex;justify-content:space-between"><span style="color:var(--fg2);font-weight:500">' + esc(x.e.name) + '</span>' +
           '<span class="muted num">' + x.c.cited + ' · ' + x.c.mentioned + ' · ' + x.c.absent + '</span></div>' +
           CH.stackBar([{ value: x.c.cited, color: 'var(--st-cited)', label: l.dot.cited }, { value: x.c.mentioned, color: 'var(--st-mentioned)', label: l.dot.mentioned }, { value: x.c.absent, color: 'var(--st-absent)', label: l.dot.absent }, { value: x.c.other, color: 'var(--st-none)', label: l.dot.notrun }]) + '</div>').join('') +
@@ -2014,7 +2019,7 @@
       const ctx = {
         // Only engines that answered count (one never asked isn't "absent").
         kpis, nowPct: pct(totalHits, keyQs.length * Math.max(1, ENGINES.filter(e => keyQs.some(q => q.r && q.r[e.id][0] !== 'notrun')).length)),
-        gapQs: activeQs.filter(isGap), fullGapCount: activeQs.filter(q => absentCount(q) === 3).length,
+        gapQs: activeQs.filter(isGap), fullGapCount: activeQs.filter(isFullGap).length,
         ranked: CATS.map(c => ({ c, st: catStats(c.id) })).sort((a, b) => b.st.weight - a.st.weight)
       };
 
