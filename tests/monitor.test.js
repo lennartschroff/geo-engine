@@ -240,3 +240,35 @@ describe('brand aliases', () => {
     assert.equal(r[0].mentioned, 1); assert.equal(r[0].position, 1);
   });
 });
+
+describe('insights from stored answers', () => {
+  const row = (q, text, cited, mentioned, ts) => ({ question_id: q, engine: 'claude', variant: 0, timestamp: ts || '2026-11-25T10:00:00Z', answer_text: text, cited_urls: cited || [], mentioned: mentioned ? 1 : 0 });
+  test('visibility per persona; questions without one get their own group', () => {
+    const P = [{ id: 'p1', name: 'Landwirt', lang: 'de' }, { id: 'p2', name: 'Investor', lang: 'de' }];
+    const Q = [{ id: 'q1', persona: 'p1' }, { id: 'q2', persona: 'p1' }, { id: 'q3', persona: 'p2' }, { id: 'q4' }];
+    const R = { q1: { r: 'a n n' }, q2: { r: 'n n n' }, q3: { r: 'c1 n n' }, q4: { r: 'm2 n n' } };
+    assert.deepEqual(M.personaStats(Q, R, P).map(x => [x.name, x.total, x.asked, x.named, x.gaps]), [
+      ['Landwirt', 2, 1, 0, ['q1']], ['Investor', 1, 1, 1, []], [null, 1, 1, 1, []]]);
+    assert.deepEqual(M.personaStats(Q, R, []), []);
+  });
+  test('own site used as a source without naming the brand (latest answer per question)', () => {
+    const rows = [
+      row('q1', 'x', ['doppelernte.de'], false), row('q2', 'x', ['www.doppelernte.de', 'a.de'], true),
+      row('q3', 'x', ['shop.doppelernte.de'], false), row('q4', 'x', ['notdoppelernte.de'], false),
+      row('q3', 'old', ['doppelernte.de'], true, '2026-11-01T00:00:00Z'),
+    ];
+    assert.deepEqual(M.ownSiteUse(rows, 'doppelernte.de'), { cited: 3, named: 1, questions: ['q1', 'q3'] });
+  });
+  test('missed competitors: names in several answers, not generic headings or topic words', () => {
+    const rows = [
+      row('q1', '## 1. **Feldwerke**\nPlant Agri-PV. **Spezialisierte Projektentwickler** gibt es viele. Elysium Solar GmbH auch.', ['feldwerke.de', 'agri-pv.org']),
+      row('q2', '**Feldwerke** und **Next2Sun** und die **Elysium Solar GmbH** bauen Agri-PV.', []),
+      row('q3', 'Agri-PV lohnt sich. **Spezialisierte Projektentwickler** helfen. **DoppelErnte** auch. Agri-PV.', ['agri-pv.org']),
+      row('q4', 'Mehr zu Agri-PV.', []), row('q5', 'Agri-PV überall.', []),
+    ];
+    const r = M.missedCompetitors(rows, ['DoppelErnte GmbH', 'DoppelErnte'], ['Next2Sun']);
+    assert.deepEqual(r.map(c => [c.name, c.answers]), [['Elysium Solar', 2], ['Feldwerke', 2]]);
+    assert.deepEqual(r[1].questions, ['q1', 'q2']);
+    assert.deepEqual(M.missedCompetitors(rows, ['X'], [], { exclude: ['Feldwerke'] }).map(c => c.name), ['Elysium Solar']);
+  });
+});

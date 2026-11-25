@@ -242,6 +242,7 @@
         (out[r.question_id] = out[r.question_id] || []).push({
           engine: r.engine, variant: r.variant || 0, model: r.model, date: r.timestamp.slice(0, 10), prompt: r.question_text,
           text: r.answer_text.length > MAX_ANSWER_CHARS ? r.answer_text.slice(0, MAX_ANSWER_CHARS) + '…' : r.answer_text,
+          cited: r.cited_urls || [], named: !!r.mentioned,
         });
       });
     return out;
@@ -256,6 +257,75 @@
     return Object.keys(per).map(d => ({ name: d, kind: KNOWN_KINDS[d] || 'portal', cites: per[d].cites, qs: per[d].qs.size, present: null, act: 'analyze' }))
       .sort((a, b) => b.cites - a.cites);
   }
+  // ---------- Insights from stored answers (no API calls) ----------
+  const latestRows = rows => Object.values(latestBy((rows || []).filter(r => !r.variant), r => r.question_id + '|' + r.engine));
+  const isNamedCode = code => /(^| )[cm]/.test(code || '');
+  const wasAsked = code => /(^| )[acm]/.test(code || '');
+
+  // Per persona: how many of its questions were answered, and how many name the brand.
+  function personaStats(questions, results, personas) {
+    const P = (personas || []).slice();
+    if (!P.length) return [];
+    const ids = new Set(P.map(p => p.id));
+    if ((questions || []).some(q => !ids.has(q.persona))) P.push({ id: null, name: null, lang: '' });
+    return P.map(p => {
+      const qs = (questions || []).filter(q => p.id === null ? !ids.has(q.persona) : q.persona === p.id);
+      const asked = qs.filter(q => results[q.id] && wasAsked(results[q.id].r));
+      return { id: p.id, name: p.name, lang: p.lang, total: qs.length, asked: asked.length,
+        named: asked.filter(q => isNamedCode(results[q.id].r)).length, gaps: asked.filter(q => !isNamedCode(results[q.id].r)).map(q => q.id) };
+    }).filter(x => x.total);
+  }
+
+  // Answers that use the brand's own website as a source but don't name the brand.
+  const onDomain = (d, domain) => !!domain && (d === domain || d.endsWith('.' + domain));
+  function ownSiteUse(rows, domain) {
+    const used = latestRows(rows).filter(r => (r.cited_urls || []).some(d => onDomain(d, domain)));
+    const unnamed = used.filter(r => !r.mentioned);
+    return { cited: used.length, named: used.length - unnamed.length, questions: [...new Set(unnamed.map(r => r.question_id))].sort() };
+  }
+
+  // Companies that come up in several answers but are neither the brand nor a
+  // listed competitor. Candidates: bold list headings and names with a legal
+  // form. A bold heading only counts as a name if it has a legal form, looks
+  // like a brand (inner capital or digit, e.g. "DoppelErnte", "Next2Sun") or
+  // matches a cited domain ("Feldwerke" -> feldwerke.de); that keeps generic
+  // headings like "Spezialisierte Projektentwickler" out. Topic words (opts.exclude)
+  // and words without a legal form that turn up in most answers ("Agri-PV") are
+  // the subject, not a company.
+  const WITH_FORM = /([A-ZÄÖÜ][\p{L}\p{N}&.\-]*(?:\s+[A-ZÄÖÜ&][\p{L}\p{N}&.\-]*){0,3})\s+(GmbH|AG|SE|UG|KG|Inc\.|Ltd\.|LLC|e\.\s?V\.)(?![\p{L}])/gu;
+  function missedCompetitors(rows, brandAliasesList, competitors, opts) {
+    const o = Object.assign({ minAnswers: 2, exclude: [] }, opts);
+    const latest = latestRows(rows);
+    const known = [];
+    (brandAliasesList || []).concat(competitors || []).forEach(n => brandAliases(n).forEach(a => known.push(normalize(a))));
+    (o.exclude || []).forEach(t => { const k = normalize(t); if (k.length >= 3) known.push(k); });
+    const isKnown = n => { const k = normalize(n); return !k || known.some(x => x === k || k.indexOf(x) !== -1 || x.indexOf(k) !== -1); };
+    const domains = new Set(); latest.forEach(r => (r.cited_urls || []).forEach(d => domains.add(String(d).replace(/^www\./, ''))));
+    const compact = n => normalize(n).replace(/[^a-z0-9]/g, '');
+    const matchesDomain = n => { const c = compact(n); return c.length >= 4 && [...domains].some(d => d.split('.')[0].replace(/[^a-z0-9]/g, '') === c); };
+    const cands = {};
+    const add = (raw, formal) => {
+      let name = String(raw).replace(/^\s*(\d+[.)]\s*)/, '').replace(/[:–—-]\s*$/, '').trim();
+      if (!name || name.length > 60 || name.split(/\s+/).length > 5) return;
+      const short = brandAliases(name).slice(-1)[0] || name;
+      if (isKnown(short)) return;
+      if (!formal && !(/[a-zäöü][A-ZÄÖÜ]|\p{N}/u.test(short) || matchesDomain(short) || WITH_FORM.test(name))) { WITH_FORM.lastIndex = 0; return; }
+      WITH_FORM.lastIndex = 0;
+      const k = normalize(short);
+      if (!cands[k] || (formal && !cands[k].formal)) cands[k] = { name: short, formal: !!formal };
+    };
+    latest.forEach(r => {
+      const t = String(r.answer_text || '');
+      for (const m of t.matchAll(/\*\*([^*\n]{2,60})\*\*/g)) add(m[1], false);
+      for (const m of t.matchAll(WITH_FORM)) add(m[1] + ' ' + m[2], true);
+    });
+    return Object.values(cands).map(c => {
+      const hit = latest.filter(r => findFirstMention(r.answer_text, c.name) !== null);
+      return { name: c.name, formal: c.formal, answers: hit.length, questions: [...new Set(hit.map(r => r.question_id))].sort() };
+    }).filter(c => c.answers >= o.minAnswers && (c.formal || c.answers <= Math.max(3, latest.length / 2)))
+      .map(c => ({ name: c.name, answers: c.answers, questions: c.questions })).sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name)).slice(0, 8);
+  }
+
   // Everything the app's monitoring views read, from stored rows.
   function summarize(rows, brand, competitors) {
     const trend = buildTrend(rows);
@@ -436,7 +506,7 @@
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
     personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
-    brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
+    personaStats, ownSiteUse, missedCompetitors, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };
 });
