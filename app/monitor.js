@@ -170,16 +170,20 @@
   function redetect(rows, aliases, competitors) {
     return (rows || []).map(r => { const m = detectMention(r.answer_text, aliases, competitors); return Object.assign({}, r, { mentioned: m.mentioned ? 1 : 0, position: m.position }); });
   }
-  function makeRow(question, engine, model, prompt, answer, brandAliases, competitors, when) {
+  // extra: { check, run_index } when a check asks the same question several times.
+  function makeRow(question, engine, model, prompt, answer, brandAliases, competitors, when, extra) {
     const m = detectMention(answer.answer_text, brandAliases, competitors);
-    return {
+    return Object.assign({
       question_id: question.id, engine, model, timestamp: (when || new Date()).toISOString(),
       mentioned: m.mentioned ? 1 : 0, position: m.position, cited_urls: normalizeDomains(answer.cited_urls),
       answer_text: answer.answer_text, variant: 0, question_text: prompt,
-    };
+    }, extra || {});
   }
 
   // ---------- Rows -> what the app shows (same as export_monitoring.py) ----------
+  // One difference: a check in the app can ask a question several times
+  // (rows share a "check" id); buildResults then counts all of them. run.py's
+  // runs_per_question still exports only the latest answer per engine.
   function wilson(k, n, z) {
     z = z || 1.96;
     if (!n) return [0, 0];
@@ -210,17 +214,35 @@
     rows.forEach(r => { const k = keyFn(r); if (!out[k] || r.timestamp > out[k].timestamp) out[k] = r; });
     return out;
   }
+  // The answers of the latest check per question and engine: one row, or all
+  // repeats of that check (same "check" id) when a question was asked several times.
+  function latestCheck(rows) {
+    const plain = rows.filter(r => !r.variant);
+    const latest = latestBy(plain, r => r.question_id + '|' + r.engine);
+    const out = {};
+    Object.keys(latest).forEach(k => {
+      const top = latest[k];
+      out[k] = top.check ? plain.filter(r => r.question_id === top.question_id && r.engine === top.engine && r.check === top.check) : [top];
+    });
+    return out;
+  }
+  // Status per engine: named when at least half of the check's answers name the
+  // brand (with one answer per question that is simply yes or no); share counts them.
   function buildResults(rows, ownDomain, brandAliases, competitors) {
-    const latest = latestBy(rows.filter(r => !r.variant), r => r.question_id + '|' + r.engine);
+    const groups = latestCheck(rows);
+    const latest = {}; Object.keys(groups).forEach(k => { latest[k] = groups[k][groups[k].length - 1]; });
     const qids = [...new Set(Object.values(latest).map(r => r.question_id))].sort();
     const out = {};
     qids.forEach(qid => {
+      const share = {};
       const codes = ENGINE_ORDER.map(e => {
-        const r = latest[qid + '|' + e];
-        if (!r) return 'n';
-        if (!r.mentioned) return 'a';
-        const cited = !!ownDomain && r.cited_urls.some(u => u.indexOf(ownDomain) !== -1);
-        return (cited ? 'c' : 'm') + r.position;
+        const g = groups[qid + '|' + e];
+        if (!g) return 'n';
+        const named = g.filter(r => r.mentioned);
+        if (g.length > 1) share[e] = [named.length, g.length];
+        if (!named.length || named.length * 2 < g.length) return 'a';
+        const cited = !!ownDomain && named.some(r => (r.cited_urls || []).some(u => u.indexOf(ownDomain) !== -1));
+        return (cited ? 'c' : 'm') + Math.min(...named.map(r => r.position || 99));
       });
       let comp = null;
       ENGINE_ORDER.some(e => {
@@ -230,7 +252,7 @@
         if (named.length) { comp = named[0]; return true; }
         return false;
       });
-      out[qid] = { competitor: comp, r: codes.join(' ') };
+      out[qid] = Object.assign({ competitor: comp, r: codes.join(' ') }, Object.keys(share).length ? { share } : {});
     });
     return out;
   }

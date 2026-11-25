@@ -336,3 +336,23 @@ describe('before / after a published page', () => {
     assert.deepEqual(M.pieceEffect(rows, ['q1'], '2026-12-05'), { before: { named: 1, total: 2 }, after: { named: 0, total: 0 } });
   });
 });
+
+describe('several answers per question in one check', () => {
+  const row = (e, check, i, mentioned, cited, ts) => ({ question_id: 'q1', engine: e, variant: 0, check, run_index: i, timestamp: ts || '2026-11-25T10:0' + i + ':00Z', mentioned: mentioned ? 1 : 0, position: mentioned ? 2 : null, cited_urls: cited ? ['acme.de'] : [], answer_text: '' });
+  test('named when at least half name the brand; share says how many', () => {
+    const rows = [
+      row('claude', 'c1', 0, 1, 0), row('claude', 'c1', 1, 0, 0), row('claude', 'c1', 2, 1, 1),
+      row('gemini', 'c1', 0, 0, 0), row('gemini', 'c1', 1, 1, 0), row('gemini', 'c1', 2, 0, 0),
+      row('gpt', 'old', 0, 1, 0, '2026-11-01T00:00:00Z'),
+    ];
+    const r = M.buildResults(rows, 'acme.de', ['Acme'], []).q1;
+    assert.equal(r.r, 'c2 m2 a');
+    assert.deepEqual(r.share, { claude: [2, 3], gemini: [1, 3] });
+  });
+  test('only the latest check counts; single answers have no share', () => {
+    const rows = [row('claude', 'c1', 0, 1, 0, '2026-11-01T10:00:00Z'), row('claude', 'c1', 1, 1, 0, '2026-11-01T10:01:00Z'), row('claude', 'c2', 0, 0, 0, '2026-11-25T10:00:00Z')];
+    const r = M.buildResults(rows, '', ['Acme'], []).q1;
+    assert.equal(r.r, 'a n n');
+    assert.equal(r.share, undefined);
+  });
+});
