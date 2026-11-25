@@ -699,7 +699,7 @@
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}, radarHidden: {}, radarTracked: {},
       radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
-      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false,
+      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false, report: false,
       qSearch: '', qTopic: 'all', qPersona: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page', keyDraft: {}, keyMsg: {}
     }, saved, init || {});
@@ -940,7 +940,8 @@
         '<button class="btn" ' + click(() => set({ tab: 'write', writeStep: 1, brief: '' })) + '>' + ic('write', 15) + esc(l.writeCta.replace(/\s*→$/, '')) + '</button></div>' : '';
 
       return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.overview) + ' · ' + esc(BRAND.short) + '</h1><p>' + esc(l.ui.overviewSub) + '</p></div>' +
-        '<div class="actions"><button class="btn" ' + click(() => set({ tab: 'write', writeStep: 1, brief: '' })) + '>' + ic('write', 15) + esc(l.ui.actWrite) + '</button></div></div>' +
+        '<div class="actions">' + (INS ? '<button class="btn plain" ' + click(() => set({ report: true })) + '>' + ic('download', 15) + esc(l.ui.report.open) + '</button>' : '') +
+        '<button class="btn" ' + click(() => set({ tab: 'write', writeStep: 1, brief: '' })) + '>' + ic('write', 15) + esc(l.ui.actWrite) + '</button></div></div>' +
         banner + standsOut() + kpis + insights() +
         '<div class="grid g-main">' + trend + engines + '</div>' +
         '<div class="grid g-main">' + nba + topics + '</div>' +
@@ -948,20 +949,52 @@
     }
 
     // ---------- What stands out (TASKS.md I4, I9, I10) ----------
+    // ---------- Report to hand over (TASKS.md I7): print view, saved as PDF by the browser ----------
+    function reportHtml() {
+      const l = L(); const R = l.ui.report; const b = BRAND.short;
+      const day = d => new Date(d).toLocaleDateString(state.lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const last = own.runs.reduce((m, r) => r.timestamp > m ? r.timestamp : m, '');
+      const ran = ENGINES.filter(e => INS.enginesRan.includes(e.id));
+      const qs = QUESTIONS.filter(q => q.key);
+      const named = INS.counts.brand, total = INS.counts.answers;
+      const stat = (v, t) => '<div class="rp-stat"><b>' + esc(v) + '</b><span>' + esc(t) + '</span></div>';
+      const P = INS.personas.filter(p => p.asked);
+      const cell = (q, e) => { const k = status(q, e.id).k; return '<td class="rp-' + k + '">' + esc(l.dot[k] || '–') + '</td>'; };
+      return '<div class="rp"><div class="rp-bar no-print"><button class="btn plain" ' + click(() => set({ report: false })) + '>' + esc(R.close) + '</button>' +
+        '<span class="s13 muted">' + esc(R.hint) + '</span><button class="btn" ' + click(() => window.print()) + '>' + ic('download', 15) + esc(R.print) + '</button></div>' +
+        '<article class="rp-page"><header><span class="rp-kicker">' + esc(R.kicker) + '</span><h1>' + esc(R.title(b)) + '</h1>' +
+        '<p class="rp-meta">' + esc(R.meta(last ? day(last) : '–', ran.map(e => e.name).join(', '), qs.length)) + '</p></header>' +
+        '<section><div class="rp-stats">' + stat(pct(named, total) + ' %', R.sVis(named, total)) + stat(String(INS.site.cited), R.sSite(BRAND.domain, INS.site.named)) +
+        (INS.counts.competitors[0] && INS.counts.competitors[0].answers ? stat(INS.counts.competitors[0].name, R.sComp(INS.counts.competitors[0].answers)) : '') + '</div></section>' +
+        (INS.findings.length ? '<section><h2>' + esc(R.hFind) + '</h2><ol>' + INS.findings.filter(f => f.kind !== 'stale').map(f => '<li>' + esc(findText(f)) + '</li>').join('') + '</ol></section>' : '') +
+        (P.length ? '<section><h2>' + esc(R.hPersona) + '</h2><table><thead><tr><th>' + esc(R.colGroup) + '</th><th>' + esc(R.colNamed) + '</th></tr></thead><tbody>' +
+          P.map(p => '<tr><td>' + esc(p.name || l.ui.insNoPersona) + '</td><td>' + esc(l.ui.insOf(p.named, p.asked)) + '</td></tr>').join('') + '</tbody></table></section>' : '') +
+        '<section><h2>' + esc(R.hQuestions) + '</h2><table class="rp-q"><thead><tr><th>' + esc(R.colQuestion) + '</th>' + ran.map(e => '<th>' + esc(e.name) + '</th>').join('') + '<th>' + esc(R.colComp) + '</th></tr></thead><tbody>' +
+          qs.map(q => '<tr><td>' + esc(q.text) + (q.persona && personaName(q.persona) ? '<span class="rp-sub">' + esc(personaName(q.persona)) + '</span>' : '') + '</td>' + ran.map(e => cell(q, e)).join('') + '<td>' + esc(q.comp || '') + '</td></tr>').join('') + '</tbody></table></section>' +
+        (INS.sources.length ? '<section><h2>' + esc(R.hSources) + '</h2><table><thead><tr><th>' + esc(R.colSource) + '</th><th>' + esc(R.colAnswers) + '</th></tr></thead><tbody>' +
+          INS.sources.slice(0, 8).map(x => '<tr><td>' + esc(x.domain) + '</td><td>' + x.answers + '</td></tr>').join('') + '</tbody></table></section>' : '') +
+        '<section><h2>' + esc(R.hMethod) + '</h2><p class="rp-small">' + esc(R.method) + '</p></section></article></div>';
+    }
+    function findText(f) {
+      const F = L().ui.find; const b = BRAND.short;
+      const engName = id => (ENGINES.find(e => e.id === id) || { name: id }).name;
+      return f.kind === 'stale' ? F.stale(f.days) : f.kind === 'personaZero' ? F.personaZero(f.name, f.asked, b) : f.kind === 'siteUnnamed' ? F.siteUnnamed(f.cited, f.named, BRAND.domain, b)
+        : f.kind === 'competitorAhead' ? F.competitorAhead(f.name, f.answers, f.brand, b) : f.kind === 'topSource' ? F.topSource(f.domain, f.answers, f.of)
+          : f.kind === 'missed' ? F.missed(f.name, f.answers) : f.kind === 'oneEngine' ? F.oneEngine(engName(f.engine)) : '';
+    }
     function standsOut() {
       if (!INS || !INS.findings.length) return '';
-      const l = L(); const F = l.ui.find; const b = BRAND.short;
-      const engName = id => (ENGINES.find(e => e.id === id) || { name: id }).name;
+      const l = L(); const F = l.ui.find;
       const act = (label, fn, primary) => '<button class="btn sm' + (primary ? '' : ' plain') + '" ' + click(fn) + '>' + esc(label) + '</button>';
       const item = f => {
         let text = '', acts = '';
-        if (f.kind === 'stale') { text = F.stale(f.days); acts = act(F.recheck, () => { if (connected().length) startCheck(); else set({ tab: 'runs' }); }, true); }
-        if (f.kind === 'personaZero') { text = F.personaZero(f.name, f.asked, b); acts = (f.question ? act(F.write, () => openDraft(f.question), true) : '') + act(F.seeQuestions, () => set({ tab: 'questions', qPersona: f.persona, scope: 'all', qSel: -1 })); }
-        if (f.kind === 'siteUnnamed') { text = F.siteUnnamed(f.cited, f.named, BRAND.domain, b); acts = f.question ? act(F.seeAnswer, () => openQuestion(f.question)) : ''; }
-        if (f.kind === 'competitorAhead') { text = F.competitorAhead(f.name, f.answers, f.brand, b); acts = act(F.seeQuestions, () => set({ tab: 'questions', scope: 'all', qSel: -1 })); }
-        if (f.kind === 'topSource') { text = F.topSource(f.domain, f.answers, f.of); acts = act(F.seeSources, () => set({ tab: 'sources' })); }
-        if (f.kind === 'missed') { text = F.missed(f.name, f.answers); acts = act(F.add, () => addCompetitor(f.name)); }
-        if (f.kind === 'oneEngine') { text = F.oneEngine(engName(f.engine)); acts = act(F.connect, () => set({ tab: 'runs' })); }
+        if (f.kind === 'stale') { text = findText(f); acts = act(F.recheck, () => { if (connected().length) startCheck(); else set({ tab: 'runs' }); }, true); }
+        if (f.kind === 'personaZero') { text = findText(f); acts = (f.question ? act(F.write, () => openDraft(f.question), true) : '') + act(F.seeQuestions, () => set({ tab: 'questions', qPersona: f.persona, scope: 'all', qSel: -1 })); }
+        if (f.kind === 'siteUnnamed') { text = findText(f); acts = f.question ? act(F.seeAnswer, () => openQuestion(f.question)) : ''; }
+        if (f.kind === 'competitorAhead') { text = findText(f); acts = act(F.seeQuestions, () => set({ tab: 'questions', scope: 'all', qSel: -1 })); }
+        if (f.kind === 'topSource') { text = findText(f); acts = act(F.seeSources, () => set({ tab: 'sources' })); }
+        if (f.kind === 'missed') { text = findText(f); acts = act(F.add, () => addCompetitor(f.name)); }
+        if (f.kind === 'oneEngine') { text = findText(f); acts = act(F.connect, () => set({ tab: 'runs' })); }
         return '<li class="find"><span class="find-dot find-' + f.kind + '" aria-hidden="true"></span><span class="find-t">' + esc(text) + '</span><span class="find-a">' + acts + '</span></li>';
       };
       return '<div class="panel find-panel"><div class="panel-h"><div><h2>' + esc(F.title) + '</h2><span class="sub">' + esc(F.sub) + '</span></div></div>' +
@@ -2334,6 +2367,7 @@
       const focusKey = captureFocus();
       handlers = [];
       const l = L();
+      if (state.report && INS) { root.innerHTML = reportHtml(); window.scrollTo(0, 0); return; }
 
       const keyQs = QUESTIONS.filter(q => q.key);
       let totalHits = 0;

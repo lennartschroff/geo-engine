@@ -346,6 +346,15 @@ window.makeStrings = (b) => {
         full: 'The browser\'s storage is full. Save a backup and delete a company first.',
         badFile: 'That file is not a GEO Engine backup.', loaded: n => n + ' loaded', switchLabel: 'Company',
       },
+      report: {
+        open: 'Report', close: 'Back to the app', print: 'Print or save as PDF', hint: 'In the print dialog, choose "Save as PDF".',
+        kicker: 'AI visibility report', title: b => 'How AI assistants talk about ' + b,
+        meta: (d, e, n) => 'Checked on ' + d + ' with ' + e + ' · ' + n + ' questions',
+        sVis: (n, t) => 'of answers name the company (' + n + ' of ' + t + ')', sSite: (d, n) => 'answers read ' + d + ' (' + n + ' of them name the company)', sComp: n => 'most-named competitor (' + n + ' answers)',
+        hFind: 'What stands out', hPersona: 'By who asks', hQuestions: 'Every question', hSources: 'Sources the assistants read most', hMethod: 'How this was measured',
+        colGroup: 'Group', colNamed: 'Company named', colQuestion: 'Question', colComp: 'Named instead', colSource: 'Website', colAnswers: 'Answers',
+        method: 'Each question was asked once per assistant through its official API, with web search where the assistant offers it. Answers vary between runs and can differ from the consumer apps; treat single results as a snapshot, and trends over several weeks as the signal.',
+      },
       today: {
         title: 'What the assistants answer today', sub: b => 'Write so that ' + b + ' is clearly the provider behind the answer, and cover what they already bring up.',
         named: b => 'names ' + b, notNamed: b => 'does not name ' + b, instead: n => 'Names instead: ' + n, sources: s => 'Reads: ' + s,
@@ -915,6 +924,15 @@ window.makeStrings = (b) => {
         note: 'Alles bleibt in diesem Browser. Eine Sicherung ist eine Datei mit Fragen und Ergebnissen einer Firma (nie deine Schlüssel); lade sie hier oder in einem anderen Browser.',
         full: 'Der Speicher des Browsers ist voll. Speichere eine Sicherung und lösche zuerst eine Firma.',
         badFile: 'Diese Datei ist keine GEO-Engine-Sicherung.', loaded: n => n + ' geladen', switchLabel: 'Firma',
+      },
+      report: {
+        open: 'Bericht', close: 'Zurück zur App', print: 'Drucken oder als PDF speichern', hint: 'Im Druckdialog „Als PDF speichern“ wählen.',
+        kicker: 'Bericht zur KI-Sichtbarkeit', title: b => 'Wie KI-Assistenten über ' + b + ' sprechen',
+        meta: (d, e, n) => 'Geprüft am ' + d + ' mit ' + e + ' · ' + n + ' Fragen',
+        sVis: (n, t) => 'der Antworten nennen die Firma (' + n + ' von ' + t + ')', sSite: (d, n) => 'Antworten lesen ' + d + ' (davon nennen ' + n + ' die Firma)', sComp: n => 'meistgenannter Konkurrent (' + n + ' Antworten)',
+        hFind: 'Was auffällt', hPersona: 'Nach Zielgruppe', hQuestions: 'Alle Fragen', hSources: 'Quellen, die die Assistenten am meisten lesen', hMethod: 'So wurde gemessen',
+        colGroup: 'Gruppe', colNamed: 'Firma genannt', colQuestion: 'Frage', colComp: 'Stattdessen genannt', colSource: 'Website', colAnswers: 'Antworten',
+        method: 'Jede Frage wurde einmal pro Assistent über dessen offizielle Schnittstelle gestellt, mit Websuche, wo der Assistent sie anbietet. Antworten schwanken zwischen Durchläufen und können von den Apps abweichen; einzelne Ergebnisse sind eine Momentaufnahme, Verläufe über mehrere Wochen sind das Signal.',
       },
       today: {
         title: 'Was die Assistenten heute antworten', sub: b => 'Schreib so, dass ' + b + ' klar der Anbieter hinter der Antwort ist, und greif auf, was sie heute schon bringen.',
