@@ -570,9 +570,22 @@
 
     // ---------- Data preparation ----------
     const CATS = D.categories.map(c => ({ id: c.id, kw: c.keywords }));
+    // Findings from the stored answers (TASKS.md I1-I3). No API calls.
+    const PERSONAS = (mode === 'own' && own && own.personas) || [];
+    const personaName = id => { const p = PERSONAS.find(x => x.id === id); return p ? p.name : ''; };
+    const HAS_RUNS = mode === 'own' && own && Array.isArray(own.runs) && own.runs.length > 0;
+    const INS = HAS_RUNS ? {
+      personas: MONITOR.personaStats(D.questions, D.demo.results || {}, PERSONAS),
+      site: MONITOR.ownSiteUse(own.runs, BRAND.domain),
+      missed: MONITOR.missedCompetitors(own.runs, BRAND_NAMES, COMPETITORS,
+        { exclude: D.categories.reduce((a, c) => a.concat([c.label_en, c.label_de], c.keywords || []), []) }),
+    } : null;
+    // Latest stored answer per question and engine, for the "site used, brand not named" note.
+    const LATEST_ROW = {};
+    if (HAS_RUNS) own.runs.forEach(r => { if (r.variant) return; const k = r.question_id + '|' + r.engine; if (!LATEST_ROW[k] || r.timestamp > LATEST_ROW[k].timestamp) LATEST_ROW[k] = r; });
     const QUESTIONS = D.questions.map(q => {
       const res = D.demo.results[q.id];
-      return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
+      return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, persona: q.persona || null, lang: q.lang || '', comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
     });
     const BASE_BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
     // Like allQ() for questions: content blocks added in-browser (no terminal, no
@@ -598,7 +611,7 @@
       radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
       drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false,
-      qSearch: '', qTopic: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
+      qSearch: '', qTopic: 'all', qPersona: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page', keyDraft: {}, keyMsg: {}
     }, saved, init || {});
     let drag = null;
@@ -839,10 +852,37 @@
 
       return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.overview) + ' · ' + esc(BRAND.short) + '</h1><p>' + esc(l.ui.overviewSub) + '</p></div>' +
         '<div class="actions"><button class="btn" ' + click(() => set({ tab: 'write', writeStep: 1, brief: '' })) + '>' + ic('write', 15) + esc(l.ui.actWrite) + '</button></div></div>' +
-        banner + kpis +
+        banner + kpis + insights() +
         '<div class="grid g-main">' + trend + engines + '</div>' +
         '<div class="grid g-main">' + nba + topics + '</div>' +
         heat + callout + '</section>';
+    }
+
+    // ---------- Findings on the Overview (TASKS.md I1-I3) ----------
+    function insights() {
+      if (!INS) return '';
+      const l = L(); const U = l.ui;
+      const P = INS.personas.filter(p => p.asked);
+      const persona = P.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(U.insPersonaTitle) + '</h2><span class="sub">' + esc(U.insPersonaSub) + '</span></div></div><div>' +
+        P.map(p => {
+          const pc = Math.round(100 * p.named / p.asked);
+          const langName = (l.ui.ob.langs || {})[p.lang] || p.lang;
+          return '<button class="row ins-row" ' + click(() => set({ tab: 'questions', qPersona: p.id === null ? 'all' : p.id, scope: 'all', qSel: -1 })) + '>' +
+            '<span class="ins-name"><b>' + esc(p.name || U.insNoPersona) + '</b>' + (langName ? '<span class="small muted">' + esc(langName) + '</span>' : '') + '</span>' +
+            '<span class="bar-t ins-bar"><span style="width:' + Math.max(pc, p.named ? 4 : 0) + '%;background:var(--viz-1)"></span></span>' +
+            '<span class="num s13' + (p.named ? '' : ' warn') + '" style="white-space:nowrap">' + esc(U.insOf(p.named, p.asked)) + '</span></button>';
+        }).join('') + '</div></div>' : '';
+      const S = INS.site;
+      const site = S.cited && S.questions.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(U.insSiteTitle) + '</h2><span class="sub">' + esc(U.insSiteSub) + '</span></div></div>' +
+        '<div class="panel-b" style="display:flex;flex-direction:column;gap:10px"><p class="s14" style="margin:0">' + esc(U.insSiteText(BRAND.domain, S.cited, S.named, BRAND.short)) + '</p>' +
+        '<div style="display:flex;flex-direction:column;gap:2px">' + S.questions.slice(0, 4).map(id => { const q = allQ().find(x => x.id === id); return q ? '<button class="link s13" style="text-align:left" ' + click(() => openQuestion(id)) + '>' + esc(q.text) + '</button>' : ''; }).join('') + '</div></div></div>' : '';
+      const missed = mode === 'own' && INS.missed.length ? '<div class="panel"><div class="panel-h"><div><h2>' + esc(U.insMissedTitle) + '</h2><span class="sub">' + esc(U.insMissedSub) + '</span></div></div><div>' +
+        INS.missed.slice(0, 5).map(c => '<div class="row ins-row" style="cursor:default"><span class="ins-name"><b>' + esc(c.name) + '</b><span class="small muted">' + esc(U.insMissedIn(c.answers)) + '</span></span><span></span>' +
+          '<button class="btn sm plain" ' + click(() => addCompetitor(c.name)) + '>+ ' + esc(U.insAdd) + '</button></div>').join('') + '</div></div>' : '';
+      if (!persona && !site && !missed) return '';
+      const side = site + missed;
+      return persona && side ? '<div class="grid g-main" style="align-items:start">' + persona + '<div style="display:flex;flex-direction:column;gap:16px">' + side + '</div></div>'
+        : '<div class="grid g-main" style="align-items:start">' + (persona || site) + (persona ? '' : missed) + '</div>';
     }
 
     // Sort weight for one engine's status: cited > mentioned > absent > none.
@@ -854,7 +894,7 @@
       const inScope = q => state.scope === 'all' || (state.scope === 'key' && q.key) || (state.scope === 'more' && !q.key && !q.custom) || (state.scope === 'custom' && q.custom);
       const words = state.qSearch.toLowerCase().split(/\s+/).filter(Boolean);
       const scoped = allQ().filter(inScope);
-      let rows = scoped.filter(q => (!state.onlyGaps || isGap(q)) && (state.qTopic === 'all' || q.tags.indexOf(state.qTopic) !== -1) &&
+      let rows = scoped.filter(q => (!state.onlyGaps || isGap(q)) && (state.qTopic === 'all' || q.tags.indexOf(state.qTopic) !== -1) && (state.qPersona === 'all' || (q.persona || '') === state.qPersona) &&
         words.every(w => (q.text + ' ' + catLabels(q.tags)).toLowerCase().indexOf(w) !== -1));
       const dir = state.qDir;
       const sorters = {
@@ -882,7 +922,7 @@
         else if (gap) { label = l.actClose; fn = () => openDraft(q.id); cls = 'outline'; }
         else if (!hasData) { label = l.actWait; fn = null; cls = 'ghost'; }
         else { label = l.actExpand; fn = () => openDraft(q.id); cls = 'plain'; }
-        const meta = (q.key ? l.metaKey : q.custom ? l.metaCustom : l.metaManual) + ' · ' + catLabels(q.tags) + (q.r && q.comp ? ' · ' + l.comp + q.comp : '');
+        const meta = (q.key ? l.metaKey : q.custom ? l.metaCustom : l.metaManual) + (q.persona && personaName(q.persona) ? ' · ' + personaName(q.persona) : '') + ' · ' + catLabels(q.tags) + (q.r && q.comp ? ' · ' + l.comp + q.comp : '');
         const sel = n === state.qSel || q.id === state.drawerQ;
         return '<div class="row qgrid qrow' + (sel ? ' sel' : '') + '" ' + click(e => { if (!e.target.closest('input, button')) { state.qSel = n; openQuestion(q.id); } }) + '>' +
           '<input type="checkbox"' + (act ? ' checked' : '') + ' aria-label="' + esc((act ? l.ariaOff : l.ariaOn) + q.text) + '" ' + attr('change', () => toggleActive(q)) + '>' +
@@ -892,12 +932,14 @@
           '<div style="display:flex;justify-content:flex-end"><button class="btn sm ' + cls + '"' + (fn ? ' ' + click(fn) : ' disabled') + '>' + esc(label) + '</button></div></div>';
       }).join('');
       const empty = '<div class="empty">' + ic('search', 22) + '<b>' + esc(l.ui.noMatch) + '</b><span class="s13">' + esc(l.ui.noMatchSub) + '</span>' +
-        '<button class="btn sm plain" ' + click(() => set({ qSearch: '', qTopic: 'all', onlyGaps: false, scope: 'all' })) + '>' + esc(l.ui.clear) + '</button></div>';
+        '<button class="btn sm plain" ' + click(() => set({ qSearch: '', qTopic: 'all', qPersona: 'all', onlyGaps: false, scope: 'all' })) + '>' + esc(l.ui.clear) + '</button></div>';
       return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.questions) + '</h1><p>' + esc(l.questionsSub) + '</p></div></div>' +
         '<div class="toolbar">' +
         '<div class="search">' + ic('search', 15) + '<label for="q-filter" class="sr">' + esc(l.ui.filterQ) + '</label><input id="q-filter" data-filter type="search" placeholder="' + esc(l.ui.filterQ) + '" value="' + esc(state.qSearch) + '" ' + attr('input', e => set({ qSearch: e.target.value, qSel: -1 })) + '></div>' +
         '<div class="seg" role="group" aria-label="Scope">' + scopes + '</div>' +
         '<label for="q-topic" class="sr">' + esc(l.topicLabel) + '</label><select id="q-topic" ' + attr('change', e => set({ qTopic: e.target.value, qSel: -1 })) + '>' + topicOpts + '</select>' +
+        (PERSONAS.length ? '<label for="q-persona" class="sr">' + esc(l.ui.personaLabel) + '</label><select id="q-persona" ' + attr('change', e => set({ qPersona: e.target.value, qSel: -1 })) + '>' +
+          '<option value="all">' + esc(l.ui.allPersonas) + '</option>' + PERSONAS.map(p => '<option value="' + esc(p.id) + '"' + (state.qPersona === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>' : '') +
         '<button class="toggle' + (state.onlyGaps ? ' on' : '') + '" aria-pressed="' + state.onlyGaps + '" ' + click(() => set({ onlyGaps: !state.onlyGaps, qSel: -1 })) + '>' + esc(l.onlyGaps) + '</button>' +
         '<span class="count-note">' + esc(l.ui.shown(rows.length, scoped.length)) + '</span></div>' +
         '<div class="table-wrap"><div class="scroll"><div style="min-width:820px">' +
@@ -921,10 +963,13 @@
       const engineIdx = id => ENGINES.findIndex(e => e.id === id);
       return '<div class="answers">' + ans.map(a => {
         const i = engineIdx(a.engine);
+        const row = a.qid ? LATEST_ROW[a.qid + '|' + a.engine] : null;
+        const siteUnnamed = row && !row.mentioned && BRAND.domain && (row.cited_urls || []).some(d => d === BRAND.domain || d.endsWith('.' + BRAND.domain));
         return '<div class="answer"><div class="small muted" style="display:flex;align-items:center;gap:6px">' +
           (i >= 0 ? '<span class="swatch" style="background:var(--viz-' + (i + 1) + ')"></span><b style="color:var(--fg);font-weight:600">' + esc(ENGINES[i].name) + '</b>' : esc(a.engine)) +
           '<span>· ' + esc(a.model === 'demo' ? l.answerDemo : a.model + ' · ' + a.date) + '</span></div>' +
           (a.variant > 0 && a.prompt ? '<div class="small" style="color:var(--fg2);margin-top:4px">' + esc(l.answerVariant) + ': ' + esc(a.prompt) + '</div>' : '') +
+          (siteUnnamed ? '<div class="small" style="color:var(--amber);margin-top:4px">' + esc(l.ui.answerSiteUnnamed(BRAND.domain, BRAND.short)) + '</div>' : '') +
           '<p>' + CORE.highlightMentions(a.text, BRAND_NAMES, COMPETITORS) + '</p></div>';
       }).join('') + '</div>';
     }
@@ -1690,6 +1735,17 @@
     function removeKey(id) { delete KEYS[id]; saveKeys(KEYS); set({ keyMsg: Object.assign({}, state.keyMsg, { [id]: '' }) }); }
 
     // Same summary the GitHub export produces, from the answers stored here.
+    // A competitor found in the answers: add it and count every stored answer again.
+    function addCompetitor(name) {
+      if (mode !== 'own' || !own) return;
+      const list = ownCompetitors().slice();
+      if (!list.some(c => c.toLowerCase() === name.toLowerCase())) list.push(name);
+      own.competitors = list;
+      own.runs = MONITOR.redetect(own.runs || [], BRAND_NAMES, list);
+      applyRows(); saveOwn(own);
+      boot({ tab: state.tab });
+      toast(L().ui.toastCompAdded(name));
+    }
     function applyRows() {
       own.demo = Object.assign({}, own.demo, MONITOR.summarize(own.runs || [], own.brand, ownCompetitors()));
     }
@@ -1980,7 +2036,7 @@
       const i = list.findIndex(x => x.id === q.id);
       const go = d => () => { const n = list[i + d]; if (n) set({ drawerQ: n.id, qSel: state.tab === 'questions' ? i + d : state.qSel }); };
       const act = isActive(q);
-      const ans = ANSWERS[q.id] || [];
+      const ans = (ANSWERS[q.id] || []).map(a => Object.assign({ qid: q.id }, a));
       const cards = ENGINES.map(e => '<div class="eng-card"><span class="name"><span class="swatch" style="background:var(--viz-' + (ENGINES.indexOf(e) + 1) + ')"></span>' + esc(e.name) + '</span>' + chip(status(q, e.id)) + '</div>').join('');
       const meta = '<dl class="kv"><dt>' + esc(l.ui.topics) + '</dt><dd>' + esc(catLabels(q.tags)) + '</dd>' +
         '<dt>' + esc(l.ui.kind) + '</dt><dd>' + esc(q.key ? l.metaKey : q.custom ? l.metaCustom : l.metaManual) + '</dd>' +

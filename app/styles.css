@@ -851,3 +851,13 @@ mark.m-comp { background: color-mix(in srgb, var(--viz-2) 22%, transparent); }
 .btn.danger { background: var(--bad, #b42318); border-color: transparent; color: #fff; }
 .btn.danger:hover { filter: brightness(1.08); }
 .setup-reset { display: flex; flex-direction: column; gap: 8px; margin: 12px 20px 0; padding: 14px 16px; border: 1px solid var(--bad, #b42318); border-radius: 10px; background: var(--surface-2); }
+
+/* ---------- 18. Findings on the Overview ---------- */
+.ins-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(60px, 1fr) auto; gap: 14px; align-items: center; width: 100%; padding: 11px 18px; text-align: left; background: none; border: 0; border-top: 1px solid var(--line2); color: inherit; font: inherit; cursor: pointer; }
+.ins-row:first-child { border-top: 0; }
+button.ins-row:hover { background: var(--hover); }
+.ins-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ins-name b { font-weight: 550; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-bar { height: 6px; display: block; }
+.ins-bar > span { display: block; height: 100%; border-radius: 3px; }
+@media (max-width: 640px) { .ins-row { grid-template-columns: minmax(0, 1fr) auto; } .ins-bar { display: none; } }
