@@ -11,6 +11,15 @@ how reversible / how much it touches running behavior.
 
 ## Next session — pick up here
 
+Left off 2026-11-25. First real use (DoppelErnte GmbH, a company the owner checked out of
+interest, Claude only, 20 German questions from 4 personas) showed that the numbers are
+there but the conclusions had to be pulled out by hand: no engine names the brand for
+farmers, Claude reads doppelernte.de in 8 answers but names the company in 2, and the
+most-cited source (Feldwerke) was missing from the competitor list. **Epic I** turns
+those into features. Suggested order: I1 → I2 → I3 → I4 → I5, then I11 → I6 → I7.
+
+### Previous session notes (2026-11-19)
+
 Left off 2026-11-19. C5a done (`45ca45e`): `COMPETITOR_NAMES` moved to
 `data/competitors.json`, schema-validated, cross-checked against brand aliases.
 Same pass also fixed a real bug found by audit: `run.py` only committed to
@@ -33,6 +42,56 @@ drops unimplemented engines before the cost estimate. In priority order:
 4. Explicitly declined for now: connecting Gemini to the webcrawler/topic-suggestion
    feature — not worth building since it wouldn't add anything the free (BM25 /
    heading-heuristic) path doesn't already cover.
+
+---
+
+## Epic I — Insights, several companies, reports (2026-11-25)
+Goal: the app says what to do next, works for someone checking several companies, and
+produces something to hand over. Everything here runs in the browser with data that is
+already stored; nothing below makes extra API calls unless it says so.
+
+**Insights from existing results**
+- [ ] **I1. Visibility per persona.** Overview tile and a table: named / asked per persona
+  (e.g. "Farmers 0 of 5"), with language. Questions page: filter and chip per persona.
+  Questions without a persona (older setups) go under "Without a group". — *S*
+- [ ] **I2. "Used, but not named."** Answers that cite the brand's own domain but don't
+  name the brand. Count on the Overview, flag in the question drawer and on Sources
+  ("doppelernte.de: cited in 8 answers, brand named in 2"). — *S*
+- [ ] **I3. Missed competitors.** Suggest names that appear in several answers but are
+  neither the brand nor a listed competitor: bold list headings (`**Name**`), names with
+  a legal form (GmbH, AG, …) and the most-cited domains. One click adds a competitor and
+  recounts all stored answers (`redetect`). No AI call. — *M*
+- [ ] **I4. "What stands out" panel** on the Overview: the 3–5 strongest findings from
+  I1–I3 plus the dominant cited sources and the weakest topic, in plain language, each
+  with one action button. Rules in `core.js` with tests, wording in `i18n.js`. — *M*,
+  depends on I1–I3
+- [ ] **I5. Write from a finding.** "Write about this" opens the brief with the question,
+  a short summary of what the assistants answer today, the sources they cite and the
+  competitors they name, so the draft answers the real gap. — *M*, depends on I4
+
+**Several companies and handing results over**
+- [ ] **I6. Several companies side by side.** Store each company under its own id,
+  switcher in the sidebar, "Add company" next to "Start over". Migrate today's single
+  company without loss (test the migration with a stored copy first). Keys stay shared.
+  — *M/L*, risk: storage migration
+- [ ] **I7. Report.** A print view (browser "Save as PDF") in EN/DE: summary, per-persona
+  table, open gaps, top sources, missed competitors, next steps. No server, so no share
+  link; the PDF is what gets passed on. — *M*, best after I4
+- [ ] **I11. Backup.** "Save as file" / "Load file" for a company's data (never the keys).
+  Needed before I6 so a failed migration can be undone. — *S*
+
+**Measuring more reliably**
+- [ ] **I8. Repeat each question 1–3 times** per check (setting, default 1). Show "named in
+  2 of 3 answers" instead of yes/no; cost estimate updates before starting. — *M*, more
+  API calls per check (shown first)
+- [ ] **I9. Check-again reminder.** When the app opens 7+ days after the last check, a
+  banner offers "Check again" so a weekly history builds up. — *S*
+- [ ] **I10. Nudge to a second assistant.** After the first check with one assistant,
+  suggest connecting Gemini (free) so results are not one engine's view. — *S*
+
+**Chores**
+- [ ] **I12.** Move `ci.yml` and `monitoring.yml` to the current action versions
+  (`checkout@v7`, `setup-python@v7`), like `pages.yml`, before GitHub drops Node 20. — *S*
 
 ---
 
