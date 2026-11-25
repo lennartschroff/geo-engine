@@ -966,7 +966,7 @@
         '<p class="rp-meta">' + esc(R.meta(last ? day(last) : '–', ran.map(e => e.name).join(', '), qs.length)) + '</p></header>' +
         '<section><div class="rp-stats">' + stat(pct(named, total) + ' %', R.sVis(named, total)) + stat(String(INS.site.cited), R.sSite(BRAND.domain, INS.site.named)) +
         (INS.counts.competitors[0] && INS.counts.competitors[0].answers ? stat(INS.counts.competitors[0].name, R.sComp(INS.counts.competitors[0].answers)) : '') + '</div></section>' +
-        (INS.findings.length ? '<section><h2>' + esc(R.hFind) + '</h2><ol>' + INS.findings.filter(f => f.kind !== 'stale').map(f => '<li>' + esc(findText(f)) + '</li>').join('') + '</ol></section>' : '') +
+        (INS.findings.length ? '<section><h2>' + esc(R.hFind) + '</h2><ol>' + INS.findings.filter(f => ['stale', 'missed', 'oneEngine'].indexOf(f.kind) === -1).map(f => '<li>' + esc(findText(f)) + '</li>').join('') + '</ol></section>' : '') +
         (P.length ? '<section><h2>' + esc(R.hPersona) + '</h2><table><thead><tr><th>' + esc(R.colGroup) + '</th><th>' + esc(R.colNamed) + '</th></tr></thead><tbody>' +
           P.map(p => '<tr><td>' + esc(p.name || l.ui.insNoPersona) + '</td><td>' + esc(l.ui.insOf(p.named, p.asked)) + '</td></tr>').join('') + '</tbody></table></section>' : '') +
         '<section><h2>' + esc(R.hQuestions) + '</h2><table class="rp-q"><thead><tr><th>' + esc(R.colQuestion) + '</th>' + ran.map(e => '<th>' + esc(e.name) + '</th>').join('') + '<th>' + esc(R.colComp) + '</th></tr></thead><tbody>' +
