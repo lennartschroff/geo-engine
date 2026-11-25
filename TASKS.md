@@ -80,7 +80,7 @@ already stored; nothing below makes extra API calls unless it says so.
 - [x] **I11. Backup.** "Save as file" / "Load file" for a company's data (never the keys).
   Needed before I6 so a failed migration can be undone. — *S*
 
-- [ ] **I13. AI draft for an own brand.** The studio starts empty for a new company (no
+- [x] **I13. AI draft for an own brand.** (Done 2026-11-25: blocks straight into the studio, unknown facts as placeholders, own blocks editable in place.) The studio starts empty for a new company (no
   blocks yet). Offer "Write a first draft" with the visitor's key: the question, today's
   answers and sources, and `[placeholder]` wherever a fact about the company is unknown;
   never invent figures. — *M*, one API call per draft (shown first)
