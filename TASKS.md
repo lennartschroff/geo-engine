@@ -85,10 +85,10 @@ already stored; nothing below makes extra API calls unless it says so.
   answers and sources, and `[placeholder]` wherever a fact about the company is unknown;
   never invent figures. — *M*, one API call per draft (shown first)
 
+- [x] **I14. Before / after per published page.** "Mark as published" in the studio (date, optional address); Impact compares the latest answers to that page's questions before and after the day. Replaced the terminal command shown there for own brands.
+
 **Measuring more reliably**
-- [ ] **I8. Repeat each question 1–3 times** (deferred 2026-11-25: triples the cost per check and needs results that count "2 of 3" in both the app and the Python export; revisit after a few weeks of single runs) per check (setting, default 1). Show "named in
-  2 of 3 answers" instead of yes/no; cost estimate updates before starting. — *M*, more
-  API calls per check (shown first)
+- [x] **I8. Repeat each question 1–3 times** (done 2026-11-25 in the app: "answers per question" on Runs, default 1; a status is "named" when at least half the answers name the brand and shows "2/3". run.py's export still keeps only the latest answer per engine.)
 - [x] **I9. Check-again reminder.** When the app opens 7+ days after the last check, a
   banner offers "Check again" so a weekly history builds up. — *S*
 - [x] **I10. Nudge to a second assistant.** After the first check with one assistant,
