@@ -687,7 +687,7 @@
     RUN_ROWS.forEach(r => { if (r.variant) return; const k = r.question_id + '|' + r.engine; if (!LATEST_ROW[k] || r.timestamp > LATEST_ROW[k].timestamp) LATEST_ROW[k] = r; });
     const QUESTIONS = D.questions.map(q => {
       const res = D.demo.results[q.id];
-      return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, persona: q.persona || null, lang: q.lang || '', comp: res ? res.competitor : null, r: res ? CORE.parseResult(res.r) : null };
+      return { id: q.id, text: q.text, tags: q.categories, key: q.key, custom: !!q.custom, persona: q.persona || null, lang: q.lang || '', comp: res ? res.competitor : null, share: res && res.share ? res.share : null, r: res ? CORE.parseResult(res.r) : null };
     });
     const BASE_BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
     // Like allQ() for questions: content blocks added in-browser (no terminal, no
@@ -765,7 +765,7 @@
 
     function status(q, eng) {
       if (!isActive(q)) return { k: 'inactive' };
-      if (q.r) return { k: q.r[eng][0], p: q.r[eng][1] };
+      if (q.r) return { k: q.r[eng][0], p: q.r[eng][1], s: q.share ? q.share[eng] || null : null };
       return { k: 'notrun' };
     }
     const absentCount = q => ENGINES.filter(e => status(q, e.id).k === 'absent').length;
@@ -2020,6 +2020,7 @@
     function applyRows() {
       own.demo = Object.assign({}, own.demo, MONITOR.summarize(own.runs || [], own.brand, ownCompetitors()));
     }
+    const repeats = () => (own && [1, 2, 3].includes(own.repeats)) ? own.repeats : 1;
     async function startCheck() {
       if (RUN.status === 'running' || mode !== 'own') return;
       const engines = connected().map(e => e.id);
@@ -2028,6 +2029,7 @@
       const brand = own.brand;
       const aliases = brand.aliases && brand.aliases.length ? brand.aliases : [brand.name];
       const comps = ownCompetitors();
+      const reps = repeats();
       Object.assign(RUN, { status: 'running', q: 0, qTotal: qs.length, current: '', errors: {}, hits: 0, answers: 0, cancel: false, started: new Date().toISOString() });
       own.runs = own.runs || [];
       const dead = {};
@@ -2036,12 +2038,15 @@
         if (RUN.cancel || engines.every(e => dead[e])) break;
         RUN.q++; RUN.current = q.text; render();
         await Promise.all(engines.filter(e => !dead[e]).map(async e => {
-          try {
-            const ans = await MONITOR.callEngine(e, engineCfg(e), q.text, KEYS[e]);
-            const row = MONITOR.makeRow(q, e, engineCfg(e).model, q.text, ans, aliases, comps);
-            own.runs.push(row);
-            RUN.answers++; if (row.mentioned) RUN.hits++;
-          } catch (err) { dead[e] = true; RUN.errors[e] = err; }
+          // Repeats of one engine go one after the other; engines run side by side.
+          for (let i = 0; i < reps && !dead[e] && !RUN.cancel; i++) {
+            try {
+              const ans = await MONITOR.callEngine(e, engineCfg(e), q.text, KEYS[e]);
+              const row = MONITOR.makeRow(q, e, engineCfg(e).model, q.text, ans, aliases, comps, null, reps > 1 ? { check: RUN.started, run_index: i } : null);
+              own.runs.push(row);
+              RUN.answers++; if (row.mentioned) RUN.hits++;
+            } catch (err) { dead[e] = true; RUN.errors[e] = err; }
+          }
         }));
         own.runs = own.runs.slice(-2000);  // keeps storage well under the browser's limit
         applyRows(); saveOwn(own);
@@ -2101,10 +2106,14 @@
         ? '<div class="check-done">' + ic('check', 16) + '<span>' + esc(RUN.status === 'done' ? R.doneTitle + '. ' + R.doneText(RUN.hits, RUN.answers) : R.stopped) + '</span>' +
           '<button class="btn sm" style="margin-left:auto" ' + click(() => { RUN.status = 'idle'; set({ tab: 'overview' }); }) + '>' + esc(R.seeResults) + '</button></div>' + runErrors()
         : lastDay ? '<span class="s13 muted">' + esc(R.last(lastDay, lastRows.filter(r => r.mentioned).length, lastRows.length)) + ' <button class="link s13" ' + click(() => set({ tab: 'overview' })) + '>' + esc(R.seeResults) + '</button></span>' : '';
-      const cost = checkCost(qs.length);
+      const reps = repeats();
+      const cost = checkCost(qs.length * reps);
+      const repSeg = '<div class="rep-row"><span class="s13" style="color:var(--fg2)">' + esc(R.repLabel) + '</span><div class="seg" role="group" aria-label="' + esc(R.repLabel) + '">' +
+        [1, 2, 3].map(n => '<button class="' + (reps === n ? 'on' : '') + '" aria-pressed="' + (reps === n) + '" ' + click(() => { own.repeats = n; saveOwn(own); render(); }) + '>' + n + '</button>').join('') + '</div>' +
+        '<span class="s13 muted">' + esc(reps > 1 ? R.repMore : R.repOne) + '</span></div>';
       return '<div class="check-card"><h2 class="check-title">' + esc(R.hero(BRAND.short)) + '</h2>' +
-        (con.length ? '<span class="s14" style="color:var(--fg2)">' + esc(R.plan(qs.length, con.map(e => e.name).join(', '))) + '</span>' +
-          '<span class="s13 muted">' + esc(R.estimate(cost ? money(cost) : R.free, checkMinutes(qs.length))) + '</span>' +
+        (con.length ? '<span class="s14" style="color:var(--fg2)">' + esc(R.plan(qs.length, con.map(e => e.name).join(', '))) + '</span>' + repSeg +
+          '<span class="s13 muted">' + esc(R.estimate(cost ? money(cost) : R.free, checkMinutes(qs.length * reps))) + '</span>' +
           '<button class="btn big" ' + (qs.length ? '' : 'disabled ') + click(startCheck) + '>' + ic('runs', 18) + esc(R.checkNow) + '</button>'
           : '<span class="s14" style="color:var(--fg2)">' + esc(R.needKey) + '</span>') +
         after + '</div>';
@@ -2301,8 +2310,9 @@
       const k = st.k;
       const label = short ? (l.ui.chip[k] || '–') : l.dot[k];
       const sw = { cited: 'var(--st-cited)', mentioned: 'var(--st-mentioned)', absent: 'var(--st-absent)', notrun: 'var(--st-none)', inactive: 'var(--st-none)' }[k];
-      return '<span class="chip ' + k + '"' + (short ? ' data-tt="' + esc(l.dot[k] + (st.p ? ' · ' + l.ui.position + ' ' + st.p : '')) + '"' : '') + '><span class="swatch" style="background:' + sw + ';border-radius:50%"></span>' + esc(label) +
-        (st.p ? '<span class="p">#' + st.p + '</span>' : '') + '</span>';
+      const share = st.s ? l.ui.shareOf(st.s[0], st.s[1]) : '';
+      return '<span class="chip ' + k + '"' + (short ? ' data-tt="' + esc(l.dot[k] + (st.p ? ' · ' + l.ui.position + ' ' + st.p : '') + (share ? ' · ' + share : '')) + '"' : '') + '><span class="swatch" style="background:' + sw + ';border-radius:50%"></span>' + esc(label) +
+        (st.p ? '<span class="p">#' + st.p + '</span>' : '') + (st.s ? '<span class="p">' + st.s[0] + '/' + st.s[1] + '</span>' : '') + '</span>';
     }
 
     // ---------- Overlays: question drawer, command palette, shortcut help ----------

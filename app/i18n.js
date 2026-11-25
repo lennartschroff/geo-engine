@@ -339,6 +339,7 @@ window.makeStrings = (b) => {
       kpiBest: 'Strongest engine',
       kpiBestSub: (n, p) => n + ' names ' + b + ' in ' + p + '% of key questions',
       kpiBestNone: 'No assistant names ' + b + ' yet',
+      shareOf: (n, k) => n + ' of ' + k + ' answers name you',
       editBlock: 'Edit block', saveBlock: 'Save', cancel: 'Cancel',
       companies: {
         title: 'Your companies', active: 'open now', open: 'Open', add: 'Add company',
@@ -481,6 +482,7 @@ window.makeStrings = (b) => {
         plan: (q, names) => q + ' questions · asks ' + names,
         estimate: (usd, min) => 'About ' + usd + ' on your account · about ' + min + ' min',
         free: 'free', checkNow: 'Check now', connectFirst: 'Connect an assistant',
+        repLabel: 'Answers per question', repOne: 'Quick: one answer each. Answers vary, so single results are a snapshot.', repMore: 'More reliable: shows how many of the answers name you. Costs and takes longer accordingly.',
         running: 'Checking…', progress: (i, n) => 'Question ' + i + ' of ' + n, stop: 'Stop', stopping: 'Stopping after this question…',
         keepOpen: 'Keep this tab open until it\'s done.',
         last: (d, k, n) => 'Last check ' + d + ': named in ' + k + ' of ' + n + ' answers.', seeResults: 'See the results',
@@ -935,6 +937,7 @@ window.makeStrings = (b) => {
       kpiBest: 'Stärkste Engine',
       kpiBestSub: (n, p) => n + ' nennt ' + b + ' bei ' + p + ' % der Key-Fragen',
       kpiBestNone: 'Noch kein Assistent nennt ' + b,
+      shareOf: (n, k) => n + ' von ' + k + ' Antworten nennen dich',
       editBlock: 'Baustein bearbeiten', saveBlock: 'Speichern', cancel: 'Abbrechen',
       companies: {
         title: 'Deine Firmen', active: 'gerade offen', open: 'Öffnen', add: 'Firma hinzufügen',
@@ -1077,6 +1080,7 @@ window.makeStrings = (b) => {
         plan: (q, names) => q + ' Fragen · fragt ' + names,
         estimate: (usd, min) => 'Etwa ' + usd + ' auf deinem Konto · etwa ' + min + ' Min.',
         free: 'kostenlos', checkNow: 'Jetzt prüfen', connectFirst: 'Assistenten verbinden',
+        repLabel: 'Antworten pro Frage', repOne: 'Schnell: je eine Antwort. Antworten schwanken, einzelne Ergebnisse sind eine Momentaufnahme.', repMore: 'Verlässlicher: zeigt, wie viele der Antworten dich nennen. Kostet und dauert entsprechend länger.',
         running: 'Wird geprüft…', progress: (i, n) => 'Frage ' + i + ' von ' + n, stop: 'Stopp', stopping: 'Stoppt nach dieser Frage…',
         keepOpen: 'Lass diesen Tab offen, bis es fertig ist.',
         last: (d, k, n) => 'Letzte Prüfung ' + d + ': genannt in ' + k + ' von ' + n + ' Antworten.', seeResults: 'Ergebnisse ansehen',

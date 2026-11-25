@@ -918,3 +918,5 @@ button.ins-row:hover { background: var(--hover); }
 .pub-form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pub-form input { height: 32px; min-width: 0; }
 .pub-form input[type=url] { flex: 1 1 200px; }
+.rep-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rep-row .seg button { min-width: 36px; justify-content: center; }
