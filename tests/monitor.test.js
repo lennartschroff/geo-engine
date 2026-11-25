@@ -272,3 +272,31 @@ describe('insights from stored answers', () => {
     assert.deepEqual(M.missedCompetitors(rows, ['X'], [], { exclude: ['Feldwerke'] }).map(c => c.name), ['Elysium Solar']);
   });
 });
+
+describe('what stands out', () => {
+  const row = (q, text, cited) => ({ question_id: q, engine: 'claude', variant: 0, timestamp: '2026-11-25T10:00:00Z', answer_text: text, cited_urls: cited || [], mentioned: 0 });
+  test('name counts and top sources come from the latest answers', () => {
+    const rows = [row('q1', 'Next2Sun und Feldwerke', ['feldwerke.de', 'acme.de']), row('q2', 'Next2Sun. Acme auch.', ['feldwerke.de']), row('q3', 'nichts', ['x.de'])];
+    const c = M.nameCounts(rows, ['Acme'], ['Next2Sun', 'BayWa']);
+    assert.equal(c.answers, 3); assert.equal(c.brand, 1);
+    assert.deepEqual(c.competitors, [{ name: 'Next2Sun', answers: 2 }, { name: 'BayWa', answers: 0 }]);
+    assert.deepEqual(M.topSources(rows, 'acme.de'), [{ domain: 'feldwerke.de', answers: 2 }, { domain: 'x.de', answers: 1 }]);
+  });
+  test('findings are picked by rules and ordered by usefulness', () => {
+    const f = M.findings({
+      daysSinceCheck: 9,
+      personas: [{ id: 'p1', name: 'Landwirt', asked: 5, named: 0, gaps: ['q1'] }, { id: 'p2', name: 'Investor', asked: 5, named: 1, gaps: [] }, { id: null, name: null, asked: 3, named: 0, gaps: ['q9'] }],
+      site: { cited: 8, named: 2, questions: ['q1'] },
+      counts: { answers: 20, brand: 2, competitors: [{ name: 'Next2Sun', answers: 3 }] },
+      sources: [{ domain: 'feldwerke.de', answers: 10 }],
+      missed: [{ name: 'Feldwerke', answers: 2 }],
+      enginesRan: ['claude'],
+    });
+    assert.deepEqual(f.map(x => x.kind), ['stale', 'personaZero', 'siteUnnamed', 'competitorAhead', 'topSource', 'missed', 'oneEngine']);
+    assert.equal(f[1].name, 'Landwirt'); assert.equal(f[1].question, 'q1');
+  });
+  test('nothing to say when things look fine', () => {
+    assert.deepEqual(M.findings({ daysSinceCheck: 2, personas: [{ id: 'p1', asked: 3, named: 2, gaps: [] }], site: { cited: 2, named: 2, questions: [] },
+      counts: { answers: 10, brand: 6, competitors: [{ name: 'X', answers: 3 }] }, sources: [{ domain: 'a.de', answers: 2 }], missed: [], enginesRan: ['claude', 'gemini'] }), []);
+  });
+});

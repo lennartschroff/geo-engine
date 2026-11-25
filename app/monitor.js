@@ -326,6 +326,49 @@
       .map(c => ({ name: c.name, answers: c.answers, questions: c.questions })).sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name)).slice(0, 8);
   }
 
+  // How many of the latest answers name each competitor, and the brand.
+  function nameCounts(rows, brandAliasesList, competitors) {
+    const latest = latestRows(rows);
+    const per = {}; (competitors || []).forEach(c => { per[c] = 0; });
+    let brand = 0;
+    latest.forEach(r => {
+      const m = detectMention(r.answer_text, brandAliasesList, competitors);
+      if (m.mentioned) brand++;
+      new Set(m.providers.filter(p => p !== '(brand)')).forEach(p => { per[p]++; });
+    });
+    return { answers: latest.length, brand, competitors: Object.keys(per).map(name => ({ name, answers: per[name] })).sort((a, b) => b.answers - a.answers) };
+  }
+  // The most-cited sources that are not the brand's own site.
+  function topSources(rows, ownDomain) {
+    const latest = latestRows(rows);
+    const per = {};
+    latest.forEach(r => new Set(r.cited_urls || []).forEach(d => { if (d && !onDomain(d, ownDomain)) per[d] = (per[d] || 0) + 1; }));
+    return Object.keys(per).map(domain => ({ domain, answers: per[domain] })).sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain));
+  }
+
+  /**
+   * "What stands out" (TASKS.md I4): the strongest findings, most useful first.
+   * Pure rules over numbers the app already has; wording lives in i18n.js.
+   * in = { personas, site, missed, counts, sources, daysSinceCheck, enginesRan }
+   */
+  function findings(inp) {
+    const out = [];
+    const n = inp.counts ? inp.counts.answers : 0;
+    if (inp.daysSinceCheck != null && inp.daysSinceCheck >= 7) out.push({ kind: 'stale', weight: 90, days: inp.daysSinceCheck });
+    (inp.personas || []).filter(p => p.id !== null && p.asked >= 2 && p.named === 0).sort((a, b) => b.asked - a.asked).slice(0, 2)
+      .forEach((p, i) => out.push({ kind: 'personaZero', weight: 80 - i, persona: p.id, name: p.name, asked: p.asked, question: p.gaps[0] || null }));
+    const s = inp.site;
+    if (s && s.cited - s.named >= 2) out.push({ kind: 'siteUnnamed', weight: 70, cited: s.cited, named: s.named, question: s.questions[0] || null });
+    const c = inp.counts && inp.counts.competitors[0];
+    if (c && c.answers >= 2 && c.answers > inp.counts.brand) out.push({ kind: 'competitorAhead', weight: 65, name: c.name, answers: c.answers, brand: inp.counts.brand });
+    const src = (inp.sources || [])[0];
+    if (src && n >= 4 && src.answers >= Math.max(3, n * 0.3)) out.push({ kind: 'topSource', weight: 50, domain: src.domain, answers: src.answers, of: n });
+    const m = (inp.missed || [])[0];
+    if (m) out.push({ kind: 'missed', weight: 45, name: m.name, answers: m.answers });
+    if ((inp.enginesRan || []).length === 1) out.push({ kind: 'oneEngine', weight: 40, engine: inp.enginesRan[0] });
+    return out.sort((a, b) => b.weight - a.weight);
+  }
+
   // Everything the app's monitoring views read, from stored rows.
   function summarize(rows, brand, competitors) {
     const trend = buildTrend(rows);
@@ -506,7 +549,7 @@
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
     personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
-    personaStats, ownSiteUse, missedCompetitors, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
+    personaStats, ownSiteUse, missedCompetitors, nameCounts, topSources, findings, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };
 });
