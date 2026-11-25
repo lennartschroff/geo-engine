@@ -51,13 +51,13 @@ produces something to hand over. Everything here runs in the browser with data t
 already stored; nothing below makes extra API calls unless it says so.
 
 **Insights from existing results**
-- [ ] **I1. Visibility per persona.** Overview tile and a table: named / asked per persona
+- [x] **I1. Visibility per persona.** Overview tile and a table: named / asked per persona
   (e.g. "Farmers 0 of 5"), with language. Questions page: filter and chip per persona.
   Questions without a persona (older setups) go under "Without a group". — *S*
-- [ ] **I2. "Used, but not named."** Answers that cite the brand's own domain but don't
+- [x] **I2. "Used, but not named."** Answers that cite the brand's own domain but don't
   name the brand. Count on the Overview, flag in the question drawer and on Sources
   ("doppelernte.de: cited in 8 answers, brand named in 2"). — *S*
-- [ ] **I3. Missed competitors.** Suggest names that appear in several answers but are
+- [x] **I3. Missed competitors.** Suggest names that appear in several answers but are
   neither the brand nor a listed competitor: bold list headings (`**Name**`), names with
   a legal form (GmbH, AG, …) and the most-cited domains. One click adds a competitor and
   recounts all stored answers (`redetect`). No AI call. — *M*

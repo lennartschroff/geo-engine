@@ -100,7 +100,7 @@ window.makeStrings = (b) => {
     actWait: 'Not checked yet',
     ariaOn: 'Switch on: ',
     ariaOff: 'Switch off: ',
-    formHint: 'Questions you add live in this browser. To check them in real runs, save the question list on the Runs page.',
+    formHint: 'Questions you add are stored in this browser and included in your next check.',
     msg: {
       short: 'Please enter a complete question.',
       saved: 'Saved. It will be queried in the next monitoring run.',
@@ -649,7 +649,7 @@ window.makeStrings = (b) => {
     actWait: 'Noch nicht geprüft',
     ariaOn: 'Einschalten: ',
     ariaOff: 'Ausschalten: ',
-    formHint: 'Eigene Fragen bleiben in diesem Browser. Damit sie bei echten Läufen abgefragt werden, speichere die Fragenliste auf der Seite „Läufe“.',
+    formHint: 'Eigene Fragen werden in diesem Browser gespeichert und bei deiner nächsten Prüfung mit abgefragt.',
     msg: {
       short: 'Bitte eine vollständige Frage eingeben.',
       saved: 'Gespeichert. Die Frage wird beim nächsten Monitoring-Lauf abgefragt.',
