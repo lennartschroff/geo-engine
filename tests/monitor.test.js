@@ -324,3 +324,15 @@ describe('first draft for a gap', () => {
     assert.equal(M.parseDraftBlocks('{"blocks":[{"type":"faq","text":"Nur ein einziger Block hier."}]}'), null);
   });
 });
+
+describe('before / after a published page', () => {
+  const row = (q, e, day, mentioned) => ({ question_id: q, engine: e, variant: 0, timestamp: day + 'T10:00:00Z', mentioned: mentioned ? 1 : 0 });
+  test('latest answer per question and assistant on each side of the day', () => {
+    const rows = [
+      row('q1', 'claude', '2026-11-01', 0), row('q1', 'claude', '2026-11-20', 0), row('q1', 'gemini', '2026-11-20', 0),
+      row('q1', 'claude', '2026-12-01', 1), row('q1', 'gemini', '2026-12-01', 0), row('q2', 'claude', '2026-12-01', 1),
+    ];
+    assert.deepEqual(M.pieceEffect(rows, ['q1'], '2026-11-25'), { before: { named: 0, total: 2 }, after: { named: 1, total: 2 } });
+    assert.deepEqual(M.pieceEffect(rows, ['q1'], '2026-12-05'), { before: { named: 1, total: 2 }, after: { named: 0, total: 0 } });
+  });
+});

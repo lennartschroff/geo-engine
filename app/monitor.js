@@ -326,6 +326,20 @@
       .map(c => ({ name: c.name, answers: c.answers, questions: c.questions })).sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name)).slice(0, 8);
   }
 
+  // Before / after a page went live (TASKS.md I14): for the page's questions,
+  // the latest answer per question and assistant before that day, and the
+  // latest one from that day on. after.total is 0 until the next check.
+  function pieceEffect(rows, questionIds, date) {
+    const ids = new Set(questionIds || []);
+    const day = String(date || '').slice(0, 10);
+    const mine = (rows || []).filter(r => !r.variant && ids.has(r.question_id));
+    const side = test => {
+      const latest = Object.values(latestBy(mine.filter(r => test(String(r.timestamp).slice(0, 10))), r => r.question_id + '|' + r.engine));
+      return { named: latest.filter(r => r.mentioned).length, total: latest.length };
+    };
+    return { before: side(d => d < day), after: side(d => d >= day) };
+  }
+
   // How many of the latest answers name each competitor, and the brand.
   function nameCounts(rows, brandAliasesList, competitors) {
     const latest = latestRows(rows);
@@ -582,7 +596,7 @@
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
     draftPrompt, parseDraftBlocks, hasPlaceholder, BLOCK_TYPES, personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
-    personaStats, ownSiteUse, missedCompetitors, nameCounts, topSources, findings, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
+    pieceEffect, personaStats, ownSiteUse, missedCompetitors, nameCounts, topSources, findings, brandAliases, redetect, ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };
 });
