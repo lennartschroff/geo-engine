@@ -712,7 +712,7 @@
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}, radarHidden: {}, radarTracked: {},
       radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
-      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false, report: false, editBlock: null,
+      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false, report: false, editBlock: null, pubFor: null,
       qSearch: '', qTopic: 'all', qPersona: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page', keyDraft: {}, keyMsg: {}
     }, saved, init || {});
@@ -858,9 +858,11 @@
       const values = CI ? CI.map(w => w.rate) : D.demo.trend.length ? D.demo.trend.slice(0, -1).concat([ctx.nowPct]) : [ctx.nowPct];
       const labels = values.map((_, i) => CI ? CI[i].week.slice(5) : l.ui.week(i + 1));
       const markers = {};
-      (D.demo.pieces || []).forEach(p => { if (p.week >= 1 && p.week <= values.length) markers[p.week - 1] = p.mark; });
+      // Own pages carry a date; place them in the week of their check history.
+      const weekOf = p => p.week || (p.date && CI ? CI.findIndex(w => w.week === MONITOR.isoWeek(new Date(p.date + 'T12:00:00Z'))) + 1 : 0);
+      (D.demo.pieces || []).forEach(p => { const w = weekOf(p); if (w >= 1 && w <= values.length) markers[w - 1] = p.mark; });
       const tips = values.map((v, i) => {
-        const piece = (D.demo.pieces || []).find(p => p.week === i + 1);
+        const piece = (D.demo.pieces || []).find(p => weekOf(p) === i + 1);
         return l.ui.trendTip(labels[i], v, CI ? CI[i].lo : null, CI ? CI[i].hi : null) + (piece ? '\n' + piece.mark + ': ' + piece[state.lang] : '');
       });
       return { CI, values, labels, markers, tips };
@@ -1319,12 +1321,17 @@
       const trend = T.values;
       const noise = T.CI && T.CI.length > 1 && CORE.intervalsOverlap(T.CI[T.CI.length - 2], T.CI[T.CI.length - 1]);
       const rows = pieces.map(p => {
-        const ago = trend.length - p.week; const early = ago < 4;
+        if (p.date) {
+          // An own page: before / after from the stored answers to its questions.
+          const eff = MONITOR.pieceEffect(RUN_ROWS, p.qs, p.date);
+          p = Object.assign({}, p, { before: pct(eff.before.named, eff.before.total), after: eff.after.total ? pct(eff.after.named, eff.after.total) : null, eff });
+        }
+        const ago = trend.length - (p.week || 0); const early = p.date ? !p.eff.after.total : ago < 4;
         const qs = p.qs.map(id => { const q = QUESTIONS.find(x => x.id === id); return q ? q.text : id; }).join(' · ');
         const d = p.after - p.before;
-        return '<div class="row igrid"><span class="mark">' + p.mark + '</span><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:500">' + esc(p[state.lang]) + '</span><span class="small muted">' + esc(l.pieceMeta(l.ptypes[p.type], ago)) + '</span></div>' +
-          '<span class="s13" style="color:var(--fg2)">' + esc(qs) + '</span><span class="mono s13">' + p.before + '% → ' + p.after + '%</span>' +
-          '<span>' + (early ? '<span class="delta flat">' + esc(l.tooEarly) + '</span>' : '<span class="delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'flat') + '">' + esc(l.pp(d)) + '</span>') + '</span></div>';
+        return '<div class="row igrid"><span class="mark">' + p.mark + '</span><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:500">' + esc(p[state.lang]) + '</span><span class="small muted">' + (p.date ? esc(l.ui.pub.meta(p.date)) + (p.url ? ' · <a class="link" target="_blank" rel="noopener noreferrer" href="' + esc(p.url) + '">' + esc(p.url.replace(/^https?:\/\//, '').slice(0, 60)) + '</a>' : '') : esc(l.pieceMeta(l.ptypes[p.type], ago))) + '</span></div>' +
+          '<span class="s13" style="color:var(--fg2)">' + esc(qs) + '</span><span class="mono s13">' + (p.eff ? esc(l.ui.pub.ba(p.eff.before.named, p.eff.before.total, p.eff.after.named, p.eff.after.total)) : p.before + '% → ' + p.after + '%') + '</span>' +
+          '<span>' + (early ? '<span class="delta flat">' + esc(p.date ? l.ui.pub.waiting : l.tooEarly) + '</span>' : '<span class="delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'flat') + '">' + esc(l.pp(d)) + '</span>') + '</span></div>';
       }).join('');
       const totalDelta = ctx.nowPct - trend[0];
       return '<section><div class="page-head"><div class="head"><h1>' + esc(l.tabs.impact) + '</h1><p>' + esc(l.impSub) + '</p></div></div>' +
@@ -1337,7 +1344,7 @@
         CH.lineChart({ values: trend, labels: T.labels, ci: T.CI ? T.CI.map(c => ({ lo: c.lo, hi: c.hi })) : null, markers: T.markers, tips: T.tips, alt: T.CI ? l.impCiAlt(T.CI) : l.impAlt(trend[0], ctx.nowPct) }, { w: 1080, h: 300 }) +
         (Object.keys(T.markers).length ? '<div class="legend" style="margin-top:6px"><span>' + esc(l.ui.trendMarkers) + '</span></div>' : '') + '</div></div>' +
         '<div class="panel"><div class="panel-h"><h2>' + esc(l.impPieces) + '</h2></div><div class="scroll"><div style="min-width:760px">' +
-        (rows || (mode === 'own' ? '<div class="panel-b">' + ownHint('python monitoring/run.py --dry-run', l.impHint) + '</div>' : '<div class="empty">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
+        (rows || (mode === 'own' ? '<div class="panel-b s14" style="display:flex;flex-direction:column;gap:6px"><b>' + esc(l.ui.pub.emptyTitle) + '</b><span class="muted">' + esc(l.ui.pub.emptyText) + '</span></div>' : '<div class="empty">' + esc(l.noRows) + '</div>')) + '</div></div></div>' +
         '<span class="small muted">' + esc(l.impNote) + '</span></section>';
     }
 
@@ -1533,6 +1540,30 @@
       set({ editBlock: null, customBlocks: state.customBlocks.map(cb => cb.id === id ? Object.assign({}, cb, { text, placeholder: MONITOR.hasPlaceholder(text) }) : cb) });
     }
 
+    // Mark a page as live, so Impact can compare before / after (TASKS.md I14).
+    function publishBox(q) {
+      if (mode !== 'own' || !own) return '';
+      const P = L().ui.pub;
+      const done = (D.demo.pieces || []).find(p => p.date && (p.qs || []).includes(q.id));
+      if (done) return '<span class="s13 good" style="display:inline-flex;align-items:center;gap:6px">' + ic('check', 13) + esc(P.done(done.date)) + ' · <button class="link s13" ' + click(() => set({ tab: 'impact' })) + '>' + esc(P.see) + '</button></span>';
+      if (state.pubFor !== q.id) return '<button class="btn sm" ' + click(() => set({ pubFor: q.id })) + '>' + esc(P.mark) + '</button>';
+      const today = new Date().toISOString().slice(0, 10);
+      return '<span class="pub-form"><label for="pub-url" class="sr">' + esc(P.url) + '</label><input id="pub-url" type="url" placeholder="' + esc(P.urlPh) + '">' +
+        '<label for="pub-date" class="sr">' + esc(P.date) + '</label><input id="pub-date" type="date" value="' + today + '" max="' + today + '">' +
+        '<button class="btn sm" ' + click(() => markPublished(q)) + '>' + esc(P.save) + '</button><button class="btn sm plain" ' + click(() => set({ pubFor: null })) + '>' + esc(L().ui.cancel) + '</button></span>';
+    }
+    function markPublished(q) {
+      const date = (document.getElementById('pub-date') || {}).value || new Date().toISOString().slice(0, 10);
+      const url = String((document.getElementById('pub-url') || {}).value || '').trim().slice(0, 300);
+      const list = (own.demo.pieces || []).slice();
+      const mark = String.fromCharCode(65 + (list.length % 26));
+      list.push({ mark, date, url, type: 'page', de: q.text, en: q.text, qs: [q.id] });
+      own.demo = Object.assign({}, own.demo, { pieces: list });
+      saveOwn(own);
+      set({ pubFor: null });  // D is own, so the new page shows without a reboot (which would leave the draft)
+      toast(L().ui.pub.toast);
+    }
+
     // One request: a first draft as citable blocks, straight into the studio.
     async function aiDraft(q) {
       const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
@@ -1649,6 +1680,7 @@
           '<button class="btn sm plain" ' + click(() => copyDraft(draftBlocks)) + '>' + esc(state.copied === 'text' ? l.copied : l.copy) + '</button>' +
           '<button class="btn sm plain" ' + click(() => copyMarkdown(draftBlocks, sel.text)) + '>' + esc(state.copied === 'markdown' ? l.copied : l.copyMd) + '</button>' +
           '<button class="btn sm plain" ' + click(() => copyHtml(draftBlocks, sel.text)) + '>' + esc(state.copied === 'html' ? l.copied : l.copyHtml) + '</button>' +
+          publishBox(sel) +
           '</div>' : '') +
         '</div></div>' +
         '<div class="col-score"><div style="padding-bottom:10px;border-bottom:1px solid var(--line)"><h2 style="font-size:15px">' + esc(l.scoreTitle) + '</h2></div>' +

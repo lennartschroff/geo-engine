@@ -356,6 +356,15 @@ window.makeStrings = (b) => {
         colGroup: 'Group', colNamed: 'Company named', colQuestion: 'Question', colComp: 'Named instead', colSource: 'Website', colAnswers: 'Answers',
         method: 'Each question was asked once per assistant through its official API, with web search where the assistant offers it. Answers vary between runs and can differ from the consumer apps; treat single results as a snapshot, and trends over several weeks as the signal.',
       },
+      pub: {
+        mark: 'Mark as published', url: 'Page address', urlPh: 'Page address (optional)', date: 'Published on', save: 'Save', see: 'see Impact',
+        done: d => 'Published on ' + d, toast: 'Saved. Impact compares before and after from your next check.',
+        ba: (bn, bt, an, at) => 'before ' + bn + ' of ' + bt + ' → ' + (at ? 'after ' + an + ' of ' + at : 'after: next check'),
+        waiting: 'After your next check',
+        meta: d => 'Page, published on ' + d,
+        emptyTitle: 'Nothing published yet',
+        emptyText: 'Write an answer under Write, put it on your website and mark it there as published. This page then shows how often the assistants named you before and after.',
+      },
       aiDraft: {
         title: 'Start with a first draft', text: e => e + ' writes 5 to 7 citable blocks for this question, in the asker\'s language. Facts it can\'t know about you are marked as placeholders. Check every statement about your company before publishing. One request.',
         noKey: 'Connect an assistant to get a first draft written for you.', btn: 'Write a first draft', connect: 'Connect an assistant',
@@ -942,6 +951,15 @@ window.makeStrings = (b) => {
         hFind: 'Was auffällt', hPersona: 'Nach Zielgruppe', hQuestions: 'Alle Fragen', hSources: 'Quellen, die die Assistenten am meisten lesen', hMethod: 'So wurde gemessen',
         colGroup: 'Gruppe', colNamed: 'Firma genannt', colQuestion: 'Frage', colComp: 'Stattdessen genannt', colSource: 'Website', colAnswers: 'Antworten',
         method: 'Jede Frage wurde einmal pro Assistent über dessen offizielle Schnittstelle gestellt, mit Websuche, wo der Assistent sie anbietet. Antworten schwanken zwischen Durchläufen und können von den Apps abweichen; einzelne Ergebnisse sind eine Momentaufnahme, Verläufe über mehrere Wochen sind das Signal.',
+      },
+      pub: {
+        mark: 'Als veröffentlicht markieren', url: 'Adresse der Seite', urlPh: 'Adresse der Seite (optional)', date: 'Veröffentlicht am', save: 'Speichern', see: 'zur Wirkung',
+        done: d => 'Veröffentlicht am ' + d, toast: 'Gespeichert. Die Wirkung-Seite vergleicht vorher und nachher ab deiner nächsten Prüfung.',
+        ba: (bn, bt, an, at) => 'vorher ' + bn + ' von ' + bt + ' → ' + (at ? 'nachher ' + an + ' von ' + at : 'nachher: nächste Prüfung'),
+        waiting: 'Nach deiner nächsten Prüfung',
+        meta: d => 'Seite, veröffentlicht am ' + d,
+        emptyTitle: 'Noch nichts veröffentlicht',
+        emptyText: 'Schreib unter „Schreiben“ eine Antwort, stell sie auf deine Website und markiere sie dort als veröffentlicht. Diese Seite zeigt dann, wie oft die Assistenten dich vorher und nachher genannt haben.',
       },
       aiDraft: {
         title: 'Mit einem ersten Entwurf starten', text: e => e + ' schreibt 5 bis 7 zitierfähige Bausteine für diese Frage, in der Sprache der Fragenden. Fakten über dich, die es nicht wissen kann, sind als Platzhalter markiert. Prüf jede Aussage über deine Firma, bevor du veröffentlichst. Eine Anfrage.',
