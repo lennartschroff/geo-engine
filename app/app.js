@@ -297,6 +297,8 @@
   }
   // Radar scan in progress (busy = engine id) and its last error; token drops stale answers.
   const RADAR_SCAN = { busy: null, error: null, token: 0 };
+  // AI first draft in the studio (TASKS.md I13): busy = engine id, for = question id.
+  const DRAFT_AI = { busy: null, for: null, error: null };
   window.addEventListener('beforeunload', e => { if (RUN.status === 'running') { e.preventDefault(); e.returnValue = ''; } });
 
   const MONITOR = window.GEO_MONITOR;
@@ -679,7 +681,7 @@
     const BASE_BLOCKS = D.blocks.map(b => ({ id: b.id, type: b.type, tags: b.categories, de: b.text_de, en: b.text_en, source: b.source, placeholder: b.placeholder }));
     // Like allQ() for questions: content blocks added in-browser (no terminal, no
     // API key, no backend — just localStorage) merge in alongside the bundled ones.
-    const allBlocksList = () => BASE_BLOCKS.concat(state.customBlocks.map(cb => ({ id: cb.id, type: cb.type, tags: cb.categories, de: cb.text, en: cb.text, source: cb.source || null, placeholder: false })));
+    const allBlocksList = () => BASE_BLOCKS.concat(state.customBlocks.map(cb => ({ id: cb.id, type: cb.type, tags: cb.categories, de: cb.text, en: cb.text, source: cb.source || null, placeholder: !!cb.placeholder || MONITOR.hasPlaceholder(cb.text) })));
 
     // ---------- Helpers ----------
     const overlaps = CORE.overlaps;
@@ -699,7 +701,7 @@
       active: {}, custom: [], customBlocks: [], drafts: {}, auditDone: {}, radarHidden: {}, radarTracked: {},
       radarFilter: 'all', radarShowHidden: false,
       // Redesign: overlays, filters, sorting. Not persisted.
-      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false, report: false,
+      drawerQ: null, palette: false, palQuery: '', palSel: 0, help: false, navOpen: false, qSel: -1, setup: false, setupOpen: null, resetAsk: false, report: false, editBlock: null,
       qSearch: '', qTopic: 'all', qPersona: 'all', qSort: 'default', qDir: 1, srcSearch: '', srcSort: 'cites', libSearch: '',
       fx: 'page', keyDraft: {}, keyMsg: {}
     }, saved, init || {});
@@ -1508,6 +1510,57 @@
         '<div class="panel-b" style="display:flex;flex-direction:column;gap:12px">' + rows.map(item).join('') + '</div></details>';
     }
 
+    // Own blocks can be edited in place, e.g. to fill in [placeholder: ...].
+    const isCustomBlock = id => state.customBlocks.some(cb => cb.id === id);
+    const markPlaceholders = t => esc(t).replace(/\[(placeholder|platzhalter)[^\]]*\]/gi, m => '<mark class="ph-mark">' + m + '</mark>');
+    function saveBlockText(id) {
+      const el = document.getElementById('eb-' + id);
+      const text = el ? el.value.trim().slice(0, 700) : '';
+      if (text.length < 8) return;
+      set({ editBlock: null, customBlocks: state.customBlocks.map(cb => cb.id === id ? Object.assign({}, cb, { text, placeholder: MONITOR.hasPlaceholder(text) }) : cb) });
+    }
+
+    // One request: a first draft as citable blocks, straight into the studio.
+    async function aiDraft(q) {
+      const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
+      if (!id) { openSetup(); return; }
+      if (DRAFT_AI.busy) return;
+      Object.assign(DRAFT_AI, { busy: id, for: q.id, error: null });
+      render();
+      const rows = ENGINES.map(e => LATEST_ROW[q.id + '|' + e.id]).filter(Boolean);
+      const comps = [...new Set(rows.reduce((a, r) => a.concat(MONITOR.detectMention(r.answer_text, BRAND_NAMES, COMPETITORS).providers.filter(p => p !== '(brand)')), []))];
+      const srcs = [...new Set(rows.reduce((a, r) => a.concat(r.cited_urls || []), []))].filter(d => d !== BRAND.domain).slice(0, 5);
+      const about = (own && own.about) || {};
+      const lang = q.lang || state.lang;
+      let blocks = null, err = null;
+      try {
+        const r = await MONITOR.callEngine(id, Object.assign({}, engineCfg(id), { max_tokens: 3000 }), MONITOR.draftPrompt({
+          company: { name: BRAND.short || BRAND.name, website: about.website || BRAND.domain || '', offer: about.offer || '', where: about.where || BRAND.city || '' },
+          question: q.text, persona: q.persona ? personaName(q.persona) : '', lang, today: { competitors: comps, sources: srcs } }), KEYS[id]);
+        blocks = MONITOR.parseDraftBlocks(r.answer_text);
+      } catch (e) { err = e; }
+      DRAFT_AI.busy = null;
+      if (!blocks) { DRAFT_AI.error = err ? runErrorText(id, err) : L().ui.aiDraft.failed; render(); return; }
+      const now = new Date().toISOString();
+      const src = L().ui.aiDraft.source(engineName(id));
+      const made = blocks.map((b, i) => ({ id: 'cb' + Date.now().toString(36) + i, type: b.type, text: b.text, categories: (q.tags || []).slice(0, 2), source: src, createdAt: now, placeholder: MONITOR.hasPlaceholder(b.text) }));
+      const d = Object.assign({}, state.drafts); d[q.id] = made.map(b => b.id);
+      set({ customBlocks: state.customBlocks.concat(made), drafts: d });
+      toast(L().ui.aiDraft.done(made.length, made.filter(b => b.placeholder).length));
+    }
+    function aiDraftCard(q) {
+      if (mode !== 'own') return '';
+      const A = L().ui.aiDraft;
+      const id = ['gemini', 'claude', 'gpt'].find(x => KEYS[x]);
+      const busy = DRAFT_AI.busy && DRAFT_AI.for === q.id;
+      return '<div class="panel ai-draft"><div class="panel-b" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">' +
+        (busy ? '<span class="spinner" aria-hidden="true"></span><div style="flex:1 1 300px"><b>' + esc(A.busy(engineName(DRAFT_AI.busy))) + '</b><span class="s13 muted" style="display:block">' + esc(A.busyText) + '</span></div>'
+          : '<div style="flex:1 1 300px;display:flex;flex-direction:column;gap:2px"><b>' + esc(A.title) + '</b><span class="s13 muted">' + esc(id ? A.text(engineName(id)) : A.noKey) + '</span>' +
+            (DRAFT_AI.error && DRAFT_AI.for === q.id ? '<span class="s13 warn">' + esc(DRAFT_AI.error) + '</span>' : '') + '</div>' +
+            (id ? '<button class="btn" ' + click(() => aiDraft(q)) + '>' + ic('write', 15) + esc(A.btn) + '</button>' : '<button class="btn plain" ' + click(openSetup) + '>' + esc(A.connect) + '</button>')) +
+        '</div></div>';
+    }
+
     function viewStudio() {
       const l = L();
       const sel = allQ().find(q => q.id === state.selectedQ) || QUESTIONS[0];
@@ -1551,16 +1604,22 @@
 
       const slotEvents = i => attr('dragover', (e, el) => { e.preventDefault(); markOver(el); }) + ' ' + attr('dragleave', (e, el) => el.classList.remove('over')) + ' ' + attr('drop', e => { e.preventDefault(); dropAt(i); });
       const draft = draftBlocks.map((b, i) =>
-        '<div class="slot" ' + slotEvents(i) + '><div class="dblock" draggable="true" ' + attr('dragstart', e => { drag = { kind: 'draft', index: i }; try { e.dataTransfer.setData('text/plain', b.id); e.dataTransfer.effectAllowed = 'move'; } catch (err) { /* ignore */ } }) + ' ' + attr('dragend', clearDrag) + '>' +
-        '<div><span class="mono small" style="color:' + TYPE_FG[b.type] + '">' + String(i + 1).padStart(2, '0') + ' · ' + esc(l.types[b.type]) + '</span><span>' + esc(blockText(b)) + '</span></div>' +
+        '<div class="slot" ' + slotEvents(i) + '><div class="dblock" draggable="' + (state.editBlock === b.id ? 'false' : 'true') + '" ' + attr('dragstart', e => { drag = { kind: 'draft', index: i }; try { e.dataTransfer.setData('text/plain', b.id); e.dataTransfer.effectAllowed = 'move'; } catch (err) { /* ignore */ } }) + ' ' + attr('dragend', clearDrag) + '>' +
+        '<div><span class="mono small" style="color:' + TYPE_FG[b.type] + '">' + String(i + 1).padStart(2, '0') + ' · ' + esc(l.types[b.type]) + '</span>' +
+        (state.editBlock === b.id
+          ? '<label for="eb-' + esc(b.id) + '" class="sr">' + esc(l.ui.editBlock) + '</label><textarea id="eb-' + esc(b.id) + '" class="eb-text" rows="4" maxlength="700">' + esc(blockText(b)) + '</textarea>' +
+            '<span style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" ' + click(() => saveBlockText(b.id)) + '>' + esc(l.ui.saveBlock) + '</button><button class="btn sm plain" ' + click(() => set({ editBlock: null })) + '>' + esc(l.ui.cancel) + '</button></span>'
+          : '<span>' + (b.placeholder ? markPlaceholders(blockText(b)) : esc(blockText(b))) + '</span>') + '</div>' +
         '<div style="display:flex;gap:2px;align-items:flex-start">' +
+        (isCustomBlock(b.id) && state.editBlock !== b.id ? '<button class="icon" aria-label="' + esc(l.ui.editBlock) + '" data-tt="' + esc(l.ui.editBlock) + '" ' + click(() => set({ editBlock: b.id })) + '>' + ic('write', 13) + '</button>' : '') +
         '<button class="icon" aria-label="' + esc(l.up) + '" ' + click(() => { if (i === 0) return; const x = getDraft(); x.splice(i - 1, 0, x.splice(i, 1)[0]); setDraft(x); }) + '>↑</button>' +
         '<button class="icon" aria-label="' + esc(l.down) + '" ' + click(() => { const x = getDraft(); if (i >= x.length - 1) return; x.splice(i + 1, 0, x.splice(i, 1)[0]); setDraft(x); }) + '>↓</button>' +
         '<button class="icon" style="font-size:16px" aria-label="' + esc(l.remove) + '" ' + click(() => { const x = getDraft(); x.splice(i, 1); setDraft(x); }) + '>×</button></div></div></div>').join('');
 
       const sc = scoreDraft(draftBlocks, rel);
       const scoreColor = n === 0 ? C.faint : sc.score >= 70 ? C.accent : sc.score >= 40 ? C.amber : C.warn;
-      const verdict = n === 0 ? l.verdict.empty : sc.score >= 70 ? l.verdict.good : sc.score >= 40 ? l.verdict.mid : l.verdict.low;
+      const phOpen = draftBlocks.some(b => b.placeholder);
+      const verdict = n === 0 ? l.verdict.empty : sc.score >= 70 ? (phOpen ? l.verdict.fill : l.verdict.good) : sc.score >= 40 ? l.verdict.mid : l.verdict.low;
       const crit = l.crit.map((c, i) => '<div class="crit"><span style="color:' + (sc.met[i] ? C.accent : C.faint) + '">' + (sc.met[i] ? '✓' : '○') + '</span><div><span style="color:' + (sc.met[i] ? C.fg : C.muted) + '">' + esc(c[0]) + '</span>' +
         (!sc.met[i] && n > 0 ? '<span class="small muted">' + esc(c[1].replace('{p}', Math.round(sc.avgRel * 100))) + '</span>' : '') + '</div></div>').join('');
       const ph = draftBlocks.filter(b => b.placeholder).length;
@@ -1568,7 +1627,7 @@
 
       return '<section><div class="head"><button class="link" style="align-self:flex-start" ' + click(() => set({ writeStep: 1 })) + '>' + esc(l.changeTopic) + '</button>' +
         '<span class="s13 muted">' + esc(l.targetQ) + '</span><h1 style="font-size:26px">' + esc(sel.text) + '</h1><span class="s13 muted">' + esc(statusLine) + '</span></div>' +
-        todayAnswers(sel) +
+        todayAnswers(sel) + (n === 0 ? aiDraftCard(sel) : '') +
         '<div class="studio"><div class="col-lib"><div class="listhead" style="min-height:0;padding-bottom:10px"><h2 style="font-size:15px">' + esc(l.matchingBlocks) + '</h2><button class="link s13" ' + click(() => set({ allBlocks: !state.allBlocks })) + '>' + esc(state.allBlocks ? l.onlyMatching : l.showAll) + '</button></div><div class="libscroll">' + (sugg || '<div class="muted s13" style="padding:16px 0">' + esc(l.noRows) + '</div>') + '</div></div>' +
         '<div class="col-draft"><div class="listhead" style="min-height:0;padding-bottom:10px"><h2 style="font-size:15px">' + esc(l.draftTitle) + '</h2><span class="s13 muted">' + esc(l.blocksN(n)) + '</span></div>' +
         '<div style="display:flex;flex-direction:column;padding-top:8px">' + draft +

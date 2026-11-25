@@ -277,7 +277,7 @@ window.makeStrings = (b) => {
       ['On topic', 'Needs at least 60% fit with the question (now {p}%).'],
       ['3 to 7 blocks', 'Enough substance, not padded.'],
     ],
-    verdict: { empty: 'Nothing yet', good: 'Ready to publish', mid: 'Getting there', low: 'Unlikely to be cited' },
+    verdict: { empty: 'Nothing yet', fill: 'Strong, once the placeholders are filled', good: 'Ready to publish', mid: 'Getting there', low: 'Unlikely to be cited' },
     ph: n => n + (n === 1 ? ' block still has' : ' blocks still have') + ' [placeholders] to fill in.',
 
     // ----- write: blocks -> article -----
@@ -339,6 +339,7 @@ window.makeStrings = (b) => {
       kpiBest: 'Strongest engine',
       kpiBestSub: (n, p) => n + ' names ' + b + ' in ' + p + '% of key questions',
       kpiBestNone: 'No assistant names ' + b + ' yet',
+      editBlock: 'Edit block', saveBlock: 'Save', cancel: 'Cancel',
       companies: {
         title: 'Your companies', active: 'open now', open: 'Open', add: 'Add company',
         save: 'Save backup', load: 'Load backup',
@@ -354,6 +355,13 @@ window.makeStrings = (b) => {
         hFind: 'What stands out', hPersona: 'By who asks', hQuestions: 'Every question', hSources: 'Sources the assistants read most', hMethod: 'How this was measured',
         colGroup: 'Group', colNamed: 'Company named', colQuestion: 'Question', colComp: 'Named instead', colSource: 'Website', colAnswers: 'Answers',
         method: 'Each question was asked once per assistant through its official API, with web search where the assistant offers it. Answers vary between runs and can differ from the consumer apps; treat single results as a snapshot, and trends over several weeks as the signal.',
+      },
+      aiDraft: {
+        title: 'Start with a first draft', text: e => e + ' writes 5 to 7 citable blocks for this question, in the asker\'s language. Facts it can\'t know about you are marked as placeholders. Check every statement about your company before publishing. One request.',
+        noKey: 'Connect an assistant to get a first draft written for you.', btn: 'Write a first draft', connect: 'Connect an assistant',
+        busy: e => e + ' is writing…', busyText: 'This takes up to a minute.',
+        failed: 'The draft could not be read. Please try again.', source: e => 'AI draft · ' + e,
+        done: (n, p) => n + ' blocks in your draft' + (p ? ', ' + p + ' with placeholders to fill in' : ''),
       },
       today: {
         title: 'What the assistants answer today', sub: b => 'Write so that ' + b + ' is clearly the provider behind the answer, and cover what they already bring up.',
@@ -857,7 +865,7 @@ window.makeStrings = (b) => {
       ['Beim Thema', 'Braucht mind. 60 % Passung zur Frage (jetzt {p} %).'],
       ['3 bis 7 Bausteine', 'Genug Substanz, ohne aufzublähen.'],
     ],
-    verdict: { empty: 'Noch nichts da', good: 'Bereit zum Veröffentlichen', mid: 'Auf dem Weg', low: 'Wird kaum zitiert' },
+    verdict: { empty: 'Noch nichts da', fill: 'Stark, sobald die Platzhalter ausgefüllt sind', good: 'Bereit zum Veröffentlichen', mid: 'Auf dem Weg', low: 'Wird kaum zitiert' },
     ph: n => n + (n === 1 ? ' Baustein hat' : ' Bausteine haben') + ' noch [Platzhalter] zum Ausfüllen.',
 
     // ----- Schreiben: Bausteine -> Artikel -----
@@ -918,6 +926,7 @@ window.makeStrings = (b) => {
       kpiBest: 'Stärkste Engine',
       kpiBestSub: (n, p) => n + ' nennt ' + b + ' bei ' + p + ' % der Key-Fragen',
       kpiBestNone: 'Noch kein Assistent nennt ' + b,
+      editBlock: 'Baustein bearbeiten', saveBlock: 'Speichern', cancel: 'Abbrechen',
       companies: {
         title: 'Deine Firmen', active: 'gerade offen', open: 'Öffnen', add: 'Firma hinzufügen',
         save: 'Sicherung speichern', load: 'Sicherung laden',
@@ -933,6 +942,13 @@ window.makeStrings = (b) => {
         hFind: 'Was auffällt', hPersona: 'Nach Zielgruppe', hQuestions: 'Alle Fragen', hSources: 'Quellen, die die Assistenten am meisten lesen', hMethod: 'So wurde gemessen',
         colGroup: 'Gruppe', colNamed: 'Firma genannt', colQuestion: 'Frage', colComp: 'Stattdessen genannt', colSource: 'Website', colAnswers: 'Antworten',
         method: 'Jede Frage wurde einmal pro Assistent über dessen offizielle Schnittstelle gestellt, mit Websuche, wo der Assistent sie anbietet. Antworten schwanken zwischen Durchläufen und können von den Apps abweichen; einzelne Ergebnisse sind eine Momentaufnahme, Verläufe über mehrere Wochen sind das Signal.',
+      },
+      aiDraft: {
+        title: 'Mit einem ersten Entwurf starten', text: e => e + ' schreibt 5 bis 7 zitierfähige Bausteine für diese Frage, in der Sprache der Fragenden. Fakten über dich, die es nicht wissen kann, sind als Platzhalter markiert. Prüf jede Aussage über deine Firma, bevor du veröffentlichst. Eine Anfrage.',
+        noKey: 'Verbinde einen Assistenten, dann schreibt er dir einen ersten Entwurf.', btn: 'Ersten Entwurf schreiben', connect: 'Assistent verbinden',
+        busy: e => e + ' schreibt…', busyText: 'Das dauert bis zu einer Minute.',
+        failed: 'Der Entwurf ließ sich nicht lesen. Bitte versuch es noch einmal.', source: e => 'KI-Entwurf · ' + e,
+        done: (n, p) => n + ' Bausteine im Entwurf' + (p ? ', ' + p + ' mit Platzhaltern zum Ausfüllen' : ''),
       },
       today: {
         title: 'Was die Assistenten heute antworten', sub: b => 'Schreib so, dass ' + b + ' klar der Anbieter hinter der Antwort ist, und greif auf, was sie heute schon bringen.',
