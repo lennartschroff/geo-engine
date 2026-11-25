@@ -105,28 +105,51 @@ describe('summarize (same as export_monitoring.py)', () => {
   });
 });
 
-describe('onboarding suggestions', () => {
-  test('JSON is found inside prose and code fences, junk is dropped', () => {
-    const text = 'Sure!\n```json\n{"topics":[{"label":"Shoes","keywords":["running"," trail "]},{"label":""}],' +
-      '"questions":[{"text":"Where can I buy running shoes in Munich?","topic":"Shoes"},{"text":"short"}],' +
-      '"competitors":["Sportscheck","Sportscheck",""]}\n```';
-    assert.deepEqual(M.parseSuggestions(text), {
-      topics: [{ label: 'Shoes', keywords: ['running', 'trail'] }],
-      questions: [{ text: 'Where can I buy running shoes in Munich?', topic: 'Shoes' }],
-      competitors: ['Sportscheck'],
+describe('onboarding: personas and their questions', () => {
+  test('personas: JSON inside prose and fences, language codes cleaned, duplicates and junk dropped', () => {
+    const text = 'Sure!\n```json\n' + JSON.stringify({
+      personas: [{ name: 'Landwirt in Bayern', who: 'Owns farmland.', language: 'DE' }, { name: 'landwirt in bayern', language: 'de' }, { name: '', language: 'en' }, { name: 'Investor', language: 'english' }],
+      topics: [{ label: 'Agri-PV', keywords: ['agri-pv', ' solar '] }, { label: '' }],
+      competitors: ['Next2Sun', 'Next2Sun', ''],
+    }) + '\n```';
+    assert.deepEqual(M.parsePersonas(text), {
+      personas: [{ id: 'p1', name: 'Landwirt in Bayern', who: 'Owns farmland.', lang: 'de' }, { id: 'p2', name: 'Investor', who: '', lang: 'en' }],
+      topics: [{ label: 'Agri-PV', keywords: ['agri-pv', 'solar'] }],
+      competitors: ['Next2Sun'],
     });
+    assert.equal(M.parsePersonas('{"personas":[]}'), null);
+    assert.equal(M.parsePersonas('I cannot help with that.'), null);
   });
-  test('no usable questions means no suggestion', () => {
-    assert.equal(M.parseSuggestions('{"topics":[],"questions":[]}'), null);
-    assert.equal(M.parseSuggestions('I cannot help with that.'), null);
+  test('questions: tied to a persona and its language, unknown persona falls back to the first', () => {
+    const P = [{ id: 'p1', name: 'Landwirt', lang: 'de' }, { id: 'p2', name: 'Investor', lang: 'en' }];
+    const text = JSON.stringify({ questions: [
+      { text: 'Kann ich meine Ackerfläche für Agri-PV verpachten?', persona: 'p1', topic: 'Agri-PV' },
+      { text: 'What returns do agrivoltaic projects offer?', persona: 'p2' },
+      { text: 'Wer plant Agri-PV-Anlagen in Bayern?', persona: 'p9' },
+      { text: 'short', persona: 'p1' },
+      { text: 'kann ich meine ackerfläche für agri-pv verpachten', persona: 'p1' },
+    ] });
+    assert.deepEqual(M.parseQuestions(text, P), [
+      { text: 'Kann ich meine Ackerfläche für Agri-PV verpachten?', topic: 'Agri-PV', persona: 'p1', lang: 'de' },
+      { text: 'What returns do agrivoltaic projects offer?', topic: '', persona: 'p2', lang: 'en' },
+      { text: 'Wer plant Agri-PV-Anlagen in Bayern?', topic: '', persona: 'p1', lang: 'de' },
+    ]);
+    assert.equal(M.parseQuestions('{"questions":[]}', P), null);
   });
-  test('templates use the offer and place, in both languages', () => {
+  test('prompts: persona languages are spelled out, the company is never put into questions', () => {
+    const c = { name: 'Acme', offer: 'agri-PV', where: 'Bavaria' };
+    assert.match(M.personaPrompt(c, 'de'), /ISO 639-1/);
+    assert.match(M.personaPrompt(c, 'de'), /in German\.$/);
+    const q = M.questionsPrompt(c, [{ id: 'p1', name: 'Landwirt', who: 'Hat Flächen', lang: 'de' }, { id: 'p2', name: 'Investor', lang: 'en' }], [{ label: 'Agri-PV' }]);
+    assert.match(q, /- p1: Landwirt \(Hat Flächen\), writes in German/);
+    assert.match(q, /- p2: Investor, writes in English/);
+    assert.match(q, /Do not name Acme/);
+  });
+  test('templates without an AI: one persona, plain questions in both languages', () => {
+    assert.deepEqual(M.templatePersonas('de'), [{ id: 'p1', name: 'Kunden', who: '', lang: 'de' }]);
     const en = M.templateQuestions({ offer: 'tax advice', where: 'Munich' }, 'en');
     assert.equal(en[0].text, 'Who are the best providers of tax advice in Munich?');
     assert.ok(M.templateQuestions({ offer: 'Steuerberatung', where: '' }, 'de')[0].text.startsWith('Wer sind die besten Anbieter für Steuerberatung?'));
-  });
-  test('the prompt never asks to name the company in questions', () => {
-    assert.match(M.suggestPrompt({ name: 'Acme', offer: 'x' }, 'en'), /Do not name Acme/);
   });
 });
 
@@ -139,6 +162,11 @@ describe('radar scan', () => {
     assert.match(p, /Who fixes bikes fast\?/);
     assert.match(p, /regulation/);
     assert.match(p, /in German/);
+  });
+  test('with personas, each question is written in its asker\'s language', () => {
+    const p = M.radarScanPrompt(Object.assign({}, company, { personas: [{ name: 'Landwirt', lang: 'de' }, { name: 'Investor', lang: 'en' }] }), 'en');
+    assert.match(p, /Landwirt \(writes in German\); Investor \(writes in English\)/);
+    assert.match(p, /Write changes, signals and trends in English\./);
   });
   test('parses signals into radar candidates, defensively', () => {
     const txt = 'Here you go:\n```json\n' + JSON.stringify({

@@ -252,36 +252,77 @@
     };
   }
 
-  // ---------- Onboarding: suggested questions for a new brand ----------
-  // The prompt asks for JSON only; the answer is parsed defensively because
-  // models sometimes wrap it in prose or code fences.
-  function suggestPrompt(c, lang) {
-    const where = c.where ? (lang === 'de' ? ' in ' : ' in ') + c.where : '';
-    return [
-      'A company wants to see how AI assistants talk about it.',
-      'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + c.offer + where + '.',
-      'Reply with JSON only, no other text, in this shape:',
-      '{"topics":[{"label":"...","keywords":["..."]}],"questions":[{"text":"...","topic":"..."}],"competitors":["..."]}',
-      'topics: 2 to 4 short topic names for what the company offers, each with 3 to 6 lowercase keywords.',
-      'questions: 10 questions a potential customer would type into ChatGPT when looking for such a provider. Do not name ' + c.name + ' in them. "topic" is one of the topic labels.',
-      'competitors: up to 6 real companies that offer the same' + where + '. Names only. Leave the list empty if you are not sure they exist.',
-      'Write topics and questions in ' + (lang === 'de' ? 'German' : 'English') + '.',
-    ].join('\n');
-  }
-  function parseSuggestions(text) {
+  // ---------- Onboarding: personas first, then their questions ----------
+  // Who asks matters: a Bavarian farmer asks in German, an investor maybe in
+  // English. So the guide first suggests personas (each with the language it
+  // would ask in), then questions per persona in that language. Both prompts
+  // ask for JSON only; answers are parsed defensively because models sometimes
+  // wrap them in prose or code fences.
+  const LANG_NAMES = { de: 'German', en: 'English', fr: 'French', es: 'Spanish', it: 'Italian', nl: 'Dutch', pl: 'Polish', pt: 'Portuguese', sv: 'Swedish', da: 'Danish', cs: 'Czech', tr: 'Turkish' };
+  const langName = code => LANG_NAMES[code] || code;
+  function jsonFrom(text) {
     const t = String(text || '');
     const a = t.indexOf('{'), b = t.lastIndexOf('}');
     if (a === -1 || b <= a) return null;
-    let j;
-    try { j = JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
-    const str = x => typeof x === 'string' ? x.trim() : '';
-    const topics = (Array.isArray(j.topics) ? j.topics : []).map(x => ({ label: str(x && x.label), keywords: (Array.isArray(x && x.keywords) ? x.keywords : []).map(str).filter(Boolean).slice(0, 8) }))
+    try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+  }
+  const str = (x, n) => typeof x === 'string' ? x.trim().slice(0, n || 300) : '';
+  const langCode = x => { const c = str(x, 12).toLowerCase().slice(0, 2); return /^[a-z]{2}$/.test(c) ? c : ''; };
+
+  function personaPrompt(c, lang) {
+    const where = c.where ? ' in ' + c.where : '';
+    return [
+      'A company wants to see how AI assistants like ChatGPT talk about it.',
+      'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + c.offer + where + '.',
+      'Reply with JSON only, no other text, in this shape:',
+      '{"personas":[{"name":"...","who":"...","language":"de"}],"topics":[{"label":"...","keywords":["..."]}],"competitors":["..."]}',
+      'personas: 2 to 4 kinds of people who would ask an AI assistant about what this company offers (customers, partners, investors, ...). "name": 2 to 5 words. "who": one short sentence. "language": the ISO 639-1 code of the language this persona would most likely type in, given where they are.',
+      'topics: 2 to 4 short topic names for what the company offers, each with 3 to 6 lowercase keywords.',
+      'competitors: up to 6 real companies that offer the same' + where + '. Names only. Leave the list empty if you are not sure they exist.',
+      'Write "name", "who" and the topics in ' + langName(lang) + '.',
+    ].join('\n');
+  }
+  function parsePersonas(text) {
+    const j = jsonFrom(text);
+    if (!j) return null;
+    const seen = new Set();
+    const personas = (Array.isArray(j.personas) ? j.personas : []).map(x => ({ name: str(x && x.name, 60), who: str(x && x.who, 200), lang: langCode(x && x.language) || 'en' }))
+      .filter(x => x.name && !seen.has(x.name.toLowerCase()) && seen.add(x.name.toLowerCase())).slice(0, 5)
+      .map((x, i) => Object.assign({ id: 'p' + (i + 1) }, x));
+    const topics = (Array.isArray(j.topics) ? j.topics : []).map(x => ({ label: str(x && x.label, 60), keywords: (Array.isArray(x && x.keywords) ? x.keywords : []).map(k => str(k, 40)).filter(Boolean).slice(0, 8) }))
       .filter(x => x.label).slice(0, 5);
-    const questions = (Array.isArray(j.questions) ? j.questions : []).map(x => ({ text: str(x && x.text).slice(0, 300), topic: str(x && x.topic) }))
-      .filter(x => x.text.length >= 8).slice(0, 15);
-    const competitors = [...new Set((Array.isArray(j.competitors) ? j.competitors : []).map(str).filter(x => x && x.length <= 60))].slice(0, 8);
-    if (!questions.length) return null;
-    return { topics, questions, competitors };
+    const competitors = [...new Set((Array.isArray(j.competitors) ? j.competitors : []).map(x => str(x, 60)).filter(Boolean))].slice(0, 8);
+    if (!personas.length) return null;
+    return { personas, topics, competitors };
+  }
+  function questionsPrompt(c, personas, topics) {
+    const where = c.where ? ' in ' + c.where : '';
+    return [
+      'A company wants to see how AI assistants like ChatGPT talk about it.',
+      'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + c.offer + where + '.',
+      'Its topics: ' + ((topics || []).map(t => t.label).join('; ') || c.offer) + '.',
+      'People who ask about it (id: who, language):',
+      personas.map(p => '- ' + p.id + ': ' + p.name + (p.who ? ' (' + p.who + ')' : '') + ', writes in ' + langName(p.lang)).join('\n'),
+      'Write 3 to 5 questions per person that they would type into ChatGPT when looking for such a provider or information. Write each question in that person\'s language, the way they would really ask. Do not name ' + c.name + ' in them.',
+      'Reply with JSON only, no other text, in this shape:',
+      '{"questions":[{"text":"...","persona":"p1","topic":"..."}]}',
+      '"persona" is the person\'s id, "topic" one of the topics above.',
+    ].join('\n');
+  }
+  function parseQuestions(text, personas) {
+    const j = jsonFrom(text);
+    if (!j) return null;
+    const byId = {}; (personas || []).forEach(p => { byId[p.id] = p; });
+    const seen = new Set();
+    const questions = (Array.isArray(j.questions) ? j.questions : []).map(x => {
+      const p = byId[str(x && x.persona, 12)] || (personas || [])[0] || null;
+      return { text: str(x && x.text), topic: str(x && x.topic, 60), persona: p ? p.id : null, lang: p ? p.lang : '' };
+    }).filter(x => x.text.length >= 8 && !seen.has(normalize(x.text)) && seen.add(normalize(x.text))).slice(0, 25);
+    return questions.length ? questions : null;
+  }
+  // Without an AI: one plain persona in the interface language.
+  function templatePersonas(lang) {
+    return [{ id: 'p1', name: lang === 'de' ? 'Kunden' : 'Customers', who: '', lang: lang === 'de' ? 'de' : 'en' }];
   }
   // Without an AI: plain questions from what the person typed.
   function templateQuestions(c, lang) {
@@ -311,6 +352,7 @@
       'Company: ' + c.name + (c.website ? ' (' + c.website + ')' : '') + '. It offers: ' + (c.offer || '-') + (c.where ? ' in ' + c.where : '') + '.',
       'Its topics: ' + ((c.topics || []).join('; ') || '-') + '.',
       known.length ? 'Questions it already tracks (do not repeat them):\n- ' + known.join('\n- ') : '',
+      (c.personas || []).length ? 'People who ask about it: ' + c.personas.map(p => p.name + ' (writes in ' + langName(p.lang) + ')').join('; ') + '. Write each question in the language of the person who would ask it.' : '',
       'Find questions that potential customers are starting to ask AI assistants like ChatGPT, or will likely ask soon, because something is changing.',
       'Look at five drivers of change: technology, market, society, regulation, environment.',
       'Sort each question into a horizon: "now" = already asked, but good answers are still rare; "next" = growing, likely common within 6 to 12 months; "later" = an early, weak signal that may or may not grow.',
@@ -320,7 +362,7 @@
       'trends: 3 to 6 short topic terms (2 to 4 words) that are moving in this market.',
       'Keep "change" and "signal" under 20 words each.',
       'Do not invent numbers, studies, laws, dates or company names. If you are unsure, say so with a low confidence.',
-      'Write questions, changes, signals and trends in ' + (lang === 'de' ? 'German' : 'English') + '.',
+      ((c.personas || []).length ? 'Write changes, signals and trends in ' : 'Write questions, changes, signals and trends in ') + langName(lang === 'de' ? 'de' : 'en') + '.',
     ].filter(Boolean).join('\n');
   }
   // Short, stable id from the question text, so a rescan keeps what was tracked or dismissed.
@@ -376,7 +418,7 @@
 
   return {
     radarScanPrompt, parseRadarScan, salvageArray, textId, DRIVERS, HORIZONS, RADAR_SCAN_TOKENS,
-    suggestPrompt, parseSuggestions, templateQuestions,
+    personaPrompt, parsePersonas, questionsPrompt, parseQuestions, templatePersonas, templateQuestions, LANG_NAMES,
     ENGINE_ORDER, RETRY_WAITS, normalize, findFirstMention, detectMention, normalizeDomain, normalizeDomains,
     request, parse, isTransient, callEngine, makeRow, wilson, isoWeek, buildTrend, buildResults, buildAnswers, buildCitedSources, summarize,
   };
